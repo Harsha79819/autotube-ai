@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AutoTube AI</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #111;
+            color: white;
+            text-align: center;
+            padding-top: 80px;
+        }
+
+        .box {
+            width: 500px;
+            margin: auto;
+            background: #1e1e1e;
+            padding: 40px;
+            border-radius: 15px;
+        }
+
+        h1 {
+            font-size: 38px;
+        }
+
+        button {
+            background: #ff0000;
+            color: white;
+            border: none;
+            padding: 18px 50px;
+            font-size: 20px;
+            border-radius: 10px;
+            cursor: pointer;
+        }
+
+        button:disabled {
+            background: #555;
+        }
+
+        .status {
+            margin-top: 30px;
+            font-size: 18px;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="box">
+
+    <h1>🚀 AutoTube AI</h1>
+
+    <p>Automatic YouTube Video Generator</p>
+
+    <form action="/start" method="POST">
+
+        <button
+            type="submit"
+            {% if running %}disabled{% endif %}
+        >
+            {% if running %}
+                ⏳ RUNNING...
+            {% else %}
+                🚀 START
+            {% endif %}
+        </button>
+
+    </form>
+
+    <div class="status">
+        {{ status }}
+    </div>
+
+</div>
+
+</body>
+</html>

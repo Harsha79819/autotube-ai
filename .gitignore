@@ -216,3 +216,24 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# AutoTube AI local secrets
+client_secret.json
+token.json
+
+# Virtual environments
+voice_test/
+
+# Generated output
+output/
+
+# Generated audio/video
+*.wav
+*.mp3
+*.mp4
+*.mov
+*.mkv
+*.avi
+
+# Archives
+*.zip

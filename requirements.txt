@@ -1,0 +1,6 @@
+openai
+moviepy
+gtts
+python-dotenv
+requests
+beautifulsoup4
