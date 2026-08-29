@@ -1,68 +1,40 @@
-"""
-AutoTube AI - Image Agent
-=========================
-
-Purpose:
-    Find highly relevant news images for a video topic.
-
-Important:
-    - No Gemini
-    - No icrawler
-    - Uses Bing Images metadata
-    - Search query is NEVER used as evidence of relevance
-    - Strong entity/person matching
-    - Rejects unrelated results aggressively
-    - Downloads and validates images locally
-    - Removes visual duplicates
-
-Function:
-    download_images(topic) -> int
-
-Output:
-    assets/1.jpg
-    assets/2.jpg
-    ...
-"""
-
 import os
 import re
 import time
 import hashlib
 import html
-import json
 from pathlib import Path
-from urllib.parse import quote_plus, urlparse
+
 
 import requests
-from PIL import Image, ImageStat
+from PIL import Image
 
 
 # ============================================================
 # CONFIG
 # ============================================================
 
-ASSETS_DIR = Path("assets")
+ROOT = Path(__file__).resolve().parent.parent
+ASSETS_DIR = ROOT / "assets"
+OUTPUT_DIR = ROOT / "output"
 
 TARGET_IMAGES = 12
 
-RESULTS_PER_QUERY = 35
-
-MIN_RELEVANCE_SCORE = 12
-
-MIN_WIDTH = 500
-MIN_HEIGHT = 300
+MIN_PIXEL_X = 500
+MIN_PIXEL_Y = 300
 
 MAX_FILE_SIZE = 12 * 1024 * 1024
 
-REQUEST_TIMEOUT = 15
+REQUEST_TIMEOUT = 20
 
-SEARCH_DELAY = 0.4
+MAX_WIKIMEDIA_RESULTS = 20
+MAX_BING_RESULTS = 40
 
-MAX_CANDIDATES_TO_DOWNLOAD = 80
+WIKIMEDIA_DELAY = 2
 
 
 # ============================================================
-# HTTP SESSION
+# SESSION
 # ============================================================
 
 SESSION = requests.Session()
@@ -70,399 +42,191 @@ SESSION = requests.Session()
 SESSION.headers.update(
     {
         "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/151.0.0.0 Safari/537.36"
-        ),
-        "Accept": (
-            "text/html,application/xhtml+xml,application/xml;"
-            "q=0.9,image/avif,image/webp,*/*;q=0.8"
+            "AutoTubeAI/2.0 "
+            "(automated video project)"
         ),
         "Accept-Language": "en-US,en;q=0.9",
-        "Referer": "https://www.bing.com/",
-        "Connection": "keep-alive",
     }
 )
 
 
 # ============================================================
-# WORDS THAT SHOULD NOT DRIVE RELEVANCE
-# ============================================================
-
-STOP_WORDS = {
-    "the",
-    "and",
-    "for",
-    "with",
-    "from",
-    "into",
-    "that",
-    "this",
-    "about",
-    "highlights",
-    "highlight",
-    "role",
-    "roles",
-    "says",
-    "said",
-    "news",
-    "latest",
-    "today",
-    "india",
-    "indian",
-    "photo",
-    "photograph",
-    "image",
-    "images",
-    "picture",
-    "pictures",
-    "supreme",
-    "court",
-    "lawyer",
-    "lawyers",
-    "advocate",
-    "advocates",
-}
-
-
-# ============================================================
-# HARD BLOCKED DOMAINS / CONTENT
-# ============================================================
-
-BAD_DOMAINS = {
-    "pinterest.com",
-    "pinimg.com",
-    "freepik.com",
-    "vecteezy.com",
-    "shutterstock.com",
-    "istockphoto.com",
-    "dreamstime.com",
-    "wallpaperaccess.com",
-    "wallpapers.com",
-    "wallpapercave.com",
-    "ebayimg.com",
-    "sokmil.com",
-    "porn",
-    "adult",
-    "anime",
-    "recipe",
-    "food",
-    "cooking",
-    "dog",
-    "dogs",
-    "cat",
-    "cats",
-    "fashion",
-    "music",
-}
-
-
-# ============================================================
-# GOOD NEWS DOMAINS
-# ============================================================
-
-GOOD_DOMAINS = {
-    "supremecourtofindia.nic.in": 8,
-    "sci.gov.in": 8,
-    "pib.gov.in": 7,
-
-    "thehindu.com": 6,
-    "indianexpress.com": 6,
-    "reuters.com": 6,
-    "apnews.com": 6,
-
-    "ndtv.com": 5,
-    "news18.com": 5,
-    "indiatoday.in": 5,
-    "hindustantimes.com": 5,
-    "timesofindia.indiatimes.com": 5,
-
-    "deccanherald.com": 5,
-    "telegraphindia.com": 5,
-
-    "bbc.com": 5,
-    "bbc.co.uk": 5,
-
-    "wikimedia.org": 4,
-    "wikipedia.org": 3,
-}
-
-
-# ============================================================
-# GENERIC UNRELATED WORDS
-# ============================================================
-
-UNRELATED_TERMS = {
-    "dog",
-    "dogs",
-    "puppy",
-    "puppies",
-    "cat",
-    "cats",
-    "kitten",
-    "recipe",
-    "salad",
-    "chicken",
-    "cooking",
-    "food",
-    "restaurant",
-    "fashion",
-    "dress",
-    "makeup",
-    "anime",
-    "manga",
-    "singer",
-    "actress",
-    "actor",
-    "football",
-    "cricket",
-    "gaming",
-    "game",
-    "wallpaper",
-    "vector",
-    "illustration",
-    "clipart",
-    "stock",
-    "toy",
-    "toys",
-    "action figure",
-    "action figures",
-    "diy",
-    "craft",
-    "amazon",
-    "ebay",
-    "pinterest",
-    "etsy",
-    "product",
-    "shopping",
-    "lamp",
-    "globe",
-    "light",
-    "lighting",
-    "furniture",
-}
-
-
-# ============================================================
-# HELPERS
+# TEXT HELPERS
 # ============================================================
 
 def line():
     print("=" * 60)
 
 
-def clean_text(value):
-    if not value:
+def clean_text(text):
+
+    if not text:
         return ""
 
-    value = html.unescape(str(value))
-    value = re.sub(r"<[^>]+>", " ", value)
-    value = re.sub(r"\s+", " ", value)
+    text = html.unescape(str(text))
 
-    return value.strip()
+    text = re.sub(
+        r"<[^>]+>",
+        " ",
+        text
+    )
 
+    text = re.sub(
+        r"\s+",
+        " ",
+        text
+    )
 
-def normalize_text(value):
-    value = clean_text(value).lower()
-
-    value = value.replace("-", " ")
-    value = value.replace("_", " ")
-    value = value.replace("/", " ")
-
-    value = re.sub(r"\s+", " ", value)
-
-    return value.strip()
+    return text.strip()
 
 
-def contains_word(text, word):
-    """
-    Whole-word matching.
+def normalize_text(text):
 
-    Prevents:
-        court -> courtyard
-        india -> indian
-        art -> article
-    """
+    text = clean_text(text).lower()
 
-    text = normalize_text(text)
-    word = normalize_text(word)
+    text = re.sub(
+        r"[^a-z0-9\s]",
+        " ",
+        text
+    )
 
-    if not text or not word:
-        return False
+    text = re.sub(
+        r"\s+",
+        " ",
+        text
+    )
 
-    pattern = r"(?<![a-z0-9])" + re.escape(word) + r"(?![a-z0-9])"
-
-    return re.search(pattern, text) is not None
+    return text.strip()
 
 
-def contains_any(text, words):
-    return any(contains_word(text, word) for word in words)
-
-
-def tokenize(text):
-    text = normalize_text(text)
-
-    words = re.findall(r"[a-z0-9]+", text)
-
-    result = []
-
-    for word in words:
-
-        if len(word) < 3:
-            continue
-
-        if word in STOP_WORDS:
-            continue
-
-        if word not in result:
-            result.append(word)
-
-    return result
-
-
-def get_domain(url):
-    try:
-        domain = urlparse(url).netloc.lower()
-        domain = domain.replace("www.", "")
-        return domain
-    except Exception:
-        return ""
+def text_tokens(text):
+    return set(normalize_text(text).split())
 
 
 # ============================================================
-# TOPIC ANALYSIS
+# STORY DETECTION
 # ============================================================
 
-def analyze_topic(topic):
+def detect_story(topic):
 
     text = normalize_text(topic)
 
-    analysis = {
-        "person": False,
-        "surya_kant": False,
-        "supreme_court": False,
-        "lawyers": False,
-        "freedom": False,
-    }
-
-    if (
-        "surya kant" in text
-        or "surya" in text and "kant" in text
-    ):
-        analysis["surya_kant"] = True
-        analysis["person"] = True
-
-    if (
-        "supreme court" in text
-        or "cji" in text
-        or "chief justice" in text
-    ):
-        analysis["supreme_court"] = True
-
-    if contains_any(
-        text,
-        [
+    if any(
+        word in text
+        for word in [
+            "supreme court",
+            "chief justice",
+            "justice",
             "lawyer",
-            "lawyers",
-            "advocate",
-            "advocates",
-            "barrister",
-        ],
+            "court",
+        ]
     ):
-        analysis["lawyers"] = True
+        return "LEGAL"
 
-    if contains_any(
-        text,
-        [
-            "freedom struggle",
-            "freedom movement",
-            "independence movement",
-            "independence struggle",
-            "indian independence",
-        ],
+    if any(
+        word in text
+        for word in [
+            "technology",
+            "tech",
+            "ai",
+            "artificial intelligence",
+            "software",
+            "startup",
+            "semiconductor",
+            "chip",
+            "robot",
+            "cybersecurity",
+        ]
     ):
-        analysis["freedom"] = True
+        return "TECH"
 
-    return analysis
+    if any(
+        word in text
+        for word in [
+            "hormuz",
+            "iran",
+            "uae",
+            "adnoc",
+            "vessel",
+            "tanker",
+            "shipping",
+        ]
+    ):
+        return "MARITIME"
+
+    if any(
+        word in text
+        for word in [
+            "india",
+            "indian",
+        ]
+    ):
+        return "INDIA"
+
+    return "GENERAL"
 
 
 # ============================================================
-# SEARCH QUERY GENERATION
+# NORMAL TOPIC QUERIES
 # ============================================================
 
-def build_search_queries(topic):
+def build_queries(topic):
 
-    analysis = analyze_topic(topic)
+    text = normalize_text(topic)
+
+    words = [
+        word
+        for word in text.split()
+        if len(word) >= 4
+    ]
+
+    story = detect_story(topic)
 
     queries = []
 
-    # --------------------------------------------------------
-    # PERSON
-    # --------------------------------------------------------
+    if story == "LEGAL":
 
-    if analysis["surya_kant"]:
+        queries = [
+            topic,
+            "Supreme Court India",
+            "Chief Justice India",
+            "Indian lawyers court",
+            "Indian judiciary",
+        ]
 
-        queries.extend(
-            [
-                "Justice Surya Kant India",
-                "Justice Surya Kant Supreme Court India",
-                "Justice Surya Kant Chief Justice India",
-                "CJI Surya Kant Supreme Court",
-                "Surya Kant Supreme Court judge",
-                "Surya Kant lawyers Supreme Court",
-                "Surya Kant advocate lawyers India",
-                "Surya Kant courtroom",
-            ]
-        )
+    elif story == "TECH":
 
-    # --------------------------------------------------------
-    # SUPREME COURT
-    # --------------------------------------------------------
+        queries = [
+            topic,
+            " ".join(words[:8]) + " technology",
+            " ".join(words[:6]) + " tech news",
+            " ".join(words[:6]) + " India technology",
+        ]
 
-    if analysis["supreme_court"]:
+    elif story == "MARITIME":
 
-        queries.extend(
-            [
-                "Supreme Court of India judges",
-                "Supreme Court of India lawyers",
-                "Supreme Court India courtroom",
-                "Supreme Court India advocates",
-                "Indian lawyers Supreme Court",
-                "Indian advocates Supreme Court",
-                "Indian lawyers courtroom",
-            ]
-        )
+        queries = [
+            topic,
+            "Strait of Hormuz ships",
+            "Hormuz maritime shipping",
+            "Persian Gulf tanker",
+            "Iran Gulf shipping",
+        ]
 
-    # --------------------------------------------------------
-    # FREEDOM MOVEMENT
-    # --------------------------------------------------------
+    elif story == "INDIA":
 
-    if analysis["freedom"]:
+        queries = [
+            topic,
+            " ".join(words[:8]),
+            "India " + " ".join(words[:5]),
+        ]
 
-        queries.extend(
-            [
-                "Indian freedom struggle lawyers",
-                "Indian independence movement lawyers",
-                "freedom movement Indian barristers",
-                "Indian freedom fighters lawyers",
-            ]
-        )
+    else:
 
-    # --------------------------------------------------------
-    # GENERIC FALLBACK
-    # --------------------------------------------------------
-
-    tokens = tokenize(topic)
-
-    if tokens:
-
-        query = " ".join(tokens[:8])
-
-        queries.append(query)
-
-    # --------------------------------------------------------
-    # REMOVE DUPLICATES
-    # --------------------------------------------------------
+        queries = [
+            topic,
+            " ".join(words[:8]),
+        ]
 
     final = []
 
@@ -470,546 +234,372 @@ def build_search_queries(topic):
 
         query = query.strip()
 
-        if not query:
-            continue
-
-        if query not in final:
+        if query and query not in final:
             final.append(query)
 
-    return final[:20]
+    return final
+
+
+# ============================================================
+# WIKIMEDIA SEARCH
+# ============================================================
+
+def search_wikimedia(query):
+
+    url = "https://commons.wikimedia.org/w/api.php"
+
+    params = {
+        "action": "query",
+        "format": "json",
+        "generator": "search",
+        "gsrsearch": query,
+        "gsrnamespace": 6,
+        "gsrlimit": MAX_WIKIMEDIA_RESULTS,
+        "prop": "imageinfo",
+        "iiprop": "url|size|mime",
+        "iiurlwidth": 1600,
+    }
+
+    try:
+
+        response = SESSION.get(
+            url,
+            params=params,
+            timeout=REQUEST_TIMEOUT,
+        )
+
+        response.raise_for_status()
+
+        data = response.json()
+
+    except Exception as error:
+
+        print(
+            f"Wikimedia search failed: {error}"
+        )
+
+        return []
+
+    pages = (
+        data
+        .get("query", {})
+        .get("pages", {})
+    )
+
+    results = []
+
+    for page in pages.values():
+
+        imageinfo = page.get(
+            "imageinfo",
+            []
+        )
+
+        if not imageinfo:
+            continue
+
+        info = imageinfo[0]
+
+        image_url = (
+            info.get("thumburl")
+            or info.get("url")
+        )
+
+        if not image_url:
+            continue
+
+        results.append(
+            {
+                "image_url": image_url,
+                "title": clean_text(
+                    page.get("title", "")
+                ),
+                "source": "Wikimedia",
+                "width": info.get(
+                    "width",
+                    0
+                ),
+                "height": info.get(
+                    "height",
+                    0
+                ),
+                "mime": info.get(
+                    "mime",
+                    ""
+                ),
+            }
+        )
+
+    return results
 
 
 # ============================================================
 # BING IMAGE SEARCH
 # ============================================================
 
-def search_bing_images(query, limit=RESULTS_PER_QUERY):
+def search_bing(query):
 
     url = (
-        "https://www.bing.com/images/async"
-        f"?q={quote_plus(query)}"
-        f"&first=0"
-        f"&count={limit}"
-        f"&adlt=off"
+        "https://www.bing.com/images/"
+        "search"
     )
+
+    params = {
+        "q": query,
+        "form": "HDRSC2",
+        "first": 1,
+    }
 
     try:
 
         response = SESSION.get(
             url,
+            params=params,
             timeout=REQUEST_TIMEOUT,
         )
 
         response.raise_for_status()
 
-    except Exception as exc:
+    except Exception as error:
 
-        print(f"Search request failed: {exc}")
+        print(
+            f"Bing search failed: {error}"
+        )
 
         return []
 
-    page = response.text
+    html_text = response.text
 
-    candidates = []
+    results = []
 
     pattern = re.compile(
-        r'<a[^>]+class="[^"]*iusc[^"]*"[^>]+m="([^"]+)"',
-        re.IGNORECASE,
+        r'murl&quot;:&quot;(.*?)&quot;.*?'
+        r'mid&quot;:&quot;(.*?)&quot;',
+        re.DOTALL,
     )
 
-    matches = pattern.findall(page)
+    matches = pattern.findall(
+        html_text
+    )
 
-    for raw_metadata in matches:
-
-        try:
-
-            metadata_text = html.unescape(
-                raw_metadata
-            )
-
-            data = json.loads(metadata_text)
-
-        except Exception:
-            continue
+    for image_url, mid in matches:
 
         image_url = (
-            data.get("murl")
-            or data.get("turl")
-            or ""
+            image_url
+            .replace("\\/", "/")
+            .replace("\\u002f", "/")
         )
 
-        page_url = data.get("purl", "") or ""
-
-        title = (
-            data.get("t")
-            or data.get("desc")
-            or data.get("pt")
-            or ""
-        )
-
-        if not image_url:
+        if not image_url.startswith(
+            "http"
+        ):
             continue
 
-        candidates.append(
+        results.append(
             {
                 "image_url": image_url,
-                "page_url": page_url,
-                "title": clean_text(title),
-                "query": query,
+                "title": query,
+                "source": "Bing",
+                "width": 0,
+                "height": 0,
+                "mime": "",
+                "mid": mid,
             }
         )
 
-    return candidates
+        if len(results) >= MAX_BING_RESULTS:
+            break
+
+    return results
 
 
 # ============================================================
-# DOMAIN SCORING
+# RELEVANCE
 # ============================================================
 
-def domain_score(url):
+def score_candidate(
+    candidate,
+    query,
+):
 
-    domain = get_domain(url)
+    title_tokens = text_tokens(
+        candidate.get(
+            "title",
+            ""
+        )
+    )
 
-    if not domain:
+    query_words = [
+        word
+        for word in normalize_text(
+            query
+        ).split()
+        if len(word) >= 2
+    ]
+
+    if not query_words:
         return 0
-
-    # Hard block
-    for bad in BAD_DOMAINS:
-
-        if bad in domain:
-            return -50
-
-    # Good sources
-    for good, score in GOOD_DOMAINS.items():
-
-        if good in domain:
-            return score
-
-    return 0
-
-
-# ============================================================
-# HARD UNRELATED CHECK
-# ============================================================
-
-def is_obviously_unrelated(candidate):
-
-    title = normalize_text(
-        candidate.get("title", "")
-    )
-
-    page_url = normalize_text(
-        candidate.get("page_url", "")
-    )
-
-    image_url = normalize_text(
-        candidate.get("image_url", "")
-    )
-
-    # IMPORTANT:
-    # Do NOT include candidate["query"] here.
-    #
-    # The search query describes what WE asked Bing.
-    # It is NOT evidence that the returned image is relevant.
-
-    evidence = (
-        title
-        + " "
-        + page_url
-        + " "
-        + image_url
-    )
-
-    for term in UNRELATED_TERMS:
-
-        if contains_word(evidence, term):
-            return True
-
-    return False
-
-
-# ============================================================
-# RELEVANCE SCORING
-# ============================================================
-
-def relevance_score(candidate, topic):
-
-    analysis = analyze_topic(topic)
-
-    title = normalize_text(
-        candidate.get("title", "")
-    )
-
-    page_url = normalize_text(
-        candidate.get("page_url", "")
-    )
-
-    image_url = normalize_text(
-        candidate.get("image_url", "")
-    )
-
-    # --------------------------------------------------------
-    # VERY IMPORTANT
-    #
-    # Search query is intentionally NOT included.
-    #
-    # Previous bug:
-    #
-    # combined = title + page_url + image_url + query
-    #
-    # This caused unrelated images to score highly because
-    # the query itself contained "Supreme Court", "India",
-    # "lawyers", etc.
-    # --------------------------------------------------------
-
-    evidence = (
-        title
-        + " "
-        + page_url
-        + " "
-        + image_url
-    )
 
     score = 0
 
-    # --------------------------------------------------------
-    # HARD UNRELATED
-    # --------------------------------------------------------
+    for word in query_words:
 
-    if is_obviously_unrelated(candidate):
-        return -50
+        if word in title_tokens:
+            score += 10
 
-    # --------------------------------------------------------
-    # PERSON: SURYA KANT
-    # --------------------------------------------------------
-
-    if analysis["surya_kant"]:
-
-        has_surya = contains_word(
-            evidence,
-            "surya",
-        )
-
-        has_kant = contains_word(
-            evidence,
-            "kant",
-        )
-
-        has_full_name = (
-            "surya kant" in evidence
-        )
-
-        if has_full_name:
-
-            score += 40
-
-        elif has_surya and has_kant:
-
-            score += 30
-
-        else:
-
-            # If the actual result doesn't mention the person,
-            # it should NOT rank highly just because the query did.
-            score -= 20
-
-    # --------------------------------------------------------
-    # SUPREME COURT
-    # --------------------------------------------------------
-
-    if analysis["supreme_court"]:
-
-        if "supreme court" in evidence:
-            score += 15
-
-        elif "supremecourt" in evidence:
-            score += 12
-
-        if contains_word(
-            evidence,
-            "justice",
-        ):
-            score += 5
-
-        if contains_word(
-            evidence,
-            "judge",
-        ):
-            score += 5
-
-        if contains_word(
-            evidence,
-            "courtroom",
-        ):
-            score += 5
-
-    # --------------------------------------------------------
-    # LAWYERS
-    # --------------------------------------------------------
-
-    if analysis["lawyers"]:
-
-        lawyer_terms = [
-            "lawyer",
-            "lawyers",
-            "advocate",
-            "advocates",
-            "barrister",
-            "legal",
-            "courtroom",
-        ]
-
-        for term in lawyer_terms:
-
-            if contains_word(title, term):
-                score += 6
-
-            elif contains_word(page_url, term):
-                score += 3
-
-    # --------------------------------------------------------
-    # FREEDOM MOVEMENT
-    # --------------------------------------------------------
-
-    if analysis["freedom"]:
-
-        freedom_terms = [
-            "freedom struggle",
-            "freedom movement",
-            "independence movement",
-            "independence struggle",
-            "indian independence",
-            "freedom fighter",
-            "national movement",
-            "barrister",
-        ]
-
-        found_freedom = False
-
-        for term in freedom_terms:
-
-            if term in title:
-
-                score += 10
-                found_freedom = True
-
-            elif term in page_url:
-
-                score += 5
-                found_freedom = True
-
-        # Generic historical lawyers are useful for the
-        # secondary part of the story, but only if the image
-        # actually contains historical/freedom evidence.
-        if contains_word(title, "lawyer"):
-            score += 3
-
-        if contains_word(title, "lawyers"):
-            score += 3
-
-        if not found_freedom and analysis["surya_kant"]:
-            # Person images are still useful.
-            pass
-
-    # --------------------------------------------------------
-    # TITLE QUALITY
-    # --------------------------------------------------------
-
-    if title:
-
-        if contains_word(title, "photo"):
-            score += 2
-
-        if contains_word(title, "photograph"):
-            score += 2
-
-        if contains_word(title, "news"):
-            score += 2
-
-    # --------------------------------------------------------
-    # DOMAIN
-    # --------------------------------------------------------
-
-    source_url = (
-        candidate.get("page_url", "")
-        or candidate.get("image_url", "")
+    width = candidate.get(
+        "width",
+        0
     )
 
-    score += domain_score(source_url)
+    height = candidate.get(
+        "height",
+        0
+    )
 
-    # --------------------------------------------------------
-    # EXTRA SAFETY
-    # --------------------------------------------------------
+    if width >= 1000:
+        score += 5
 
-    # If we are searching for a specific person,
-    # unrelated generic images should not survive.
-    if analysis["surya_kant"]:
-
-        has_person = (
-            "surya kant" in evidence
-            or (
-                contains_word(evidence, "surya")
-                and contains_word(evidence, "kant")
-            )
-        )
-
-        if not has_person:
-
-            # Allow generic Supreme Court images only as
-            # secondary B-roll.
-            if "supreme court" not in evidence:
-                score -= 25
+    if height >= 600:
+        score += 5
 
     return score
 
 
+def is_relevant(
+    candidate,
+    query,
+):
+
+    score = score_candidate(
+        candidate,
+        query
+    )
+
+    return score >= 5
+
+
 # ============================================================
-# DOWNLOAD IMAGE
+# IMAGE DOWNLOAD
 # ============================================================
 
-def download_image(candidate, destination):
+def download_image(
+    candidate,
+    destination,
+):
 
-    image_url = candidate.get("image_url")
+    url = candidate.get(
+        "image_url",
+        ""
+    )
 
-    if not image_url:
+    if not url:
         return False
-
-    temp_file = destination.with_suffix(".tmp")
 
     try:
 
-        response = SESSION.get(
-            image_url,
+        with SESSION.get(
+            url,
             timeout=REQUEST_TIMEOUT,
             stream=True,
-            headers={
-                "Referer": "https://www.bing.com/",
-                "User-Agent": SESSION.headers["User-Agent"],
-            },
-        )
+        ) as response:
+            response.raise_for_status()
 
-        response.raise_for_status()
-
-        content_type = (
-            response.headers.get(
-                "Content-Type",
-                ""
+            content_type = (
+                response.headers
+                .get(
+                    "content-type",
+                    ""
+                )
+                .lower()
             )
-            .lower()
-        )
 
-        # Reject obvious HTML pages
-        if "text/html" in content_type:
+            if (
+                content_type
+                and "image" not in content_type
+            ):
+                return False
+
+            content_length = int(
+                response.headers.get(
+                    "content-length",
+                    0
+                )
+                or 0
+            )
+
+            if (
+                content_length
+                and content_length > MAX_FILE_SIZE
+            ):
+                return False
+
+            data = response.content
+
+        if len(data) > MAX_FILE_SIZE:
             return False
 
-        content_length = response.headers.get(
-            "Content-Length"
+        destination.parent.mkdir(
+            parents=True,
+            exist_ok=True,
         )
-
-        if content_length:
-
-            try:
-
-                if int(content_length) > MAX_FILE_SIZE:
-                    return False
-
-            except Exception:
-                pass
-
-        total = 0
 
         with open(
-            temp_file,
-            "wb",
+            destination,
+            "wb"
         ) as file:
 
-            for chunk in response.iter_content(
-                chunk_size=64 * 1024
-            ):
+            file.write(data)
 
-                if not chunk:
-                    continue
+        with Image.open(
+            destination
+        ) as image:
 
-                total += len(chunk)
+            image.verify()
 
-                if total > MAX_FILE_SIZE:
+        with Image.open(
+            destination
+        ) as image:
 
-                    try:
-                        temp_file.unlink()
-                    except Exception:
-                        pass
+            pixel_x, pixel_y = image.size
 
-                    return False
-
-                file.write(chunk)
-
-        # ----------------------------------------------------
-        # PIL validation
-        # ----------------------------------------------------
-
-        try:
-
-            with Image.open(temp_file) as image:
-                image.verify()
-
-        except Exception:
-
-            try:
-                temp_file.unlink()
-            except Exception:
-                pass
-
+        if pixel_x < MIN_PIXEL_X:
+            destination.unlink(
+                missing_ok=True
+            )
             return False
 
-        # ----------------------------------------------------
-        # Reopen and convert
-        # ----------------------------------------------------
-
-        try:
-
-            with Image.open(temp_file) as image:
-
-                width, height = image.size
-
-                if width < MIN_WIDTH:
-                    return False
-
-                if height < MIN_HEIGHT:
-                    return False
-
-                ratio = width / float(height)
-
-                # Allow normal landscape / portrait,
-                # reject extreme banners and tiny strips.
-                if ratio < 0.55 or ratio > 2.5:
-                    return False
-
-                image = image.convert("RGB")
-
-                image.save(
-                    destination,
-                    "JPEG",
-                    quality=92,
-                    optimize=True,
-                )
-
-        except Exception:
-
+        if pixel_y < MIN_PIXEL_Y:
+            destination.unlink(
+                missing_ok=True
+            )
             return False
+
+        with Image.open(
+            destination
+        ) as image:
+
+            image.convert(
+                "RGB"
+            ).save(
+                destination,
+                "JPEG",
+                quality=90,
+            )
 
         return True
 
-    except Exception:
+    except Exception as error:
+
+        print(
+            f"Download failed: {error}"
+        )
+
+        destination.unlink(
+            missing_ok=True
+        )
 
         return False
-
-    finally:
-
-        try:
-            if temp_file.exists():
-                temp_file.unlink()
-        except Exception:
-            pass
 
 
 # ============================================================
@@ -1020,109 +610,60 @@ def image_hash(path):
 
     try:
 
-        with Image.open(path) as image:
+        hasher = hashlib.sha256()
 
-            image = image.convert("L")
+        with open(
+            path,
+            "rb"
+        ) as file:
 
-            image = image.resize(
-                (32, 32)
-            )
+            while True:
 
-            data = bytes(
-                image.getdata()
-            )
+                chunk = file.read(
+                    1024 * 1024
+                )
 
-            return hashlib.md5(
-                data
-            ).hexdigest()
+                if not chunk:
+                    break
+
+                hasher.update(
+                    chunk
+                )
+
+        return hasher.hexdigest()
 
     except Exception:
 
         return None
 
 
-# ============================================================
-# VISUAL QUALITY
-# ============================================================
+def save_flyer_fallback(flyer_path, destination):
+    if not flyer_path:
+        return False
 
-def visual_quality_score(path):
+    source = Path(flyer_path)
 
-    try:
-
-        with Image.open(path) as image:
-
-            image = image.convert("RGB")
-
-            stat = ImageStat.Stat(image)
-
-            means = stat.mean
-
-            contrast = (
-                sum(stat.stddev) / 3
-            )
-
-            brightness = (
-                sum(means) / 3
-            )
-
-            score = 0
-
-            if contrast > 18:
-                score += 3
-
-            if contrast > 30:
-                score += 2
-
-            if 25 < brightness < 235:
-                score += 3
-
-            if brightness < 10:
-                score -= 10
-
-            if brightness > 250:
-                score -= 10
-
-            return score
-
-    except Exception:
-
-        return -100
-
-
-# ============================================================
-# FINAL VALIDATION
-# ============================================================
-
-def validate_final_image(path):
+    if not source.exists():
+        return False
 
     try:
-
-        with Image.open(path) as image:
-
-            width, height = image.size
-
-            if width < MIN_WIDTH:
-                return False
-
-            if height < MIN_HEIGHT:
-                return False
-
-            quality = visual_quality_score(
-                path
+        with Image.open(source) as image:
+            image.convert("RGB").save(
+                destination,
+                "JPEG",
+                quality=95,
             )
-
-            if quality < 0:
-                return False
-
         return True
-
-    except Exception:
-
+    except Exception as error:
+        print(
+            f"Could not create flyer fallback: {error}"
+        )
+        destination.unlink(missing_ok=True)
         return False
 
 
 # ============================================================
-# CLEAN OLD ASSETS
+# CLEAN ASSETS
 # ============================================================
 
 def clean_assets():
@@ -1143,432 +684,249 @@ def clean_assets():
 
 
 # ============================================================
-# MAIN FUNCTION
+# SEARCH CANDIDATES
 # ============================================================
 
-def download_images(topic):
+def collect_candidates(
+    queries,
+):
+
+    candidates = []
+
+    seen_urls = set()
+
+    for index, query in enumerate(
+        queries,
+        1
+    ):
+
+        print()
+        line()
+
+        print(
+            f"SEARCH {index}/{len(queries)}"
+        )
+
+        print(
+            query
+        )
+
+        line()
+
+        sources = []
+
+        sources.extend(
+            search_wikimedia(
+                query
+            )
+        )
+
+        sources.extend(
+            search_bing(
+                query
+            )
+        )
+
+        for candidate in sources:
+
+            url = candidate.get(
+                "image_url",
+                ""
+            )
+
+            key = url.split(
+                "?",
+                1
+            )[0]
+
+            if not key:
+                continue
+
+            if key in seen_urls:
+                continue
+
+            seen_urls.add(
+                key
+            )
+
+            if not is_relevant(
+                candidate,
+                query
+            ):
+                continue
+
+            candidate["score"] = (
+                score_candidate(
+                    candidate,
+                    query
+                )
+            )
+
+            candidate["visual_query"] = (
+                query
+            )
+
+            candidates.append(
+                candidate
+            )
+
+        time.sleep(
+            WIKIMEDIA_DELAY
+        )
+
+    candidates.sort(
+        key=lambda item: item.get(
+            "score",
+            0
+        ),
+        reverse=True,
+    )
+
+    return candidates
+
+
+# ============================================================
+# NORMAL TOPIC MODE
+# ============================================================
+
+def download_images(
+    topic
+):
 
     line()
 
-    print("AI IMAGE SEARCH STARTED")
+    print(
+        "AI IMAGE SEARCH STARTED"
+    )
 
     line()
 
     print()
-    print("Topic:")
+    print(
+        "Topic:"
+    )
     print(topic)
-    print()
-
-    # --------------------------------------------------------
-    # Topic analysis
-    # --------------------------------------------------------
-
-    analysis = analyze_topic(topic)
-
-    print("Topic analysis:")
-
-    print(
-        f"Surya Kant: "
-        f"{analysis['surya_kant']}"
-    )
-
-    print(
-        f"Supreme Court: "
-        f"{analysis['supreme_court']}"
-    )
-
-    print(
-        f"Lawyers: "
-        f"{analysis['lawyers']}"
-    )
-
-    print(
-        f"Freedom movement: "
-        f"{analysis['freedom']}"
-    )
-
-    # --------------------------------------------------------
-    # Clean old images
-    # --------------------------------------------------------
-
-    print()
-    print("Cleaning old image assets...")
 
     clean_assets()
 
-    # --------------------------------------------------------
-    # Build searches
-    # --------------------------------------------------------
-
-    queries = build_search_queries(
+    queries = build_queries(
         topic
     )
 
     print()
-
-    line()
-
     print(
-        f"TOTAL SEARCHES: {len(queries)}"
+        f"SEARCH QUERIES: {len(queries)}"
     )
-
-    line()
 
     for index, query in enumerate(
         queries,
-        start=1,
+        1
     ):
 
         print(
             f"{index}. {query}"
         )
 
-    print()
-
-    # --------------------------------------------------------
-    # Search
-    # --------------------------------------------------------
-
-    all_candidates = []
-
-    seen_urls = set()
-
-    for index, query in enumerate(
-        queries,
-        start=1,
-    ):
-
-        line()
-
-        print(
-            f"SEARCHING {index}/{len(queries)}"
-        )
-
-        print(query)
-
-        line()
-
-        results = search_bing_images(
-            query,
-            RESULTS_PER_QUERY,
-        )
-
-        print(
-            f"Metadata results found: "
-            f"{len(results)}"
-        )
-
-        added = 0
-
-        for candidate in results:
-
-            image_url = (
-                candidate.get(
-                    "image_url",
-                    "",
-                )
-            )
-
-            if not image_url:
-                continue
-
-            normalized_url = (
-                image_url
-                .split("?")[0]
-                .strip()
-                .lower()
-            )
-
-            if normalized_url in seen_urls:
-                continue
-
-            seen_urls.add(
-                normalized_url
-            )
-
-            # ------------------------------------------------
-            # Score ONLY actual result evidence.
-            # Search query is deliberately excluded.
-            # ------------------------------------------------
-
-            score = relevance_score(
-                candidate,
-                topic,
-            )
-
-            candidate["score"] = score
-
-            title = candidate.get(
-                "title",
-                "",
-            )
-
-            # ------------------------------------------------
-            # Hard reject
-            # ------------------------------------------------
-
-            if score < MIN_RELEVANCE_SCORE:
-
-                print(
-                    f"Skipped: relevance "
-                    f"{score} | "
-                    f"{title[:100]}"
-                )
-
-                continue
-
-            all_candidates.append(
-                candidate
-            )
-
-            added += 1
-
-        print(
-            f"Accepted from search: "
-            f"{added}"
-        )
-
-        time.sleep(
-            SEARCH_DELAY
-        )
-
-    # --------------------------------------------------------
-    # Candidate summary
-    # --------------------------------------------------------
-
-    line()
-
-    print(
-        f"RELEVANT CANDIDATES: "
-        f"{len(all_candidates)}"
+    candidates = collect_candidates(
+        queries
     )
 
-    line()
-
-    if not all_candidates:
-
-        print()
-        print(
-            "⚠️ No relevant image candidates found."
-        )
-        print()
-
-        return 0
-
-    # --------------------------------------------------------
-    # Sort
-    # --------------------------------------------------------
-
-    all_candidates.sort(
-        key=lambda item: item.get(
-            "score",
-            0,
-        ),
-        reverse=True,
+    return _download_top_candidates(
+        candidates
     )
 
-    # --------------------------------------------------------
-    # Remove duplicate titles / URLs
-    # --------------------------------------------------------
 
-    unique_candidates = []
+# ============================================================
+# DOWNLOAD TOP CANDIDATES
+# ============================================================
 
-    seen_titles = set()
+def _download_top_candidates(
+    candidates,
+    flyer_path=None,
+):
 
-    for candidate in all_candidates:
-
-        title = normalize_text(
-            candidate.get(
-                "title",
-                "",
-            )
-        )
-
-        # Don't over-filter empty titles
-        if title:
-
-            title_key = title[:150]
-
-            if title_key in seen_titles:
-                continue
-
-            seen_titles.add(
-                title_key
-            )
-
-        unique_candidates.append(
-            candidate
-        )
-
-    all_candidates = unique_candidates
-
-    # --------------------------------------------------------
-    # TOP CANDIDATES
-    # --------------------------------------------------------
-
-    print()
-    print("TOP CANDIDATES:")
-
-    for index, candidate in enumerate(
-        all_candidates[:30],
-        start=1,
-    ):
-
-        source = (
-            candidate.get(
-                "page_url",
-                "",
-            )
-            or candidate.get(
-                "image_url",
-                "",
-            )
-        )
-
-        domain = get_domain(
-            source
-        )
-
-        print(
-            f"{index:02d}. "
-            f"Score="
-            f"{candidate.get('score', 0):03d} | "
-            f"{domain} | "
-            f"{candidate.get('title', '')[:100]}"
-        )
-
-    # --------------------------------------------------------
-    # DOWNLOAD
-    # --------------------------------------------------------
-
-    print()
-
-    line()
-
-    print(
-        "DOWNLOADING BEST IMAGES"
-    )
-
-    line()
-
-    final_count = 0
+    count = 0
 
     used_hashes = set()
+    used_urls = set()
+    used_titles = set()
 
-    attempts = min(
-        len(all_candidates),
-        MAX_CANDIDATES_TO_DOWNLOAD,
-    )
+    for candidate in candidates:
 
-    for candidate in all_candidates[
-        :attempts
-    ]:
-
-        if final_count >= TARGET_IMAGES:
+        if count >= TARGET_IMAGES:
             break
 
-        next_number = (
-            final_count + 1
+        url = candidate.get(
+            "image_url",
+            ""
         )
 
-        output_path = (
+        title_key = normalize_text(
+            candidate.get(
+                "title",
+                ""
+            )
+        )
+
+        if url in used_urls:
+            continue
+
+        if (
+            title_key
+            and title_key in used_titles
+        ):
+            continue
+
+        number = count + 1
+
+        destination = (
             ASSETS_DIR
-            / f"{next_number}.jpg"
-        )
-
-        score = candidate.get(
-            "score",
-            0,
-        )
-
-        title = candidate.get(
-            "title",
-            "",
+            / f"{number}.jpg"
         )
 
         print()
-
         print(
-            f"Trying candidate "
-            f"score={score}"
+            f"Trying candidate for visual {number}: "
+            f"{candidate.get('visual_query', '')}"
         )
 
         print(
-            f"Title: "
-            f"{title[:120]}"
+            f"Score: {candidate.get('score', 0)}"
+        )
+
+        print(
+            f"Source: {candidate.get('source', '')}"
         )
 
         success = download_image(
             candidate,
-            output_path,
+            destination
         )
 
         if not success:
-
-            print(
-                "Skipped: "
-                "download/validation failed"
-            )
-
-            try:
-                output_path.unlink()
-            except Exception:
-                pass
-
             continue
-
-        # ----------------------------------------------------
-        # Final validation
-        # ----------------------------------------------------
-
-        if not validate_final_image(
-            output_path
-        ):
-
-            print(
-                "Skipped: "
-                "visual quality failed"
-            )
-
-            try:
-                output_path.unlink()
-            except Exception:
-                pass
-
-            continue
-
-        # ----------------------------------------------------
-        # Duplicate detection
-        # ----------------------------------------------------
 
         file_hash = image_hash(
-            output_path
+            destination
         )
 
         if not file_hash:
 
-            print(
-                "Skipped: "
-                "hash calculation failed"
+            destination.unlink(
+                missing_ok=True
             )
-
-            try:
-                output_path.unlink()
-            except Exception:
-                pass
 
             continue
 
         if file_hash in used_hashes:
 
             print(
-                "Skipped: duplicate image"
+                "Skipped duplicate"
             )
 
-            try:
-                output_path.unlink()
-            except Exception:
-                pass
+            destination.unlink(
+                missing_ok=True
+            )
 
             continue
 
@@ -1576,102 +934,352 @@ def download_images(topic):
             file_hash
         )
 
-        # ----------------------------------------------------
-        # SUCCESS
-        # ----------------------------------------------------
-
-        print(
-            f"✅ Final image "
-            f"{next_number} saved"
+        used_urls.add(
+            url
         )
 
-        final_count += 1
+        if title_key:
+            used_titles.add(
+                title_key
+            )
+
+        count += 1
+
+        print(
+            f"OK - Visual {count} saved as {count}.jpg"
+        )
+
+        with Image.open(destination) as image:
+            print(
+                f"Size: {image.size[0]}x{image.size[1]}"
+            )
 
     # --------------------------------------------------------
-    # FINAL SUMMARY
+    # Flyer = VISUAL 8
     # --------------------------------------------------------
+
+    if flyer_path and os.path.exists(flyer_path):
+
+        try:
+
+            flyer_destination = (
+                ASSETS_DIR / "8.jpg"
+            )
+
+            with Image.open(flyer_path) as image:
+
+                image.convert("RGB").save(
+                    flyer_destination,
+                    "JPEG",
+                    quality=95,
+                )
+
+            print()
+            print(
+                "Original flyer included as Visual 8:"
+            )
+            print(
+                flyer_destination
+            )
+
+        except Exception as error:
+
+            print(
+                f"Could not include flyer: {error}"
+            )
+
+            flyer_destination.unlink(
+                missing_ok=True
+            )
 
     print()
+    line()
+
+    print(
+        f"FINAL IMAGES: {count}"
+    )
+
+    return count
+
+
+# ============================================================
+# VISUAL PLAN MODE
+# ============================================================
+
+def download_images_from_visual_plan(
+    visual_plan_path=OUTPUT_DIR / "visual_plan.txt",
+    flyer_path=None,
+):
 
     line()
 
     print(
-        f"FINAL RELEVANT IMAGES: "
-        f"{final_count}"
+        "AI FLYER VISUAL SEARCH STARTED"
     )
 
     line()
 
-    if final_count == 0:
+    visual_plan_path = Path(
+        visual_plan_path
+    )
 
-        print()
-        print(
-            "⚠️ No usable relevant images were found."
-        )
-        print()
+    if not visual_plan_path.exists():
 
-    else:
-
-        print()
-
-        print(
-            "✅ Image pipeline completed successfully."
+        raise FileNotFoundError(
+            f"Visual plan not found: {visual_plan_path}"
         )
 
-        print(
-            f"Images saved in: "
-            f"{ASSETS_DIR.resolve()}"
+    concepts = []
+
+    with open(
+        visual_plan_path,
+        "r",
+        encoding="utf-8",
+    ) as file:
+
+        for raw_line in file:
+
+            line_text = raw_line.strip()
+
+            match = re.match(
+                r"^\d+\.\s*(.+)$",
+                line_text,
+            )
+
+            if not match:
+                continue
+
+            concept = match.group(1).strip()
+
+            if concept:
+                concepts.append(
+                    concept
+                )
+
+    if not concepts:
+
+        raise ValueError(
+            "No visual concepts found in visual plan"
         )
 
-        print()
+    print()
+    print(
+        f"VISUAL CONCEPTS: {len(concepts)}"
+    )
 
-        for index in range(
-            1,
-            final_count + 1,
+    clean_assets()
+
+    downloaded = 0
+
+    for index, concept in enumerate(
+        concepts,
+        1
+    ):
+
+        print()
+        line()
+
+        print(
+            f"VISUAL {index}/{len(concepts)}"
+        )
+
+        print(
+            f"Concept: {concept}"
+        )
+
+        line()
+
+        # ----------------------------------------------------
+        # Original flyer
+        # ----------------------------------------------------
+
+        if index == len(concepts) and (
+            concept.lower()
+            in {
+                "the original flyer",
+                "original flyer",
+                "the flyer",
+            }
+            or "original flyer" in concept.lower()
         ):
 
-            path = (
+            print(
+                f"Visual {index} -> original flyer"
+            )
+
+            if flyer_path and Path(
+                flyer_path
+            ).exists():
+
+                destination = (
+                    ASSETS_DIR
+                    / f"{index}.jpg"
+                )
+
+                with Image.open(
+                    flyer_path
+                ) as image:
+
+                    image.convert(
+                        "RGB"
+                    ).save(
+                        destination,
+                        "JPEG",
+                        quality=95,
+                    )
+
+                print(
+                    f"Saved: {destination}"
+                )
+
+                downloaded += 1
+
+            else:
+
+                print(
+                    "Original flyer not found"
+                )
+
+            continue
+
+        # ----------------------------------------------------
+        # Search this visual concept
+        # ----------------------------------------------------
+
+        candidates = collect_candidates(
+            [concept]
+        )
+
+        if not candidates:
+
+            print(
+                f"No candidates found for visual {index}"
+            )
+
+            continue
+
+        used_hashes = set()
+
+        saved = False
+
+        for candidate in candidates:
+
+            print()
+
+            print(
+                f"Trying candidate for visual {index}: "
+                f"{concept}"
+            )
+
+            print(
+                f"Score: "
+                f"{candidate.get('score', 0)}"
+            )
+
+            print(
+                f"Source: "
+                f"{candidate.get('source', '')}"
+            )
+
+            destination = (
                 ASSETS_DIR
                 / f"{index}.jpg"
             )
 
-            if not path.exists():
+            if not download_image(
+                candidate,
+                destination,
+            ):
+
                 continue
 
-            try:
+            file_hash = image_hash(
+                destination
+            )
 
-                with Image.open(path) as image:
+            if not file_hash:
 
-                    print(
-                        f"Image {index}: "
-                        f"{image.size[0]}x"
-                        f"{image.size[1]}"
-                    )
+                destination.unlink(
+                    missing_ok=True
+                )
 
-            except Exception:
-                pass
+                continue
 
-    return final_count
+            if file_hash in used_hashes:
 
+                destination.unlink(
+                    missing_ok=True
+                )
 
-# ============================================================
-# DIRECT TEST
-# ============================================================
+                continue
 
-if __name__ == "__main__":
+            used_hashes.add(
+                file_hash
+            )
 
-    test_topic = (
-        "CJI Surya Kant Highlights "
-        "Lawyers Role In Freedom Struggle"
+            with Image.open(
+                destination
+            ) as image:
+
+                width, height = image.size
+
+            print()
+            print(
+                f"OK - Visual {index} saved as "
+                f"{index}.jpg"
+            )
+
+            print(
+                f"Size: {width}x{height}"
+            )
+
+            downloaded += 1
+            saved = True
+
+            break
+
+        if not saved:
+
+            print(
+                f"FAILED - Visual {index}"
+            )
+
+    print()
+    line()
+
+    print(
+        f"VISUAL PLAN IMAGES DOWNLOADED: "
+        f"{downloaded}"
     )
 
-    count = download_images(
-        test_topic
+    print(
+        f"VISUAL CONCEPTS: {len(concepts)}"
     )
 
     print()
 
-    print(
-        f"Returned image count: {count}"
-    )
-    
+    for index, concept in enumerate(
+        concepts,
+        1
+    ):
+
+        path = (
+            ASSETS_DIR
+            / f"{index}.jpg"
+        )
+
+        status = (
+            "OK"
+            if path.exists()
+            else "MISSING"
+        )
+
+        print(
+            f"{index}.jpg -> {concept}"
+            if status == "OK"
+            else f"{index}.jpg -> MISSING"
+        )
+
+    print()
+
+    return downloaded
