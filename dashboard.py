@@ -354,10 +354,29 @@ def create_thumbnail(
 
     return create_thumbnail(topic)
 
+# ============================================================
+# AI REVIEW
+# ============================================================
 
-# ============================================================
-# METADATA
-# ============================================================
+def create_ai_review():
+    """Run Gemini AI quality review on the generated project."""
+
+    from agents.review_agent import (
+        load_project_outputs,
+        review_video,
+    )
+
+    project = load_project_outputs()
+
+    return review_video(
+        script=project["script"],
+        visual_plan=project["visual_plan"],
+        subtitles=project["subtitles"],
+        video_exists=project["video_exists"],
+        thumbnail_exists=project["thumbnail_exists"],
+        subtitles_exists=project["subtitles_exists"],
+    )
+
 
 # ============================================================
 # METADATA
@@ -648,6 +667,17 @@ def generate_multi_media_video(
         )
 
     # ========================================================
+    # AI REVIEW
+    # ========================================================
+
+    progress.progress(
+        92,
+        text="🤖 AI is reviewing the generated video...",
+    )
+
+    review = create_ai_review()
+
+    # ========================================================
     # METADATA
     # ========================================================
 
@@ -685,6 +715,7 @@ def generate_multi_media_video(
         "title": title,
         "description": description,
         "tags": tags,
+        "review": review,
         "video": str(
             OUTPUT_DIR / "final_video.mp4"
         ),
