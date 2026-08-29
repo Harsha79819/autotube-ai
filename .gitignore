@@ -237,3 +237,20 @@ output/
 
 # Archives
 *.zip
+# AutoTube AI local secrets
+.env.*
+client_secret*.json
+token.json
+
+# Local editor
+.vscode/
+
+# Local backup files
+*.backup
+*.bak
+dashboard_backup*.py
+main_backup*.py
+
+# Generated/local assets
+assets/
+input/

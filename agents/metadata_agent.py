@@ -1,10 +1,9 @@
 import os
 import re
 import time
+import json
 
-from dotenv import load_dotenv
 from google import genai
-
 
 # ============================================================
 # PROJECT / ENV
@@ -21,7 +20,25 @@ ENV_FILE = os.path.join(
     ".env"
 )
 
-load_dotenv(ENV_FILE)
+def load_env_file(path):
+    """Load simple KEY=VALUE entries without requiring python-dotenv."""
+    if not os.path.isfile(path):
+        return
+
+    with open(path, encoding="utf-8") as env_file:
+        for line in env_file:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip("'\"")
+            if key:
+                os.environ.setdefault(key, value)
+
+
+load_env_file(ENV_FILE)
 
 api_key = os.environ.get("GEMINI_API_KEY")
 
@@ -251,10 +268,6 @@ Rules:
 
     print("Generating YouTube metadata...")
 
-    # ========================================================
-    # TRY GEMINI MODELS
-    # ========================================================
-
     for model in METADATA_MODELS:
 
         try:
@@ -284,12 +297,41 @@ Rules:
                 tags
             ):
 
+                metadata = {
+                    "title": title,
+                    "description": description,
+                    "tags": tags
+                }
+
+                metadata_file = os.path.join(
+                    PROJECT_ROOT,
+                    "output",
+                    "metadata.json"
+                )
+
+                with open(
+                    metadata_file,
+                    "w",
+                    encoding="utf-8"
+                ) as f:
+
+                    json.dump(
+                        metadata,
+                        f,
+                        ensure_ascii=False,
+                        indent=2
+                    )
+
                 print(
                     f"Metadata generated using {model}"
                 )
 
                 print(
                     "Metadata generated successfully!"
+                )
+
+                print(
+                    f"Metadata saved: {metadata_file}"
                 )
 
                 return title, description, tags
@@ -307,66 +349,9 @@ Rules:
 
             print(e)
 
-            # Small delay before trying next model
             time.sleep(2)
 
-    # ========================================================
-    # ALL MODELS FAILED
-    # ========================================================
-
-    print()
-    print(
-        "WARNING: All Gemini metadata models failed."
+    raise RuntimeError(
+        "Failed to generate valid YouTube metadata "
+        "using all available Gemini models."
     )
-
-    print(
-        "Using local metadata fallback..."
-    )
-
-    title, description, tags = generate_fallback_metadata(
-        topic,
-        script
-    )
-
-    print(
-        "Fallback metadata generated successfully!"
-    )
-
-    return title, description, tags
-
-
-# ============================================================
-# STANDALONE TEST
-# ============================================================
-
-if __name__ == "__main__":
-
-    test_topic = (
-        "UAE says Iran attacked ADNOC vessel "
-        "in Hormuz, urges waterway's reopening - Reuters"
-    )
-
-    test_script = """
-    This is a test news script for AutoTube AI.
-    """
-
-    title, description, tags = generate_metadata(
-        test_topic,
-        test_script
-    )
-
-    print()
-    print("=" * 60)
-
-    print("TITLE:")
-    print(title)
-
-    print()
-    print("DESCRIPTION:")
-    print(description)
-
-    print()
-    print("TAGS:")
-    print(tags)
-
-    print("=" * 60)

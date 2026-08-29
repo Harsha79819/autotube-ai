@@ -1,5 +1,9 @@
 openai
+streamlit>=1.40
+google-genai
 moviepy
+edge-tts
+Pillow
 gtts
 python-dotenv
 requests

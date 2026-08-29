@@ -2,9 +2,10 @@
 from agents.news_agent import get_news
 from agents.script_agent import generate_script
 from agents.voice_agent import create_voice
-from agents.image_agent import download_images
+from agents.image_agent import download_images_from_visual_plan
 from agents.video_agent import create_video
 from agents.metadata_agent import generate_metadata
+from agents.thumbnail_agent import create_thumbnail
 from agents.youtube_agent import upload_video, load_uploaded_videos
 
 import asyncio
@@ -58,7 +59,7 @@ print("Voice Created")
 
 print("Downloading Fresh Images...")
 
-download_images(topic)
+download_images_from_visual_plan("output/visual_plan.txt")
 
 print("Images Downloaded")
 
@@ -99,7 +100,17 @@ subprocess.run(
 print("Final Video Created")
 
 # ============================================================
-# 8. GENERATE YOUTUBE METADATA
+# 8. CREATE THUMBNAIL
+# ============================================================
+
+print("Generating Thumbnail...")
+
+create_thumbnail(topic)
+
+print("Thumbnail Created")
+
+# ============================================================
+# 9. GENERATE YOUTUBE METADATA
 # ============================================================
 
 print("Generating YouTube Metadata...")
@@ -122,7 +133,7 @@ print(tags)
 print("=" * 50)
 
 # ============================================================
-# 9. CHECK DUPLICATE VIDEO
+# 10. CHECK DUPLICATE VIDEO
 # ============================================================
 
 print("Checking upload history...")
@@ -142,7 +153,7 @@ if title in uploaded_videos:
 else:
 
     # ========================================================
-    # 10. UPLOAD TO YOUTUBE
+    # 11. UPLOAD TO YOUTUBE
     # ========================================================
 
     print("Uploading to YouTube...")

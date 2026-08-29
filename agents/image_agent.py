@@ -1,18 +1,9 @@
-"""
-AutoTube AI - Image Agent
-News-relevant image downloader.
-Wikimedia Commons + Bing Images fallback.
-Strict relevance filtering.
-"""
-
 import os
 import re
 import time
 import hashlib
 import html
-import json
 from pathlib import Path
-from urllib.parse import quote_plus
 
 import requests
 from PIL import Image
@@ -22,21 +13,26 @@ from PIL import Image
 # CONFIG
 # ============================================================
 
-ASSETS_DIR = Path("assets")
+ROOT = Path(__file__).resolve().parent.parent
 
-TARGET_IMAGES = 12
+ASSETS_DIR = ROOT / "assets"
+OUTPUT_DIR = ROOT / "output"
 
-MIN_WIDTH = 500
-MIN_HEIGHT = 300
+# IMPORTANT:
+# Script agent creates exactly 8 visual concepts.
+TARGET_IMAGES = 8
+
+MIN_PIXEL_X = 500
+MIN_PIXEL_Y = 300
 
 MAX_FILE_SIZE = 12 * 1024 * 1024
 
 REQUEST_TIMEOUT = 20
 
-MAX_WIKIMEDIA_RESULTS = 20
-MAX_BING_RESULTS = 40
+MAX_WIKIMEDIA_RESULTS = 12
+MAX_BING_RESULTS = 30
 
-WIKIMEDIA_DELAY = 3
+WIKIMEDIA_DELAY = 2
 
 
 # ============================================================
@@ -48,8 +44,8 @@ SESSION = requests.Session()
 SESSION.headers.update(
     {
         "User-Agent": (
-            "AutoTubeAI/1.0 "
-            "(news video project; contact: autotube-ai)"
+            "AutoTubeAI/2.1 "
+            "(automated video project)"
         ),
         "Accept-Language": "en-US,en;q=0.9",
     }
@@ -65,7 +61,6 @@ def line():
 
 
 def clean_text(text):
-
     if not text:
         return ""
 
@@ -74,58 +69,49 @@ def clean_text(text):
     text = re.sub(
         r"<[^>]+>",
         " ",
-        text
+        text,
     )
 
     text = re.sub(
         r"\s+",
         " ",
-        text
+        text,
     )
 
     return text.strip()
 
 
 def normalize_text(text):
-
     text = clean_text(text).lower()
 
     text = re.sub(
         r"[^a-z0-9\s]",
         " ",
-        text
+        text,
     )
 
     text = re.sub(
         r"\s+",
         " ",
-        text
+        text,
     )
 
     return text.strip()
 
 
+def text_tokens(text):
+    return set(
+        normalize_text(text).split()
+    )
+
+
 # ============================================================
-# STORY TYPE
+# STORY DETECTION
 # ============================================================
 
 def detect_story(topic):
 
     text = normalize_text(topic)
-
-    if any(
-        word in text
-        for word in [
-            "hormuz",
-            "iran",
-            "uae",
-            "adnoc",
-            "vessel",
-            "tanker",
-            "shipping",
-        ]
-    ):
-        return "HORMUZ"
 
     if any(
         word in text
@@ -142,6 +128,37 @@ def detect_story(topic):
     if any(
         word in text
         for word in [
+            "technology",
+            "tech",
+            "ai",
+            "artificial intelligence",
+            "software",
+            "startup",
+            "semiconductor",
+            "chip",
+            "robot",
+            "cybersecurity",
+        ]
+    ):
+        return "TECH"
+
+    if any(
+        word in text
+        for word in [
+            "hormuz",
+            "iran",
+            "uae",
+            "adnoc",
+            "vessel",
+            "tanker",
+            "shipping",
+        ]
+    ):
+        return "MARITIME"
+
+    if any(
+        word in text
+        for word in [
             "india",
             "indian",
         ]
@@ -152,78 +169,84 @@ def detect_story(topic):
 
 
 # ============================================================
-# QUERY BUILDER
+# SEARCH QUERIES
 # ============================================================
 
 def build_queries(topic):
 
     text = normalize_text(topic)
 
+    words = [
+        word
+        for word in text.split()
+        if len(word) >= 4
+    ]
+
     story = detect_story(topic)
+
+    # Build topic-relevant image queries.
+    # IMPORTANT: Do not inject unrelated categories such as
+    # "technology", "tech news", or "latest news".
 
     queries = []
 
-    if story == "HORMUZ":
+    if story == "LEGAL":
 
         queries = [
-            "Strait of Hormuz",
-            "Strait of Hormuz ships",
-            "Strait of Hormuz tanker",
-            "Strait of Hormuz oil tanker",
-            "Hormuz maritime shipping",
-            "UAE Iran Strait Hormuz",
-            "ADNOC UAE oil tanker",
-            "ADNOC vessel UAE",
-            "Iran UAE shipping",
-            "Persian Gulf tanker",
-            "Hormuz satellite map",
-            "Hormuz shipping route",
+            topic,
+            "Supreme Court India",
+            "Indian judiciary",
+            "Indian court hearing",
         ]
 
-    elif story == "LEGAL":
+    elif story == "TECH":
 
         queries = [
-            "Supreme Court of India",
-            "Chief Justice India",
-            "Indian lawyers court",
-            "Indian judiciary",
-            "Supreme Court India lawyers",
+            topic,
+            " ".join(words[:8]),
+            " ".join(words[:6]) + " India",
+        ]
+
+    elif story == "MARITIME":
+
+        queries = [
+            topic,
+            "Strait of Hormuz ships",
+            "Hormuz maritime shipping",
+            "Persian Gulf tanker",
         ]
 
     elif story == "INDIA":
 
         queries = [
-            "India news",
-            "Indian government",
-            "India parliament",
-            "India current affairs",
+            topic,
+            " ".join(words[:8]),
+            "India " + " ".join(words[:5]),
+            " ".join(words[:6]) + " India",
         ]
 
     else:
 
-        words = [
-            word
-            for word in text.split()
-            if len(word) >= 4
-        ]
-
         queries = [
-            " ".join(words[:8])
+            topic,
+            " ".join(words[:8]),
+            " ".join(words[:6]) + " India",
         ]
 
     final = []
 
     for query in queries:
 
-        if query not in final:
+        query = query.strip()
 
+        if query and query not in final:
             final.append(query)
 
     return final
 
 
 # ============================================================
-# WIKIMEDIA
+# WIKIMEDIA SEARCH
 # ============================================================
 
 def search_wikimedia(query):
@@ -247,17 +270,17 @@ def search_wikimedia(query):
         response = SESSION.get(
             url,
             params=params,
-            timeout=REQUEST_TIMEOUT
+            timeout=REQUEST_TIMEOUT,
         )
 
         response.raise_for_status()
 
         data = response.json()
 
-    except Exception as exc:
+    except Exception as error:
 
         print(
-            f"Wikimedia search failed: {exc}"
+            f"Wikimedia search failed: {error}"
         )
 
         return []
@@ -272,69 +295,43 @@ def search_wikimedia(query):
 
     for page in pages.values():
 
-        title = clean_text(
-            page.get(
-                "title",
-                ""
-            )
-        )
-
-        info_list = page.get(
+        imageinfo = page.get(
             "imageinfo",
-            []
+            [],
         )
 
-        if not info_list:
+        if not imageinfo:
             continue
 
-        info = info_list[0]
+        info = imageinfo[0]
 
         image_url = (
             info.get("thumburl")
             or info.get("url")
         )
 
-        width = info.get(
-            "width",
-            0
-        )
-
-        height = info.get(
-            "height",
-            0
-        )
-
-        mime = info.get(
-            "mime",
-            ""
-        )
-
         if not image_url:
-            continue
-
-        if not mime.startswith("image/"):
-            continue
-
-        if width < MIN_WIDTH:
-            continue
-
-        if height < MIN_HEIGHT:
             continue
 
         results.append(
             {
                 "image_url": image_url,
-                "page_url": (
-                    "https://commons.wikimedia.org/wiki/"
-                    + quote_plus(
-                        title.replace(
-                            " ",
-                            "_"
-                        )
-                    )
+                "title": clean_text(
+                    page.get("title", "")
                 ),
-                "title": title,
-                "source": "Wikimedia Commons",
+                "source": "Wikimedia",
+                "width": info.get(
+                    "width",
+                    0,
+                ),
+                "height": info.get(
+                    "height",
+                    0,
+                ),
+                "mime": info.get(
+                    "mime",
+                    "",
+                ),
             }
         )
 
@@ -342,541 +339,281 @@ def search_wikimedia(query):
 
 
 # ============================================================
-# BING
+# BING IMAGE SEARCH
 # ============================================================
 
 def search_bing(query):
 
     url = (
-        "https://www.bing.com/images/async"
-        f"?q={quote_plus(query)}"
-        "&first=0"
-        f"&count={MAX_BING_RESULTS}"
-        "&adlt=off"
+        "https://www.bing.com/images/"
+        "search"
     )
+
+    params = {
+        "q": query,
+        "form": "HDRSC2",
+        "first": 1,
+    }
 
     try:
 
         response = SESSION.get(
             url,
-            timeout=REQUEST_TIMEOUT
+            params=params,
+            timeout=REQUEST_TIMEOUT,
         )
 
         response.raise_for_status()
 
-    except Exception as exc:
+    except Exception as error:
 
         print(
-            f"Bing search failed: {exc}"
+            f"Bing search failed: {error}"
         )
 
         return []
 
-    pattern = re.compile(
-        r'<a[^>]+class="[^"]*iusc[^"]*"[^>]+m="([^"]+)"',
-        re.IGNORECASE
-    )
-
-    matches = pattern.findall(
-        response.text
-    )
+    html_text = response.text
 
     results = []
 
-    for raw in matches:
+    pattern = re.compile(
+        r'murl&quot;:&quot;(.*?)&quot;.*?'
+        r'mid&quot;:&quot;(.*?)&quot;',
+        re.DOTALL,
+    )
 
-        try:
+    matches = pattern.findall(
+        html_text
+    )
 
-            raw = html.unescape(
-                raw
-            )
-
-            data = json.loads(
-                raw
-            )
-
-        except Exception:
-
-            continue
+    for image_url, mid in matches:
 
         image_url = (
-            data.get("murl")
-            or data.get("turl")
+            image_url
+            .replace("\\/", "/")
+            .replace("\\u002f", "/")
         )
 
-        if not image_url:
+        if not image_url.startswith("http"):
             continue
 
         results.append(
             {
                 "image_url": image_url,
-                "page_url": data.get(
-                    "purl",
-                    ""
-                ),
-                "title": clean_text(
-                    data.get(
-                        "t",
-                        ""
-                    )
-                    or data.get(
-                        "desc",
-                        ""
-                    )
-                ),
-                "source": "Bing Images",
+                "title": query,
+                "source": "Bing",
+                "width": 0,
+                "height": 0,
+                "mime": "",
+                "mid": mid,
             }
         )
+
+        if len(results) >= MAX_BING_RESULTS:
+            break
 
     return results
 
 
 # ============================================================
-# POSITIVE KEYWORDS
+# RELEVANCE
 # ============================================================
 
-HORMUZ_POSITIVE = [
-    "hormuz",
-    "strait of hormuz",
-    "tanker",
-    "oil tanker",
-    "oil ship",
-    "vessel",
-    "ship",
-    "shipping",
-    "maritime",
-    "waterway",
-    "persian gulf",
-    "gulf of oman",
-    "adnoc",
-    "abu dhabi",
-    "uae",
-    "united arab emirates",
-    "iran",
-    "iranian",
-    "naval",
-    "port",
-    "cargo",
-]
+def score_candidate(candidate, query):
 
-
-# ============================================================
-# NEGATIVE KEYWORDS
-# ============================================================
-
-HORMUZ_NEGATIVE = [
-    "supreme court",
-    "court of india",
-    "chief justice",
-    "justice surya",
-    "surya kant",
-    "lawyer",
-    "lawyers",
-    "advocate",
-    "advocates",
-    "freedom struggle",
-    "freedom movement",
-    "independence movement",
-    "independence day",
-    "mahatma gandhi",
-    "gandhi",
-    "nehru",
-    "ambedkar",
-    "patel",
-    "parliament of india",
-    "lok sabha",
-    "rajya sabha",
-    "cricket",
-    "bollywood",
-]
-
-
-# ============================================================
-# RELEVANCE SCORE
-# ============================================================
-
-def score_candidate(candidate, topic):
-
-    story = detect_story(topic)
-
-    title = normalize_text(
+    title_tokens = text_tokens(
         candidate.get(
             "title",
-            ""
+            "",
         )
     )
 
-    page = normalize_text(
-        candidate.get(
-            "page_url",
-            ""
-        )
-    )
+    query_words = [
+        word
+        for word in normalize_text(
+            query
+        ).split()
+        if len(word) >= 2
+    ]
 
-    url = normalize_text(
-        candidate.get(
-            "image_url",
-            ""
-        )
-    )
-
-    combined = (
-        title
-        + " "
-        + page
-        + " "
-        + url
-    )
+    if not query_words:
+        return 0
 
     score = 0
 
-    if story == "HORMUZ":
+    for word in query_words:
 
-        # Strong keywords
-        for word in HORMUZ_POSITIVE:
+        if word in title_tokens:
+            score += 10
 
-            if word in title:
-                score += 10
+    width = candidate.get(
+        "width",
+        0,
+    )
 
-            elif word in page:
-                score += 5
+    height = candidate.get(
+        "height",
+        0,
+    )
 
-            elif word in url:
-                score += 2
-
-        # Strong combinations
-        if (
-            "hormuz" in combined
-            and "tanker" in combined
-        ):
-            score += 25
-
-        if (
-            "hormuz" in combined
-            and "ship" in combined
-        ):
-            score += 20
-
-        if (
-            "hormuz" in combined
-            and "vessel" in combined
-        ):
-            score += 20
-
-        if (
-            "uae" in combined
-            and "iran" in combined
-        ):
-            score += 20
-
-        if (
-            "adnoc" in combined
-            and "tanker" in combined
-        ):
-            score += 25
-
-        if (
-            "adnoc" in combined
-            and "vessel" in combined
-        ):
-            score += 25
-
-        if (
-            "persian gulf" in combined
-            and "ship" in combined
-        ):
-            score += 15
-
-        # Negative penalty
-        for word in HORMUZ_NEGATIVE:
-
-            if word in combined:
-
-                score -= 60
-
-    else:
-
-        topic_words = [
-            word
-            for word in normalize_text(topic).split()
-            if len(word) >= 4
-        ]
-
-        for word in topic_words:
-
-            if word in title:
-                score += 8
-
-            elif word in page:
-                score += 4
-
-            elif word in url:
-                score += 2
-
-    if (
-        candidate.get("source")
-        == "Wikimedia Commons"
-    ):
+    if width >= 1000:
         score += 5
+
+    if height >= 600:
+        score += 5
+
+    # Penalize obvious logo / text-only results.
+    title = normalize_text(
+        candidate.get("title", "")
+    )
+
+    bad_words = [
+        "logo",
+        "newspaper",
+        "radio logo",
+        "svg",
+    ]
+
+    for bad in bad_words:
+
+        if bad in title:
+            score -= 15
 
     return score
 
 
-# ============================================================
-# RELEVANCE FILTER
-# ============================================================
+def is_relevant(candidate, query):
 
-def is_relevant(candidate, topic):
-
-    story = detect_story(topic)
-
-    title = normalize_text(
-        candidate.get(
-            "title",
-            ""
+    return (
+        score_candidate(
+            candidate,
+            query,
         )
+        >= 5
     )
-
-    page = normalize_text(
-        candidate.get(
-            "page_url",
-            ""
-        )
-    )
-
-    url = normalize_text(
-        candidate.get(
-            "image_url",
-            ""
-        )
-    )
-
-    combined = (
-        title
-        + " "
-        + page
-        + " "
-        + url
-    )
-
-    if story == "HORMUZ":
-
-        # NEVER allow these unrelated visuals
-        for bad in HORMUZ_NEGATIVE:
-
-            if bad in combined:
-
-                return False
-
-        positive_hits = 0
-
-        for word in HORMUZ_POSITIVE:
-
-            if word in combined:
-
-                positive_hits += 1
-
-        # Hormuz itself is very strong
-        if "strait of hormuz" in combined:
-
-            return True
-
-        if "hormuz" in combined:
-
-            if positive_hits >= 2:
-
-                return True
-
-        # ADNOC + maritime visual
-        if "adnoc" in combined:
-
-            if any(
-                word in combined
-                for word in [
-                    "ship",
-                    "vessel",
-                    "tanker",
-                    "oil",
-                    "marine",
-                    "maritime",
-                ]
-            ):
-
-                return True
-
-        # UAE + Iran + maritime
-        if (
-            (
-                "uae" in combined
-                or "abu dhabi" in combined
-            )
-            and (
-                "iran" in combined
-                or "iranian" in combined
-            )
-            and any(
-                word in combined
-                for word in [
-                    "ship",
-                    "vessel",
-                    "tanker",
-                    "maritime",
-                    "shipping",
-                    "waterway",
-                ]
-            )
-        ):
-
-            return True
-
-        # Generic tanker is allowed only if page/title
-        # has Gulf/Hormuz/UAE/Iran context.
-        if (
-            "tanker" in combined
-            and any(
-                word in combined
-                for word in [
-                    "gulf",
-                    "hormuz",
-                    "uae",
-                    "iran",
-                    "abu dhabi",
-                ]
-            )
-        ):
-
-            return True
-
-        return False
-
-    score = score_candidate(
-        candidate,
-        topic
-    )
-
-    return score >= 15
 
 
 # ============================================================
-# DOWNLOAD
+# IMAGE DOWNLOAD
 # ============================================================
 
 def download_image(
     candidate,
-    destination
+    destination,
 ):
 
-    image_url = candidate.get(
+    url = candidate.get(
         "image_url",
-        ""
+        "",
     )
 
-    if not image_url:
+    if not url:
         return False
 
     try:
 
-        response = SESSION.get(
-            image_url,
+        with SESSION.get(
+            url,
             timeout=REQUEST_TIMEOUT,
-            stream=True
+            stream=True,
+        ) as response:
+
+            response.raise_for_status()
+
+            content_type = (
+                response.headers
+                .get(
+                    "content-type",
+                    "",
+                )
+                .lower()
+            )
+
+            if (
+                content_type
+                and "image" not in content_type
+            ):
+                return False
+
+            content_length = int(
+                response.headers.get(
+                    "content-length",
+                    0,
+                )
+                or 0
+            )
+
+            if (
+                content_length
+                and content_length > MAX_FILE_SIZE
+            ):
+                return False
+
+            data = response.content
+
+        if len(data) > MAX_FILE_SIZE:
+            return False
+
+        destination.parent.mkdir(
+            parents=True,
+            exist_ok=True,
         )
-
-        response.raise_for_status()
-
-        temp = destination.with_suffix(
-            ".tmp"
-        )
-
-        total = 0
 
         with open(
-            temp,
-            "wb"
+            destination,
+            "wb",
         ) as file:
 
-            for chunk in response.iter_content(
-                chunk_size=65536
-            ):
+            file.write(data)
 
-                if not chunk:
-                    continue
+        with Image.open(
+            destination
+        ) as image:
 
-                total += len(chunk)
+            image.verify()
 
-                if total > MAX_FILE_SIZE:
+        with Image.open(
+            destination
+        ) as image:
 
-                    temp.unlink(
-                        missing_ok=True
-                    )
+            pixel_x, pixel_y = image.size
 
-                    return False
-
-                file.write(
-                    chunk
-                )
-
-        try:
-
-            with Image.open(
-                temp
-            ) as image:
-
-                image.verify()
-
-        except Exception:
-
-            temp.unlink(
+        if pixel_x < MIN_PIXEL_X:
+            destination.unlink(
                 missing_ok=True
             )
-
             return False
 
-        try:
-
-            with Image.open(
-                temp
-            ) as image:
-
-                width, height = image.size
-
-                if width < MIN_WIDTH:
-                    temp.unlink(
-                        missing_ok=True
-                    )
-                    return False
-
-                if height < MIN_HEIGHT:
-                    temp.unlink(
-                        missing_ok=True
-                    )
-                    return False
-
-                image = image.convert(
-                    "RGB"
-                )
-
-                image.save(
-                    destination,
-                    "JPEG",
-                    quality=90
-                )
-
-        except Exception:
-
-            temp.unlink(
+        if pixel_y < MIN_PIXEL_Y:
+            destination.unlink(
                 missing_ok=True
             )
-
             return False
 
-        temp.unlink(
-            missing_ok=True
-        )
+        with Image.open(
+            destination
+        ) as image:
+
+            image.convert(
+                "RGB"
+            ).save(
+                destination,
+                "JPEG",
+                quality=90,
+            )
 
         return True
 
-    except Exception:
+    except Exception as error:
+
+        print(
+            f"Download failed: {error}"
+        )
+
+        destination.unlink(
+            missing_ok=True
+        )
 
         return False
 
@@ -889,25 +626,78 @@ def image_hash(path):
 
     try:
 
-        with Image.open(
-            path
-        ) as image:
+        hasher = hashlib.sha256()
 
-            image = image.convert(
-                "RGB"
-            )
+        with open(
+            path,
+            "rb",
+        ) as file:
 
-            image = image.resize(
-                (32, 32)
-            )
+            while True:
 
-            return hashlib.md5(
-                image.tobytes()
-            ).hexdigest()
+                chunk = file.read(
+                    1024 * 1024
+                )
+
+                if not chunk:
+                    break
+
+                hasher.update(chunk)
+
+        return hasher.hexdigest()
 
     except Exception:
 
         return None
+
+
+# ============================================================
+# FLYER
+# ============================================================
+
+def save_flyer_fallback(
+    flyer_path,
+    destination,
+):
+
+    if not flyer_path:
+        return False
+
+    source = Path(flyer_path)
+
+    if not source.exists():
+        return False
+
+    try:
+
+        destination.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        with Image.open(source) as image:
+
+            image.convert(
+                "RGB"
+            ).save(
+                destination,
+                "JPEG",
+                quality=95,
+            )
+
+        return True
+
+    except Exception as error:
+
+        print(
+            f"Could not create flyer fallback: {error}"
+        )
+
+        destination.unlink(
+            missing_ok=True
+        )
+
+        return False
 
 
 # ============================================================
@@ -918,7 +708,7 @@ def clean_assets():
 
     ASSETS_DIR.mkdir(
         parents=True,
-        exist_ok=True
+        exist_ok=True,
     )
 
     for file in ASSETS_DIR.iterdir():
@@ -932,391 +722,561 @@ def clean_assets():
 
 
 # ============================================================
-# MAIN
+# COLLECT CANDIDATES
 # ============================================================
 
-def download_images(topic):
+def collect_candidates(queries):
 
-    line()
+    candidates = []
 
-    print(
-        "AI IMAGE SEARCH STARTED"
+    seen_urls = set()
+
+    for index, query in enumerate(
+        queries,
+        1,
+    ):
+
+        print()
+        print(
+            f"SEARCH {index}/{len(queries)}"
+        )
+
+        print(query)
+
+        # ----------------------------------------------------
+        # Wikimedia
+        # ----------------------------------------------------
+
+        wikimedia = search_wikimedia(
+            query
+        )
+
+        for candidate in wikimedia:
+
+            url = candidate.get(
+                "image_url"
+            )
+
+            if not url:
+                continue
+
+            if url in seen_urls:
+                continue
+
+            if not is_relevant(
+                candidate,
+                query,
+            ):
+                continue
+
+            seen_urls.add(url)
+
+            candidates.append(candidate)
+
+        # Be polite to Wikimedia.
+        time.sleep(WIKIMEDIA_DELAY)
+
+        # ----------------------------------------------------
+        # Bing
+        # ----------------------------------------------------
+
+        bing = search_bing(query)
+
+        for candidate in bing:
+
+            url = candidate.get(
+                "image_url"
+            )
+
+            if not url:
+                continue
+
+            if url in seen_urls:
+                continue
+
+            if not is_relevant(
+                candidate,
+                query,
+            ):
+                continue
+
+            seen_urls.add(url)
+
+            candidates.append(candidate)
+
+    # --------------------------------------------------------
+    # Highest relevance first.
+    # --------------------------------------------------------
+
+    candidates.sort(
+        key=lambda item: score_candidate(
+            item,
+            item.get("title", ""),
+        ),
+        reverse=True,
     )
 
+    return candidates
+
+
+# ============================================================
+# DOWNLOAD IMAGES
+# ============================================================
+
+def download_images(
+    topic,
+    flyer_path=None,
+):
+
+    line()
+    print("AI IMAGE SEARCH STARTED")
     line()
 
     print()
     print("Topic:")
     print(topic)
 
-    print()
-    print(
-        "Story type:",
-        detect_story(topic)
-    )
+    # --------------------------------------------------------
+    # ALWAYS CLEAN OLD ASSETS.
+    # --------------------------------------------------------
 
     clean_assets()
 
-    queries = build_queries(
-        topic
-    )
+    queries = build_queries(topic)
 
     print()
-    line()
-
     print(
-        f"TOTAL SEARCHES: {len(queries)}"
+        f"SEARCH QUERIES: {len(queries)}"
     )
 
-    line()
-
-    for i, query in enumerate(
+    for index, query in enumerate(
         queries,
-        1
+        1,
     ):
 
         print(
-            f"{i}. {query}"
+            f"{index}. {query}"
         )
 
-    candidates = []
+    # --------------------------------------------------------
+    # Collect candidates.
+    # --------------------------------------------------------
 
-    seen = set()
-
-    # ========================================================
-    # SEARCH
-    # ========================================================
-
-    for i, query in enumerate(
-        queries,
-        1
-    ):
-
-        print()
-        line()
-
-        print(
-            f"SEARCHING {i}/{len(queries)}"
-        )
-
-        print(query)
-
-        line()
-
-        # Wikimedia
-        wikimedia = search_wikimedia(
-            query
-        )
-
-        print(
-            f"Wikimedia results: "
-            f"{len(wikimedia)}"
-        )
-
-        for candidate in wikimedia:
-
-            url = candidate.get(
-                "image_url",
-                ""
-            )
-
-            key = url.split(
-                "?",
-                1
-            )[0]
-
-            if not key or key in seen:
-                continue
-
-            seen.add(key)
-
-            if is_relevant(
-                candidate,
-                topic
-            ):
-
-                candidate["score"] = score_candidate(
-                    candidate,
-                    topic
-                )
-
-                candidates.append(
-                    candidate
-                )
-
-        # Bing
-        bing = search_bing(
-            query
-        )
-
-        print(
-            f"Bing results: "
-            f"{len(bing)}"
-        )
-
-        for candidate in bing:
-
-            url = candidate.get(
-                "image_url",
-                ""
-            )
-
-            key = url.split(
-                "?",
-                1
-            )[0]
-
-            if not key or key in seen:
-                continue
-
-            seen.add(key)
-
-            if is_relevant(
-                candidate,
-                topic
-            ):
-
-                candidate["score"] = score_candidate(
-                    candidate,
-                    topic
-                )
-
-                candidates.append(
-                    candidate
-                )
-
-        # Small delay
-        time.sleep(
-            WIKIMEDIA_DELAY
-        )
-
-    # ========================================================
-    # SORT
-    # ========================================================
-
-    candidates.sort(
-        key=lambda x: x.get(
-            "score",
-            0
-        ),
-        reverse=True
+    candidates = collect_candidates(
+        queries
     )
 
-    print()
-    line()
+    # --------------------------------------------------------
+    # Download EXACTLY 8 images.
+    # --------------------------------------------------------
 
-    print(
-        f"RELEVANT CANDIDATES: "
-        f"{len(candidates)}"
-    )
-
-    line()
-
-    if not candidates:
-
-        print()
-        print(
-            "NO RELEVANT IMAGE CANDIDATES FOUND."
-        )
-
-        print(
-            "No unrelated fallback images will be used."
-        )
-
-        return 0
-
-    # ========================================================
-    # TOP CANDIDATES
-    # ========================================================
-
-    print()
-    print(
-        "TOP CANDIDATES:"
-    )
-
-    for i, candidate in enumerate(
-        candidates[:25],
-        1
-    ):
-
-        print(
-            f"{i:02d}. "
-            f"Score={candidate.get('score', 0):03d} | "
-            f"{candidate.get('source', '')} | "
-            f"{candidate.get('title', '')[:120]}"
-        )
-
-    # ========================================================
-    # DOWNLOAD
-    # ========================================================
-
-    print()
-    line()
-
-    print(
-        "DOWNLOADING IMAGES"
-    )
-
-    line()
-
-    count = 0
+    downloaded = 0
 
     used_hashes = set()
 
-    used_urls = set()
-
     for candidate in candidates:
 
-        if count >= TARGET_IMAGES:
+        # HARD STOP.
+        # This is the important fix.
+        if downloaded >= TARGET_IMAGES:
             break
 
-        url = candidate.get(
-            "image_url",
-            ""
+        query_title = candidate.get(
+            "title",
+            topic,
         )
 
-        if url in used_urls:
-            continue
-
-        used_urls.add(
-            url
+        score = score_candidate(
+            candidate,
+            query_title,
         )
 
-        number = count + 1
+        visual_number = (
+            downloaded + 1
+        )
 
         destination = (
             ASSETS_DIR
-            / f"{number}.jpg"
+            / f"{visual_number}.jpg"
         )
 
         print()
         print(
-            f"Trying image {number}"
+            f"Trying candidate for visual "
+            f"{visual_number}: {query_title}"
         )
 
         print(
-            f"Score: "
-            f"{candidate.get('score', 0)}"
-        )
-
-        print(
-            f"Source: "
-            f"{candidate.get('source', '')}"
-        )
-
-        print(
-            f"Title: "
-            f"{candidate.get('title', '')[:150]}"
+            f"Score: {score}"
         )
 
         success = download_image(
             candidate,
-            destination
+            destination,
         )
 
         if not success:
-
-            print(
-                "Skipped: download failed"
-            )
-
-            destination.unlink(
-                missing_ok=True
-            )
-
             continue
+
+        # ----------------------------------------------------
+        # Duplicate detection.
+        # ----------------------------------------------------
 
         file_hash = image_hash(
             destination
         )
 
-        if not file_hash:
-
-            destination.unlink(
-                missing_ok=True
-            )
-
-            continue
-
-        if file_hash in used_hashes:
-
-            print(
-                "Skipped: duplicate"
-            )
-
-            destination.unlink(
-                missing_ok=True
-            )
-
-            continue
-
-        used_hashes.add(
+        if (
             file_hash
-        )
-
-        with Image.open(
-            destination
-        ) as image:
+            and file_hash in used_hashes
+        ):
 
             print(
-                f"OK - Image {number} saved "
-                f"{image.size[0]}x{image.size[1]}"
+                "Duplicate image skipped."
             )
 
-        count += 1
+            destination.unlink(
+                missing_ok=True
+            )
 
-    # ========================================================
-    # FINAL
-    # ========================================================
+            continue
+
+        if file_hash:
+            used_hashes.add(
+                file_hash
+            )
+
+        downloaded += 1
+
+        print(
+            f"OK - Visual {downloaded} "
+            f"saved as {visual_number}.jpg"
+        )
+
+        try:
+
+            with Image.open(
+                destination
+            ) as image:
+
+                print(
+                    f"Size: {image.width}x"
+                    f"{image.height}"
+                )
+
+        except Exception:
+            pass
+
+    # --------------------------------------------------------
+    # Flyer fallback.
+    #
+    # Flyer is NOT allowed to replace the 8 normal visuals.
+    # It can only be used separately by callers that need it.
+    # --------------------------------------------------------
+
+    if downloaded < TARGET_IMAGES:
+
+        print()
+        print(
+            f"WARNING: Only {downloaded}/"
+            f"{TARGET_IMAGES} images downloaded."
+        )
+
+        raise RuntimeError(
+            f"Could not download exactly "
+            f"{TARGET_IMAGES} valid images. "
+            f"Only {downloaded} were downloaded."
+        )
+
+    # --------------------------------------------------------
+    # FINAL HARD VALIDATION.
+    # --------------------------------------------------------
+
+    final_images = []
+
+    for number in range(
+        1,
+        TARGET_IMAGES + 1,
+    ):
+
+        path = (
+            ASSETS_DIR
+            / f"{number}.jpg"
+        )
+
+        if not path.exists():
+            raise RuntimeError(
+                f"Missing required image: "
+                f"{path.name}"
+            )
+
+        final_images.append(path)
+
+    # Remove any accidental numbered files
+    # outside the expected 1-8 range.
+    for file in ASSETS_DIR.iterdir():
+
+        if not file.is_file():
+            continue
+
+        match = re.fullmatch(
+            r"(\d+)\.(jpg|jpeg|png|webp)",
+            file.name,
+            re.IGNORECASE,
+        )
+
+        if not match:
+            continue
+
+        number = int(
+            match.group(1)
+        )
+
+        if number > TARGET_IMAGES:
+
+            print(
+                f"Removing extra image: "
+                f"{file.name}"
+            )
+
+            file.unlink(
+                missing_ok=True
+            )
 
     print()
     line()
 
     print(
-        f"FINAL IMAGES: {count}"
+        f"FINAL IMAGES: {len(final_images)}"
+    )
+
+    print(
+        "Images Downloaded"
     )
 
     line()
 
-    if count:
-
-        print()
-        print(
-            f"Images saved in: "
-            f"{ASSETS_DIR.resolve()}"
-        )
-
-        print()
-        print(
-            "IMAGE PIPELINE COMPLETED"
-        )
-
-    else:
-
-        print()
-        print(
-            "No usable images downloaded."
-        )
-
-    return count
+    return [
+        str(path)
+        for path in final_images
+    ]
 
 
 # ============================================================
-# STANDALONE TEST
+# VISUAL PLAN IMAGE DOWNLOAD
 # ============================================================
 
-if __name__ == "__main__":
+def download_images_from_visual_plan(
+    visual_plan_path,
+    flyer_path=None,
+):
 
-    test_topic = (
-        "UAE says Iran attacked ADNOC vessel "
-        "in Hormuz, urges waterway's reopening - Reuters"
+    visual_plan_file = Path(
+        visual_plan_path
     )
 
-    result = download_images(
-        test_topic
-    )
+    if not visual_plan_file.exists():
+        raise FileNotFoundError(
+            f"Visual plan not found: "
+            f"{visual_plan_file}"
+        )
+
+    visuals = []
+
+    with open(
+        visual_plan_file,
+        "r",
+        encoding="utf-8",
+    ) as file:
+
+        for raw_line in file:
+
+            line_text = raw_line.strip()
+
+            match = re.match(
+                r"^\d+[\.\)]\s*(.+)$",
+                line_text,
+            )
+
+            if match:
+                visuals.append(
+                    match.group(1).strip()
+                )
+
+    if len(visuals) != TARGET_IMAGES:
+        raise RuntimeError(
+            f"Expected {TARGET_IMAGES} "
+            f"visual concepts, got "
+            f"{len(visuals)}."
+        )
+
+    # ========================================================
+    # DOWNLOAD ONE IMAGE FOR EACH VISUAL DESCRIPTION
+    # ========================================================
+
+    line()
+    print("AI VISUAL-PLAN IMAGE SEARCH")
+    line()
+
+    clean_assets()
+
+    used_hashes = set()
+    final_images = []
+
+    for visual_number, visual_query in enumerate(
+        visuals,
+        start=1,
+    ):
+
+        print()
+        print(
+            f"VISUAL {visual_number}/{TARGET_IMAGES}"
+        )
+
+        print(
+            f"Query: {visual_query}"
+        )
+
+        queries = build_queries(
+            visual_query
+        )
+
+        candidates = collect_candidates(
+            queries
+        )
+
+        saved = False
+
+        for candidate in candidates:
+
+            destination = (
+                ASSETS_DIR
+                / f"{visual_number}.jpg"
+            )
+
+            title = candidate.get(
+                "title",
+                visual_query,
+            )
+
+            print()
+            print(
+                f"Trying Visual {visual_number}: "
+                f"{title}"
+            )
+
+            success = download_image(
+                candidate,
+                destination,
+            )
+
+            if not success:
+                continue
+
+            file_hash = image_hash(
+                destination
+            )
+
+            if (
+                file_hash
+                and file_hash in used_hashes
+            ):
+
+                print(
+                    "Duplicate image skipped."
+                )
+
+                destination.unlink(
+                    missing_ok=True
+                )
+
+                continue
+
+            if file_hash:
+                used_hashes.add(
+                    file_hash
+                )
+
+            final_images.append(
+                destination
+            )
+
+            print(
+                f"OK - Visual {visual_number} "
+                f"saved as {visual_number}.jpg"
+            )
+
+            try:
+
+                with Image.open(
+                    destination
+                ) as image:
+
+                    print(
+                        f"Size: {image.width}x"
+                        f"{image.height}"
+                    )
+
+            except Exception:
+                pass
+
+            saved = True
+            break
+
+        if not saved:
+
+            raise RuntimeError(
+                f"Could not download a valid "
+                f"image for Visual "
+                f"{visual_number}: "
+                f"{visual_query}"
+            )
+
+    # ========================================================
+    # FINAL VALIDATION
+    # ========================================================
+
+    if len(final_images) != TARGET_IMAGES:
+        raise RuntimeError(
+            f"Expected {TARGET_IMAGES} images, "
+            f"got {len(final_images)}."
+        )
+
+    for number in range(
+        1,
+        TARGET_IMAGES + 1,
+    ):
+
+        path = (
+            ASSETS_DIR
+            / f"{number}.jpg"
+        )
+
+        if not path.exists():
+            raise RuntimeError(
+                f"Missing required image: "
+                f"{number}.jpg"
+            )
 
     print()
+    line()
+
     print(
-        f"Returned image count: {result}"
+        f"FINAL IMAGES: {len(final_images)}"
     )
+
+    print(
+        "Visual-plan image download successful"
+    )
+
+    line()
+
+    return [
+        str(
+            ASSETS_DIR / f"{number}.jpg"
+        )
+        for number in range(
+            1,
+            TARGET_IMAGES + 1,
+        )
+    ]

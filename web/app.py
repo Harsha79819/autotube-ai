@@ -110,9 +110,13 @@ def run_autotube():
                 current_step = 6
                 status_message = "Adding subtitles to video..."
 
-            elif "Final Video Created" in line:
+            elif "final video created" in line.lower():
                 current_step = 6
                 status_message = "Final video created."
+
+            elif "Thumbnail Created" in line:
+                current_step = 7
+                status_message = "Thumbnail created."
 
             elif "Generating YouTube Metadata" in line:
                 current_step = 7
