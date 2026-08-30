@@ -62,6 +62,56 @@ def clean_response(text):
 # PARSE + SAVE CONTENT PACKAGE
 # ============================================================
 
+def clean_script_narration(text):
+    """
+    Remove accidental subtitle/SRT formatting from Gemini narration.
+
+    output/script.txt must contain narration only.
+    """
+
+    if not text:
+        return ""
+
+    lines = text.splitlines()
+    cleaned = []
+
+    for raw_line in lines:
+        line = raw_line.strip()
+
+        if not line:
+            if cleaned and cleaned[-1] != "":
+                cleaned.append("")
+            continue
+
+        # Remove WEBVTT header
+        if line.upper() == "WEBVTT":
+            continue
+
+        # Remove subtitle sequence numbers
+        if re.fullmatch(r"\d+", line):
+            continue
+
+        # Remove SRT timestamp lines
+        if re.fullmatch(
+            r"\d{1,2}:\d{2}:\d{2}[,.]\d{3}\s+-->\s+"
+            r"\d{1,2}:\d{2}:\d{2}[,.]\d{3}",
+            line,
+        ):
+            continue
+
+        # Remove MM:SS,mmm --> MM:SS,mmm variants
+        if re.fullmatch(
+            r"\d{1,2}:\d{2}[,.]\d{3}\s+-->\s+"
+            r"\d{1,2}:\d{2}[,.]\d{3}",
+            line,
+        ):
+            continue
+
+        cleaned.append(line)
+
+    return "\n".join(cleaned).strip()
+
+
 def _parse_and_save_package(text):
     """
     Parse Gemini's structured response and save:
@@ -107,6 +157,15 @@ def _parse_and_save_package(text):
         return None
 
     script = script_match.group(1).strip()
+
+    # Gemini can occasionally return the SCRIPT section
+    # in subtitle/SRT format. Never allow that into
+    # script.txt or TTS.
+    script = clean_script_narration(script)
+
+    if not script:
+        print("SCRIPT became empty after narration cleanup.")
+        return None
 
     # --------------------------------------------------------
     # VISUAL PLAN
