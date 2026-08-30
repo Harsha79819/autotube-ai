@@ -358,7 +358,7 @@ def create_thumbnail(
 # AI REVIEW
 # ============================================================
 
-def create_ai_review():
+def create_ai_review(captions_enabled=True):
     """Run Gemini AI quality review on the generated project."""
 
     from agents.review_agent import (
@@ -375,6 +375,7 @@ def create_ai_review():
         video_exists=project["video_exists"],
         thumbnail_exists=project["thumbnail_exists"],
         subtitles_exists=project["subtitles_exists"],
+        captions_enabled=captions_enabled,
     )
 
 
@@ -467,6 +468,63 @@ def create_metadata(
     return title, description, tags
 
 
+def improve_script_from_review(
+    topic,
+    review,
+    language_style,
+    attempt,
+):
+    """
+    Ask the existing script generator to create a corrected version
+    of the same topic using the Review Agent feedback.
+    """
+
+    from agents.script_agent import generate_script
+
+    critical_issues = review.get(
+        "critical_issues",
+        [],
+    )
+
+    improvements = review.get(
+        "improvements",
+        [],
+    )
+
+    feedback = "\n".join(
+        f"- {item}"
+        for item in critical_issues + improvements
+    )
+
+    revision_topic = f"""
+Original topic:
+{topic}
+
+This is revision attempt {attempt} of 3.
+
+Create a corrected YouTube news package about the SAME original topic.
+
+The previous AI quality review found these problems:
+
+{feedback}
+
+Correction requirements:
+- Keep the SAME underlying topic.
+- Fix every factual, structural, visual-planning, and narration issue identified above.
+- Do not mention this review or revision process in the narration.
+- Do not invent facts.
+- Remove unsupported claims.
+- Keep the narration in natural English.
+- Keep the visual plan directly aligned with the corrected narration.
+"""
+
+    return generate_script(
+        revision_topic,
+        content_type="News",
+        language_style=language_style,
+    )
+
+
 def generate_multi_media_video(
     topic,
     media_files=None,
@@ -480,32 +538,31 @@ def generate_multi_media_video(
     script_override=None,
 ):
     """
-    Topic-first AutoTube AI pipeline.
+    Topic-first AutoTube AI pipeline with a maximum of 3 AI review
+    attempts.
 
-    Main flow:
+    Flow:
 
         Topic
           ↓
-        AI Script + Visual Plan
+        Script + Visual Plan
           ↓
         Web Visuals
           ↓
-        English Voice
+        Voice
           ↓
-        Video
-          ↓
-        Captions
+        Video + Captions
           ↓
         Thumbnail
           ↓
-        Metadata
+        AI Review
           ↓
-        Optional YouTube Upload
-
-    Uploaded media is optional.
+        PASS     → Metadata → Optional YouTube Upload
+        IMPROVE  → AI Correction → Regenerate → Review again
+        3x FAIL  → STOP, no upload
     """
 
-    clean_previous_generation()
+    MAX_REVIEW_ATTEMPTS = 3
 
     if not topic or not topic.strip():
         raise RuntimeError(
@@ -514,85 +571,144 @@ def generate_multi_media_video(
 
     media_files = media_files or []
 
-    progress = st.progress(
-        0,
-        text="Starting AutoTube AI...",
-    )
+    review = {
+        "status": "REVIEW_NOT_RUN",
+        "score": 0,
+        "summary": "",
+        "critical_issues": [],
+        "improvements": [],
+    }
 
-    # ========================================================
-    # OPTIONAL UPLOADED MEDIA
-    # ========================================================
+    script = ""
+    title = topic
+    description = ""
+    tags = []
+    stopped_after_review = False
+    stop_reason = ""
 
-    saved_media = []
+    for attempt in range(
+        1,
+        MAX_REVIEW_ATTEMPTS + 1,
+    ):
 
-    if media_files:
+        print()
+        print("=" * 60)
+        print(
+            f"AUTOTUBE AI GENERATION ATTEMPT "
+            f"{attempt}/{MAX_REVIEW_ATTEMPTS}"
+        )
+        print("=" * 60)
+
+        # Remove generated files from the previous attempt.
+        clean_previous_generation()
+
+        progress = st.progress(
+            0,
+            text=(
+                f"Attempt {attempt}/{MAX_REVIEW_ATTEMPTS}: "
+                "Starting AutoTube AI..."
+            ),
+        )
+
+        # ----------------------------------------------------
+        # OPTIONAL UPLOADED MEDIA
+        # ----------------------------------------------------
+
+        saved_media = []
+
+        if media_files:
+
+            progress.progress(
+                5,
+                text=(
+                    f"Attempt {attempt}: "
+                    "Preparing uploaded media..."
+                ),
+            )
+
+            saved_media = save_uploaded_files(
+                media_files
+            )
+
+        # ----------------------------------------------------
+        # SCRIPT + VISUAL PLAN
+        # ----------------------------------------------------
 
         progress.progress(
-            5,
-            text="Preparing uploaded media...",
+            15,
+            text=(
+                f"Attempt {attempt}: "
+                "AI is generating script and visual plan..."
+            ),
         )
 
-        saved_media = save_uploaded_files(
-            media_files
+        if script_override and attempt == 1:
+
+            script = script_override
+
+        elif attempt == 1:
+
+            from agents.script_agent import generate_script
+
+            script = generate_script(
+                topic,
+                content_type="News",
+                language_style=language_style,
+            )
+
+        else:
+
+            script = improve_script_from_review(
+                topic=topic,
+                review=review,
+                language_style=language_style,
+                attempt=attempt,
+            )
+
+        if not script:
+
+            raise RuntimeError(
+                "AI did not generate a script."
+            )
+
+        # ----------------------------------------------------
+        # OPTIONAL UPLOADED MEDIA
+        # ----------------------------------------------------
+
+        if saved_media:
+
+            progress.progress(
+                25,
+                text=(
+                    f"Attempt {attempt}: "
+                    "Preparing uploaded media..."
+                ),
+            )
+
+            prepare_uploaded_media(
+                saved_media
+            )
+
+        # ----------------------------------------------------
+        # WEB VISUALS
+        # ----------------------------------------------------
+
+        visual_plan_file = (
+            OUTPUT_DIR / "visual_plan.txt"
         )
 
-    # ========================================================
-    # AI SCRIPT + VISUAL PLAN
-    # ========================================================
+        if not visual_plan_file.exists():
 
-    progress.progress(
-        15,
-        text="AI is generating script and visual plan...",
-    )
-
-    if script_override:
-
-        script = script_override
-
-    else:
-
-        from agents.script_agent import generate_script
-
-        script = generate_script(
-            topic,
-            content_type="News",
-            language_style=language_style,
-        )
-
-    if not script:
-
-        raise RuntimeError(
-            "AI did not generate a script."
-        )
-
-    # ========================================================
-    # OPTIONAL UPLOADED MEDIA
-    # ========================================================
-
-    if saved_media:
-
-        progress.progress(
-            25,
-            text="Preparing uploaded media...",
-        )
-
-        prepare_uploaded_media(
-            saved_media
-        )
-
-    # ========================================================
-    # WEB VISUALS
-    # ========================================================
-
-    visual_plan_file = (
-        OUTPUT_DIR / "visual_plan.txt"
-    )
-
-    if visual_plan_file.exists():
+            raise RuntimeError(
+                "AI visual plan was not created."
+            )
 
         progress.progress(
             35,
-            text="Finding visuals from AI visual plan...",
+            text=(
+                f"Attempt {attempt}: "
+                "Finding visuals from AI visual plan..."
+            ),
         )
 
         try:
@@ -608,107 +724,234 @@ def generate_multi_media_video(
                 error,
             )
 
-    else:
-
-        raise RuntimeError(
-            "AI visual plan was not created."
-        )
-
-    # ========================================================
-    # ENGLISH VOICE
-    # ========================================================
-
-    progress.progress(
-        50,
-        text="Generating English narration...",
-    )
-
-    create_voice_for_script(
-        voice
-    )
-
-    # ========================================================
-    # VIDEO
-    # ========================================================
-
-    progress.progress(
-        65,
-        text="Creating video...",
-    )
-
-    create_pipeline_video()
-
-    # ========================================================
-    # FINAL VIDEO + CAPTIONS
-    # ========================================================
-
-    progress.progress(
-        78,
-        text="Rendering final video and captions...",
-    )
-
-    create_final_video(
-        captions=captions
-    )
-
-    # ========================================================
-    # THUMBNAIL
-    # ========================================================
-
-    if thumbnail:
+        # ----------------------------------------------------
+        # VOICE
+        # ----------------------------------------------------
 
         progress.progress(
-            88,
-            text="Creating thumbnail...",
+            50,
+            text=(
+                f"Attempt {attempt}: "
+                "Generating English narration..."
+            ),
         )
 
-        create_thumbnail(
-            topic
+        create_voice_for_script(
+            voice
         )
 
-    # ========================================================
-    # AI REVIEW
-    # ========================================================
-
-    progress.progress(
-        92,
-        text="🤖 AI is reviewing the generated video...",
-    )
-
-    review = create_ai_review()
-
-    # ========================================================
-    # METADATA
-    # ========================================================
-
-    if metadata:
+        # ----------------------------------------------------
+        # VIDEO
+        # ----------------------------------------------------
 
         progress.progress(
-            93,
-            text="Generating YouTube metadata...",
+            65,
+            text=(
+                f"Attempt {attempt}: "
+                "Creating video..."
+            ),
         )
 
-        title, description, tags = create_metadata(
-            topic,
-            script,
-            youtube_upload=youtube_upload,
-            privacy=youtube_privacy,
+        create_pipeline_video()
+
+        # ----------------------------------------------------
+        # FINAL VIDEO + CAPTIONS
+        # ----------------------------------------------------
+
+        progress.progress(
+            78,
+            text=(
+                f"Attempt {attempt}: "
+                "Rendering final video and captions..."
+            ),
         )
 
-    else:
+        create_final_video(
+            captions=captions
+        )
 
-        title = topic
-        description = ""
-        tags = []
+        # ----------------------------------------------------
+        # THUMBNAIL
+        # ----------------------------------------------------
+
+        if thumbnail:
+
+            progress.progress(
+                85,
+                text=(
+                    f"Attempt {attempt}: "
+                    "Creating thumbnail..."
+                ),
+            )
+
+            create_thumbnail(
+                topic
+            )
+
+        # ----------------------------------------------------
+        # AI REVIEW
+        # ----------------------------------------------------
+
+        progress.progress(
+            92,
+            text=(
+                f"🤖 AI Review {attempt}/"
+                f"{MAX_REVIEW_ATTEMPTS}..."
+            ),
+        )
+
+        review = create_ai_review(
+            captions_enabled=captions
+        )
+
+        status = str(
+            review.get(
+                "status",
+                "REVIEW_FAILED",
+            )
+        ).upper()
+
+        score = review.get(
+            "score",
+            0,
+        )
+
+        print()
+        print("=" * 60)
+        print(
+            f"REVIEW {attempt}/{MAX_REVIEW_ATTEMPTS}"
+        )
+        print("=" * 60)
+        print(
+            "Status:",
+            status,
+        )
+        print(
+            "Score:",
+            f"{score}/100",
+        )
+
+        # ----------------------------------------------------
+        # REVIEW FAILURE
+        # ----------------------------------------------------
+
+        if status == "REVIEW_FAILED":
+
+            stopped_after_review = True
+
+            stop_reason = (
+                "AI review failed. "
+                "YouTube upload was blocked."
+            )
+
+            break
+
+        # ----------------------------------------------------
+        # PASS
+        # ----------------------------------------------------
+
+        if (
+            status == "APPROVE"
+            and int(score or 0) >= 75
+            and not review.get(
+                "critical_issues",
+                [],
+            )
+        ):
+
+            progress.progress(
+                96,
+                text=(
+                    "✅ AI Review passed. "
+                    "Generating YouTube metadata..."
+                ),
+            )
+
+            if metadata:
+
+                title, description, tags = create_metadata(
+                    topic,
+                    script,
+                    youtube_upload=youtube_upload,
+                    privacy=youtube_privacy,
+                )
+
+            else:
+
+                title = topic
+                description = ""
+                tags = []
+
+            progress.progress(
+                100,
+                text=(
+                    "✅ AutoTube AI completed successfully."
+                ),
+            )
+
+            return {
+                "script": script,
+                "title": title,
+                "description": description,
+                "tags": tags,
+                "review": review,
+                "video": str(
+                    OUTPUT_DIR / "final_video.mp4"
+                ),
+                "review_attempts": attempt,
+                "upload_blocked": False,
+                "stop_reason": "",
+            }
+
+        # ----------------------------------------------------
+        # IMPROVE
+        # ----------------------------------------------------
+
+        if status == "IMPROVE":
+
+            if attempt < MAX_REVIEW_ATTEMPTS:
+
+                progress.progress(
+                    94,
+                    text=(
+                        f"⚠️ Review {attempt} requested "
+                        "improvements. Regenerating..."
+                    ),
+                )
+
+                print(
+                    "Review requested improvements."
+                )
+
+                print(
+                    "Regenerating the SAME topic..."
+                )
+
+                continue
+
+            # Third failure → STOP
+            stopped_after_review = True
+
+            stop_reason = (
+                "Maximum 3 AI review attempts reached. "
+                "Video was not uploaded."
+            )
+
+            break
 
     # ========================================================
-    # COMPLETE
+    # STOPPED AFTER REVIEW
     # ========================================================
 
-    progress.progress(
-        100,
-        text="AutoTube AI generation completed!",
-    )
+    if stopped_after_review:
+
+        progress.progress(
+            100,
+            text=(
+                "🛑 AI review did not approve this topic. "
+                "YouTube upload blocked."
+            ),
+        )
 
     return {
         "script": script,
@@ -719,7 +962,16 @@ def generate_multi_media_video(
         "video": str(
             OUTPUT_DIR / "final_video.mp4"
         ),
+        "review_attempts": (
+            attempt
+            if "attempt" in locals()
+            else 0
+        ),
+        "upload_blocked": True,
+        "stop_reason": stop_reason,
     }
+
+
 # ============================================================
 # STREAMLIT DASHBOARD
 # ============================================================
@@ -827,9 +1079,10 @@ voice = st.selectbox(
     ],
 )
 
-captions = st.checkbox(
-    "Auto captions",
-    value=True,
+captions = True
+
+st.success(
+    "✅ Auto captions are required and will always be included."
 )
 
 thumbnail = st.checkbox(

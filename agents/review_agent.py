@@ -169,6 +169,7 @@ def review_video(
     video_exists,
     thumbnail_exists,
     subtitles_exists,
+    captions_enabled=True,
 ):
 
     print()
@@ -205,6 +206,7 @@ FILES:
 Video exists: {video_exists}
 Thumbnail exists: {thumbnail_exists}
 Subtitles exist: {subtitles_exists}
+Captions enabled by user: {captions_enabled}
 
 
 Evaluate:
@@ -214,7 +216,7 @@ Evaluate:
 - hook
 - story flow
 - visual relevance
-- subtitle quality
+- subtitle quality only when captions are enabled
 - thumbnail readiness
 - overall YouTube readiness
 
@@ -229,7 +231,11 @@ Look for:
 - missing conclusion
 - generic visuals
 - mismatch between narration and visuals
-- subtitle problems
+- subtitle problems only when captions are enabled
+
+IMPORTANT CAPTION RULE:
+- If captions_enabled is true, subtitles must exist and should match the narration.
+- If captions_enabled is false, missing subtitles are NOT a problem and must NOT create a critical issue.
 
 Approve only if the project is genuinely ready.
 
@@ -481,6 +487,7 @@ if __name__ == "__main__":
         video_exists=project["video_exists"],
         thumbnail_exists=project["thumbnail_exists"],
         subtitles_exists=project["subtitles_exists"],
+        captions_enabled=True,
     )
 
     print()
