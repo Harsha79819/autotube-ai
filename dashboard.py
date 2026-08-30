@@ -835,6 +835,18 @@ def generate_multi_media_video(
         # REVIEW FAILURE
         # ----------------------------------------------------
 
+        if status == "REVIEW_QUOTA_EXCEEDED":
+
+            stopped_after_review = True
+
+            stop_reason = (
+                "Gemini API quota/rate limit was exceeded. "
+                "No further AI review attempts were made. "
+                "YouTube upload was blocked."
+            )
+
+            break
+
         if status == "REVIEW_FAILED":
 
             stopped_after_review = True
@@ -1079,10 +1091,10 @@ voice = st.selectbox(
     ],
 )
 
-captions = True
-
-st.success(
-    "✅ Auto captions are required and will always be included."
+captions = st.checkbox(
+    "Auto captions",
+    value=True,
+    help="Turn captions on or off for the final video.",
 )
 
 thumbnail = st.checkbox(
@@ -1166,9 +1178,189 @@ if generate:
                     youtube_privacy=youtube_privacy,
                 )
 
-            st.success(
-                "🎉 Video generated successfully!"
+            review = result.get(
+                "review",
+                {},
             )
+
+            review_status = str(
+                review.get(
+                    "status",
+                    "UNKNOWN",
+                )
+            ).upper()
+
+            review_score = review.get(
+                "score",
+                0,
+            )
+
+            upload_blocked = bool(
+                result.get(
+                    "upload_blocked",
+                    False,
+                )
+            )
+
+            review_attempts = result.get(
+                "review_attempts",
+                0,
+            )
+
+            # ------------------------------------------------
+            # AI QUALITY REVIEW
+            # ------------------------------------------------
+
+            st.divider()
+            st.subheader("🤖 AI Quality Review")
+
+            if review_status == "APPROVE" and not upload_blocked:
+
+                st.success(
+                    f"✅ APPROVED — {review_score}/100 "
+                    f"({review_attempts}/3 review attempts)"
+                )
+
+            elif review_status == "REVIEW_QUOTA_EXCEEDED":
+
+                st.error(
+                    "🛑 Gemini quota exceeded. "
+                    "No further review attempts were made."
+                )
+
+            elif upload_blocked:
+
+                st.warning(
+                    f"⚠️ {review_status} — {review_score}/100 "
+                    f"({review_attempts}/3 review attempts)"
+                )
+
+            else:
+
+                st.info(
+                    f"Review status: {review_status} — "
+                    f"{review_score}/100"
+                )
+
+            if review.get("summary"):
+
+                st.write(
+                    review["summary"]
+                )
+
+            section_labels = [
+                ("script", "Script"),
+                ("factual_quality", "Factual Quality"),
+                ("hook", "Hook"),
+                ("visuals", "Visuals"),
+                ("subtitles", "Subtitles"),
+                ("thumbnail", "Thumbnail"),
+            ]
+
+            for key, label in section_labels:
+
+                data = review.get(
+                    key,
+                    {},
+                )
+
+                if data:
+
+                    score = data.get(
+                        "score",
+                        0,
+                    )
+
+                    section_status = data.get(
+                        "status",
+                        "",
+                    )
+
+                    st.write(
+                        f"**{label}:** "
+                        f"{score}/100 — "
+                        f"{section_status}"
+                    )
+
+                    if data.get("feedback"):
+
+                        st.caption(
+                            data["feedback"]
+                        )
+
+            critical = review.get(
+                "critical_issues",
+                [],
+            )
+
+            if critical:
+
+                st.markdown(
+                    "**Critical Issues**"
+                )
+
+                for issue in critical:
+
+                    st.error(
+                        str(issue)
+                    )
+
+            improvements = review.get(
+                "improvements",
+                [],
+            )
+
+            if improvements:
+
+                st.markdown(
+                    "**Improvements**"
+                )
+
+                for improvement in improvements:
+
+                    st.info(
+                        str(improvement)
+                    )
+
+            if upload_blocked:
+
+                st.error(
+                    "🚫 YouTube upload was blocked "
+                    "by the AI review gate."
+                )
+
+                if result.get("stop_reason"):
+
+                    st.caption(
+                        result["stop_reason"]
+                    )
+
+            elif (
+                youtube_upload
+                and review_status == "APPROVE"
+            ):
+
+                st.success(
+                    "✅ YouTube upload approved."
+                    f" Privacy: {youtube_privacy.upper()}"
+                )
+
+            # ------------------------------------------------
+            # VIDEO RESULT
+            # ------------------------------------------------
+
+            if upload_blocked:
+
+                st.warning(
+                    "The generated video is available "
+                    "for inspection, but it was not published."
+                )
+
+            else:
+
+                st.success(
+                    "🎉 Video generated successfully!"
+                )
 
             video_path = Path(
                 result["video"]
