@@ -268,90 +268,143 @@ Rules:
 
     print("Generating YouTube metadata...")
 
-    for model in METADATA_MODELS:
-
-        try:
-
-            print(
-                f"Trying metadata model: {model}"
-            )
-
-            response = client.models.generate_content(
-                model=model,
-                contents=prompt
-            )
-
-            text = (
-                response.text.strip()
-                if response.text
-                else ""
-            )
-
-            title, description, tags = parse_metadata(
-                text
-            )
-
-            if valid_metadata(
-                title,
-                description,
-                tags
-            ):
-
-                metadata = {
-                    "title": title,
-                    "description": description,
-                    "tags": tags
-                }
-
-                metadata_file = os.path.join(
-                    PROJECT_ROOT,
-                    "output",
-                    "metadata.json"
-                )
-
-                with open(
-                    metadata_file,
-                    "w",
-                    encoding="utf-8"
-                ) as f:
-
-                    json.dump(
-                        metadata,
-                        f,
-                        ensure_ascii=False,
-                        indent=2
-                    )
-
-                print(
-                    f"Metadata generated using {model}"
-                )
-
-                print(
-                    "Metadata generated successfully!"
-                )
-
-                print(
-                    f"Metadata saved: {metadata_file}"
-                )
-
-                return title, description, tags
-
-            print(
-                f"Metadata response from {model} "
-                "was incomplete."
-            )
-
-        except Exception as e:
-
-            print(
-                f"Metadata model failed: {model}"
-            )
-
-            print(e)
-
-            time.sleep(2)
-
-    raise RuntimeError(
-        "Failed to generate valid YouTube metadata "
-        "using all available Gemini models."
+    metadata_file = os.path.join(
+        PROJECT_ROOT,
+        "output",
+        "metadata.json"
     )
+
+    # --------------------------------------------------------
+    # ONE GEMINI ATTEMPT ONLY
+    # --------------------------------------------------------
+
+    try:
+
+        model = METADATA_MODELS[0]
+
+        print(
+            f"Trying metadata model once: {model}"
+        )
+
+        response = client.models.generate_content(
+            model=model,
+            contents=prompt
+        )
+
+        text = (
+            response.text.strip()
+            if response.text
+            else ""
+        )
+
+        title, description, tags = parse_metadata(
+            text
+        )
+
+        if valid_metadata(
+            title,
+            description,
+            tags
+        ):
+
+            metadata = {
+                "title": title,
+                "description": description,
+                "tags": tags
+            }
+
+            os.makedirs(
+                os.path.dirname(metadata_file),
+                exist_ok=True
+            )
+
+            with open(
+                metadata_file,
+                "w",
+                encoding="utf-8"
+            ) as f:
+
+                json.dump(
+                    metadata,
+                    f,
+                    ensure_ascii=False,
+                    indent=2
+                )
+
+            print(
+                f"Metadata generated using {model}"
+            )
+
+            print(
+                "Metadata generated successfully!"
+            )
+
+            print(
+                f"Metadata saved: {metadata_file}"
+            )
+
+            return title, description, tags
+
+        print(
+            "Gemini metadata response was incomplete."
+        )
+
+    except Exception as error:
+
+        print(
+            "Gemini metadata generation failed."
+        )
+
+        print(
+            type(error).__name__
+        )
+
+        print(error)
+
+    # --------------------------------------------------------
+    # LOCAL FALLBACK
+    # --------------------------------------------------------
+
+    print(
+        "Using local metadata fallback..."
+    )
+
+    title, description, tags = generate_fallback_metadata(
+        topic,
+        script
+    )
+
+    metadata = {
+        "title": title,
+        "description": description,
+        "tags": tags
+    }
+
+    os.makedirs(
+        os.path.dirname(metadata_file),
+        exist_ok=True
+    )
+
+    with open(
+        metadata_file,
+        "w",
+        encoding="utf-8"
+    ) as f:
+
+        json.dump(
+            metadata,
+            f,
+            ensure_ascii=False,
+            indent=2
+        )
+
+    print(
+        "✅ Local metadata fallback generated."
+    )
+
+    print(
+        f"Metadata saved: {metadata_file}"
+    )
+
+    return title, description, tags
+
