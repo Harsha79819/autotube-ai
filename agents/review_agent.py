@@ -341,12 +341,39 @@ Use this exact format:
 
         print(error)
 
+        error_text = str(error)
+
+        # Gemini free-tier/API quota exhaustion is not a
+        # content-quality failure. Stop immediately rather
+        # than consuming more review attempts.
+        if (
+            "RESOURCE_EXHAUSTED" in error_text
+            or "429" in error_text
+            or "quota" in error_text.lower()
+            or "rate limit" in error_text.lower()
+        ):
+
+            return {
+                "status": "REVIEW_QUOTA_EXCEEDED",
+                "score": 0,
+                "summary": (
+                    "Gemini API quota/rate limit was exceeded. "
+                    "Review stopped without another retry."
+                ),
+                "critical_issues": [
+                    error_text
+                ],
+                "improvements": [
+                    "Wait for the Gemini quota to reset or use an available model/API quota."
+                ]
+            }
+
         return {
             "status": "REVIEW_FAILED",
             "score": 0,
             "summary": "AI review failed.",
             "critical_issues": [
-                str(error)
+                error_text
             ],
             "improvements": []
         }
