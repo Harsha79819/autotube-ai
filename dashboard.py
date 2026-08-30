@@ -842,7 +842,7 @@ def generate_multi_media_video(
             stop_reason = (
                 "Gemini API quota/rate limit was exceeded. "
                 "No further AI review attempts were made. "
-                "YouTube upload was blocked."
+                "The latest generated video will continue."
             )
 
             break
@@ -853,7 +853,8 @@ def generate_multi_media_video(
 
             stop_reason = (
                 "AI review failed. "
-                "YouTube upload was blocked."
+                "No further review attempts were made. "
+                "The latest generated video will continue."
             )
 
             break
@@ -871,49 +872,21 @@ def generate_multi_media_video(
             )
         ):
 
+            stop_reason = (
+                "AI Review approved the current version."
+            )
+
+            stopped_after_review = True
+
             progress.progress(
                 96,
                 text=(
                     "✅ AI Review passed. "
-                    "Generating YouTube metadata..."
+                    "Continuing to metadata..."
                 ),
             )
 
-            if metadata:
-
-                title, description, tags = create_metadata(
-                    topic,
-                    script,
-                    youtube_upload=youtube_upload,
-                    privacy=youtube_privacy,
-                )
-
-            else:
-
-                title = topic
-                description = ""
-                tags = []
-
-            progress.progress(
-                100,
-                text=(
-                    "✅ AutoTube AI completed successfully."
-                ),
-            )
-
-            return {
-                "script": script,
-                "title": title,
-                "description": description,
-                "tags": tags,
-                "review": review,
-                "video": str(
-                    OUTPUT_DIR / "final_video.mp4"
-                ),
-                "review_attempts": attempt,
-                "upload_blocked": False,
-                "stop_reason": "",
-            }
+            break
 
         # ----------------------------------------------------
         # IMPROVE
@@ -941,12 +914,13 @@ def generate_multi_media_video(
 
                 continue
 
-            # Third failure → STOP
+            # Third IMPROVE → stop improving but keep
+            # the latest generated version.
             stopped_after_review = True
 
             stop_reason = (
                 "Maximum 3 AI review attempts reached. "
-                "Video was not uploaded."
+                "Keeping the latest generated version."
             )
 
             break
@@ -958,12 +932,41 @@ def generate_multi_media_video(
     if stopped_after_review:
 
         progress.progress(
-            100,
+            94,
             text=(
-                "🛑 AI review did not approve this topic. "
-                "YouTube upload blocked."
+                "✅ Review stage finished. "
+                "Continuing with the latest generated version..."
             ),
         )
+
+    # --------------------------------------------------------
+    # METADATA / OPTIONAL YOUTUBE UPLOAD
+    # --------------------------------------------------------
+
+    if metadata:
+
+        progress.progress(
+            96,
+            text="Generating YouTube metadata...",
+        )
+
+        title, description, tags = create_metadata(
+            topic,
+            script,
+            youtube_upload=youtube_upload,
+            privacy=youtube_privacy,
+        )
+
+    else:
+
+        title = topic
+        description = ""
+        tags = []
+
+    progress.progress(
+        100,
+        text="✅ AutoTube AI generation completed!",
+    )
 
     return {
         "script": script,
@@ -979,7 +982,7 @@ def generate_multi_media_video(
             if "attempt" in locals()
             else 0
         ),
-        "upload_blocked": True,
+        "upload_blocked": False,
         "stop_reason": stop_reason,
     }
 
@@ -1223,23 +1226,32 @@ if generate:
 
             elif review_status == "REVIEW_QUOTA_EXCEEDED":
 
-                st.error(
-                    "🛑 Gemini quota exceeded. "
-                    "No further review attempts were made."
+                st.warning(
+                    "⚪ AI Review unavailable because the "
+                    "Gemini quota/rate limit was reached. "
+                    "The latest generated version will continue."
                 )
 
-            elif upload_blocked:
+            elif review_status == "IMPROVE":
 
                 st.warning(
-                    f"⚠️ {review_status} — {review_score}/100 "
+                    f"⚠️ IMPROVE — {review_score}/100 "
                     f"({review_attempts}/3 review attempts)"
+                )
+
+            elif review_status == "REVIEW_FAILED":
+
+                st.warning(
+                    f"⚪ AI Review unavailable — "
+                    f"{review_score}/100"
                 )
 
             else:
 
                 st.info(
                     f"Review status: {review_status} — "
-                    f"{review_score}/100"
+                    f"{review_score}/100 "
+                    f"({review_attempts}/3 review attempts)"
                 )
 
             if review.get("summary"):
@@ -1322,45 +1334,54 @@ if generate:
                         str(improvement)
                     )
 
-            if upload_blocked:
+            if result.get("stop_reason"):
 
-                st.error(
-                    "🚫 YouTube upload was blocked "
-                    "by the AI review gate."
+                st.caption(
+                    result["stop_reason"]
                 )
 
-                if result.get("stop_reason"):
-
-                    st.caption(
-                        result["stop_reason"]
-                    )
-
-            elif (
+            if (
                 youtube_upload
                 and review_status == "APPROVE"
             ):
 
                 st.success(
-                    "✅ YouTube upload approved."
-                    f" Privacy: {youtube_privacy.upper()}"
+                    "✅ AI Review approved. "
+                    f"YouTube upload: {youtube_privacy.upper()}"
+                )
+
+            elif (
+                youtube_upload
+                and review_status == "IMPROVE"
+            ):
+
+                st.info(
+                    "ℹ️ Review feedback is advisory. "
+                    "The latest generated version will continue "
+                    f"to YouTube as {youtube_privacy.upper()}."
+                )
+
+            elif (
+                youtube_upload
+                and review_status in {
+                    "REVIEW_QUOTA_EXCEEDED",
+                    "REVIEW_FAILED",
+                }
+            ):
+
+                st.info(
+                    "ℹ️ AI Review was unavailable. "
+                    "The latest generated version will continue "
+                    f"to YouTube as {youtube_privacy.upper()}."
                 )
 
             # ------------------------------------------------
             # VIDEO RESULT
             # ------------------------------------------------
 
-            if upload_blocked:
-
-                st.warning(
-                    "The generated video is available "
-                    "for inspection, but it was not published."
-                )
-
-            else:
-
-                st.success(
-                    "🎉 Video generated successfully!"
-                )
+            st.success(
+                "🎉 Video generated successfully!"
+            )
 
             video_path = Path(
                 result["video"]
