@@ -490,6 +490,9 @@ def generate_script(
 
         print()
 
+    formatted_source_context = _format_news_sources(
+        source_context
+    )
 
     prompt = f"""
 You are a professional English YouTube script writer
@@ -506,7 +509,7 @@ Style:
 {language_style}
 
 NEWS SOURCE CONTEXT:
-{source_context}
+{formatted_source_context}
 
 SOURCE GROUNDING RULES:
 

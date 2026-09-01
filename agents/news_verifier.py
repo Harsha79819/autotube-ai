@@ -494,10 +494,10 @@ def verify_news_topic(topic, limit=5):
 
         seen.add(key)
 
-        # Fetch the real article URL and article text.
-        article_text = _fetch_article_text(
-            link
-        )
+        # Do not fetch every article yet.
+        # Article text will be fetched only for the
+        # highest-ranked candidates after initial scoring.
+        article_text = ""
 
         score = _score_news_article(
             topic=topic,
@@ -574,6 +574,34 @@ def verify_news_topic(topic, limit=5):
     # --------------------------------------------------------
     # RANK CANDIDATES
     # --------------------------------------------------------
+
+    candidates.sort(
+        key=lambda article: article.get("_score", 0),
+        reverse=True,
+    )
+
+    # --------------------------------------------------------
+    # FETCH ARTICLE TEXT ONLY FOR TOP CANDIDATES
+    # --------------------------------------------------------
+
+    prefetch_count = min(
+        max(limit * 2, 10),
+        len(candidates),
+    )
+
+    for article in candidates[:prefetch_count]:
+
+        article["article_text"] = _fetch_article_text(
+            article.get("url", "")
+        )
+
+        article["_score"] = _score_news_article(
+            topic=topic,
+            title=article.get("headline", ""),
+            snippet=article.get("snippet", ""),
+            article_text=article.get("article_text", ""),
+            published_at=article.get("published_at", ""),
+        )
 
     candidates.sort(
         key=lambda article: article.get("_score", 0),
