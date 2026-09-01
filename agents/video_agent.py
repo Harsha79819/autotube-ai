@@ -2,7 +2,7 @@ import re
 from pathlib import Path
 
 import whisper
-from moviepy import AudioFileClip, ImageClip, concatenate_videoclips
+from moviepy import AudioFileClip, ImageClip, VideoFileClip, concatenate_videoclips
 
 
 # ============================================================
@@ -1239,20 +1239,97 @@ def create_video():
         )
 
         # ----------------------------------------------------
-        # Create image clip.
+        # Create visual clip.
+        #
+        # Prefer a local video clip when available.
+        # Fall back to the existing numbered image.
         # ----------------------------------------------------
 
-        clip = (
-            ImageClip(
-                str(image_path)
+        video_path = None
+
+        videos_dir = Path("assets/videos")
+
+        for extension in (
+            ".mp4",
+            ".mov",
+            ".m4v",
+            ".webm",
+        ):
+
+            candidate = (
+                videos_dir
+                / f"{visual_number}{extension}"
             )
-            .resized(
-                width=IMAGE_WIDTH
+
+            if candidate.exists():
+
+                video_path = candidate
+                break
+
+        if video_path:
+
+            print(
+                f"VIDEO   : "
+                f"{video_path.name}"
             )
-            .with_duration(
-                duration
+
+            source_video = VideoFileClip(
+                str(video_path)
             )
-        )
+
+            source_duration = (
+                source_video.duration
+            )
+
+            if source_duration >= duration:
+
+                clip = source_video.subclipped(
+                    0,
+                    duration,
+                )
+
+            else:
+
+                # Loop short videos until they
+                # cover the complete section.
+                from moviepy import vfx
+
+                clip = source_video.with_effects(
+                    [
+                        vfx.Loop(
+                            duration=duration
+                        )
+                    ]
+                )
+
+            clip = (
+                clip
+                .resized(
+                    width=IMAGE_WIDTH
+                )
+                .with_duration(
+                    duration
+                )
+            )
+
+        else:
+
+            print(
+                f"IMAGE   : "
+                f"{image_path.name}"
+            )
+
+            clip = (
+                ImageClip(
+                    str(image_path)
+                )
+                .resized(
+                    width=IMAGE_WIDTH
+                )
+                .with_duration(
+                    duration
+                )
+            )
 
         clips.append(
             clip
