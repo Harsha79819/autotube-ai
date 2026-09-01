@@ -473,6 +473,8 @@ def improve_script_from_review(
     review,
     language_style,
     attempt,
+    content_type="News",
+    source_context=None,
 ):
     """
     Ask the existing script generator to create a corrected version
@@ -500,6 +502,12 @@ def improve_script_from_review(
 Original topic:
 {topic}
 
+Content type:
+{content_type}
+
+Source context:
+{source_context or "No verified source context available."}
+
 This is revision attempt {attempt} of 3.
 
 Create a corrected YouTube news package about the SAME original topic.
@@ -514,20 +522,28 @@ Correction requirements:
 - Do not mention this review or revision process in the narration.
 - Do not invent facts.
 - Remove unsupported claims.
+- For News content, use the supplied source context
+  as the factual basis.
 - Keep the narration in natural English.
 - Keep the visual plan directly aligned with the corrected narration.
 """
 
     return generate_script(
         revision_topic,
-        content_type="News",
+        content_type=content_type,
         language_style=language_style,
+        source_context=(
+            source_context
+            if content_type == "News"
+            else None
+        ),
     )
 
 
 def generate_multi_media_video(
     topic,
     media_files=None,
+    content_type="News",
     language_style="English news style",
     voice="English Female",
     captions=True,
@@ -585,6 +601,55 @@ def generate_multi_media_video(
     tags = []
     stopped_after_review = False
     stop_reason = ""
+
+    news_verification = {
+        "status": "NOT_REQUIRED",
+        "topic": topic,
+        "articles": [],
+        "summary": "",
+    }
+
+    # --------------------------------------------------------
+    # NEWS SOURCE VERIFICATION
+    # --------------------------------------------------------
+
+    if (
+        content_type == "News"
+        and not script_override
+        and not media_files
+    ):
+
+        st.info(
+            "📰 Verifying news sources..."
+        )
+
+        from agents.news_verifier import (
+            verify_news_topic,
+        )
+
+        news_verification = (
+            verify_news_topic(topic)
+        )
+
+        articles = news_verification.get(
+            "articles",
+            [],
+        )
+
+        if articles:
+
+            st.success(
+                "📰 News sources found: "
+                f"{len(articles)}"
+            )
+
+        else:
+
+            st.warning(
+                "⚠️ No matching news sources "
+                "were confirmed. The script will "
+                "avoid unsupported claims."
+            )
 
     for attempt in range(
         1,
@@ -652,8 +717,9 @@ def generate_multi_media_video(
 
             script = generate_script(
                 topic,
-                content_type="News",
+                content_type=content_type,
                 language_style=language_style,
+                source_context=news_verification,
             )
 
         else:
@@ -663,6 +729,12 @@ def generate_multi_media_video(
                 review=review,
                 language_style=language_style,
                 attempt=attempt,
+                content_type=content_type,
+                source_context=(
+                    news_verification
+                    if content_type == "News"
+                    else None
+                ),
             )
 
         if not script:
@@ -1015,6 +1087,19 @@ topic = st.text_input(
     placeholder="Enter a topic or video idea...",
 )
 
+content_type = st.selectbox(
+    "Content Type",
+    [
+        "News",
+        "General Topic",
+    ],
+    index=0,
+    help=(
+        "News verifies source context before script generation. "
+        "General Topic uses normal topic generation."
+    ),
+)
+
 # ============================================================
 # MEDIA UPLOAD
 # ============================================================
@@ -1172,6 +1257,11 @@ if generate:
                 result = generate_multi_media_video(
                     topic=topic or "AI Generated Video",
                     media_files=all_media,
+                    content_type=(
+                        "General Topic"
+                        if flyer_file
+                        else content_type
+                    ),
                     language_style=language_style,
                     voice=voice,
                     captions=captions,

@@ -11,6 +11,7 @@ except ImportError:
         return False
 
 from google import genai
+from agents.news_verifier import verify_news_topic
 
 
 # ============================================================
@@ -316,6 +317,75 @@ def _parse_and_save_package(text):
     return script
 
 
+def _format_news_sources(source_context):
+    """
+    Convert verified news source data into a clear,
+    source-by-source context block for Gemini.
+    """
+
+    if not source_context:
+        return "No verified news sources supplied."
+
+    articles = source_context.get("articles", [])
+
+    if not articles:
+        return "No verified news sources supplied."
+
+    blocks = []
+
+    for index, article in enumerate(articles, start=1):
+
+        headline = str(
+            article.get("headline", "")
+        ).strip()
+
+        source = str(
+            article.get("source", "")
+        ).strip()
+
+        published_at = str(
+            article.get("published_at", "")
+        ).strip()
+
+        url = str(
+            article.get("url", "")
+        ).strip()
+
+        article_text = str(
+            article.get("article_text", "")
+        ).strip()
+
+        snippet = str(
+            article.get("snippet", "")
+        ).strip()
+
+        block = f"""
+SOURCE {index}
+
+Headline:
+{headline}
+
+Source:
+{source}
+
+Published:
+{published_at}
+
+Article text:
+{article_text}
+
+Snippet:
+{snippet}
+
+URL:
+{url}
+""".strip()
+
+        blocks.append(block)
+
+    return "\n\n".join(blocks)
+
+
 # ============================================================
 # NORMAL TOPIC SCRIPT
 # ============================================================
@@ -324,6 +394,7 @@ def generate_script(
     topic,
     content_type="News",
     language_style="English news style",
+    source_context=None,
 ):
     """
     Generate a complete content package for a normal topic.
@@ -344,6 +415,82 @@ def generate_script(
     print(topic)
     print()
 
+    if source_context is None:
+        source_context = {}
+
+    # --------------------------------------------------------
+    # AUTOMATIC NEWS VERIFICATION
+    # --------------------------------------------------------
+
+    if (
+        content_type.lower() == "news"
+        and not source_context.get("articles")
+    ):
+
+        print()
+        print("=" * 60)
+        print("NEWS VERIFICATION")
+        print("=" * 60)
+        print()
+
+        try:
+
+            verified = verify_news_topic(
+                topic,
+                limit=5,
+            )
+
+            if verified.get("status") == "SOURCES_FOUND":
+
+                source_context = verified
+
+                print(
+                    f"Verified sources: "
+                    f"{len(verified.get('articles', []))}"
+                )
+
+            else:
+
+                print(
+                    "No verified news sources found."
+                )
+
+                raise RuntimeError(
+                    "News verification failed: no verified "
+                    "sources found. Script generation stopped "
+                    "to prevent unsupported news claims."
+                )
+
+        except Exception as error:
+
+            print(
+                f"News verification failed: {error}"
+            )
+
+            raise RuntimeError(
+                "News verification failed. "
+                "Script generation stopped to prevent "
+                "unsupported news claims."
+            ) from error
+
+    # --------------------------------------------------------
+    # DISPLAY SOURCE CONTEXT
+    # --------------------------------------------------------
+
+    if source_context.get("articles"):
+
+        print(
+            "News source context supplied:"
+        )
+
+        print(
+            f"Sources: "
+            f"{len(source_context.get('articles', []))}"
+        )
+
+        print()
+
+
     prompt = f"""
 You are a professional English YouTube script writer
 and visual-content planning director.
@@ -357,6 +504,86 @@ Content type:
 
 Style:
 {language_style}
+
+NEWS SOURCE CONTEXT:
+{source_context}
+
+SOURCE GROUNDING RULES:
+
+The NEWS SOURCE CONTEXT contains verified source articles.
+
+For a NEWS video, the verified article text is the
+primary factual source.
+
+IMPORTANT SOURCE SELECTION RULES:
+
+1. First identify which verified source or sources are
+   directly relevant to the requested topic.
+
+2. If the topic asks for a specific news story, build the
+   entire narration around that story. Do not combine it
+   with unrelated verified articles.
+
+3. If the topic explicitly asks for a roundup, multiple
+   stories may be used. In that case, treat each story as
+   a separate news item and clearly transition between them.
+
+4. Do NOT create a broad "technology roundup" merely because
+   several verified articles contain technology-related words.
+
+5. Do NOT combine separate people, organizations, locations,
+   dates, projects, statistics or events into one event.
+
+6. Every factual claim in the narration must be supported by
+   the supplied source context, preferably by the full
+   Article text field.
+
+7. Headlines and snippets may identify a story, but do not
+   use them as evidence for additional facts that are not
+   present in the supplied Article text.
+
+8. If Article text is available, prefer it over inference
+   from the headline or snippet.
+
+9. If a verified source is older than the topic implies,
+   do not describe it as breaking, today's, or newly
+   announced news unless the source explicitly supports that.
+
+10. Never invent names, titles, casualty figures, dates,
+    quotes, locations, statistics, investments, partnerships,
+    announcements or events.
+
+11. Never merge facts from different articles unless the
+    relationship between those facts is explicitly supported
+    by the source material.
+
+12. If the supplied sources do not contain enough evidence
+    to create a factual script about the requested topic,
+    state that the available sources are insufficient rather
+    than inventing information.
+
+SOURCE PRIORITY:
+
+Use this priority when deciding what information to include:
+
+1. Full verified Article text
+2. Verified headline
+3. Verified publication date
+4. Verified source name
+5. Verified snippet
+6. URL only for source identification
+
+Do not use outside knowledge to fill missing information.
+
+NEWS ACCURACY:
+
+- Every important factual sentence must be traceable to a
+  supplied verified source.
+- Keep facts attached to the correct source.
+- Do not transfer a fact from SOURCE 1 to SOURCE 2.
+- Do not assume that two articles describe the same event.
+- Preserve uncertainty when the source itself is uncertain.
+- Never present an unverified event as confirmed news.
 
 LANGUAGE:
 
