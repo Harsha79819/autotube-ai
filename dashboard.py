@@ -358,7 +358,10 @@ def create_thumbnail(
 # AI REVIEW
 # ============================================================
 
-def create_ai_review(captions_enabled=True):
+def create_ai_review(
+    captions_enabled=True,
+    source_context=None,
+):
     """Run Gemini AI quality review on the generated project."""
 
     from agents.review_agent import (
@@ -376,6 +379,7 @@ def create_ai_review(captions_enabled=True):
         thumbnail_exists=project["thumbnail_exists"],
         subtitles_exists=project["subtitles_exists"],
         captions_enabled=captions_enabled,
+        source_context=source_context,
     )
 
 
@@ -873,7 +877,12 @@ def generate_multi_media_video(
         )
 
         review = create_ai_review(
-            captions_enabled=captions
+            captions_enabled=captions,
+            source_context=(
+                news_verification
+                if content_type == "News"
+                else None
+            ),
         )
 
         status = str(
