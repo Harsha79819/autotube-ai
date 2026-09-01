@@ -20,7 +20,7 @@ if not API_KEY:
 
 client = genai.Client(api_key=API_KEY)
 
-MODEL = "gemini-3.5-flash"
+MODEL = "gemini-3.1-flash-lite"
 
 
 # ============================================================
@@ -170,6 +170,7 @@ def review_video(
     thumbnail_exists,
     subtitles_exists,
     captions_enabled=True,
+    source_context=None,
 ):
 
     print()
@@ -177,9 +178,53 @@ def review_video(
     print("AI VIDEO REVIEW STARTED")
     print("=" * 60)
 
+    if source_context is None:
+        source_context = {}
+
     # --------------------------------------------------------
     # BUILD SIMPLE REVIEW PROMPT
     # --------------------------------------------------------
+
+    verified_articles = source_context.get(
+        "articles",
+        [],
+    )
+
+    source_blocks = []
+
+    for index, article in enumerate(
+        verified_articles,
+        start=1,
+    ):
+
+        source_blocks.append(
+            f"""
+SOURCE {index}
+Headline:
+{article.get("headline", "")}
+
+Source:
+{article.get("source", "")}
+
+Published:
+{article.get("published_at", "")}
+
+Article text:
+{article.get("article_text", "")}
+
+Snippet:
+{article.get("snippet", "")}
+
+URL:
+{article.get("url", "")}
+""".strip()
+        )
+
+    formatted_source_context = (
+        "\n\n".join(source_blocks)
+        if source_blocks
+        else "No verified news source context supplied."
+    )
 
     prompt = f"""
 You are the quality-control reviewer for AutoTube AI.
@@ -194,6 +239,11 @@ SCRIPT:
 VISUAL PLAN:
 
 {visual_plan}
+
+
+VERIFIED NEWS SOURCE CONTEXT:
+
+{formatted_source_context}
 
 
 SUBTITLES:
@@ -224,6 +274,10 @@ Look for:
 
 - weak writing
 - unsupported claims
+- claims contradicted by the verified source context
+- claims presented as confirmed when sources describe them as reported,
+  projected, expected, rumored, or possible
+- facts incorrectly combined from different sources
 - contradictions
 - repetition
 - weak opening
@@ -238,6 +292,25 @@ IMPORTANT CAPTION RULE:
 - If captions_enabled is false, missing subtitles are NOT a problem and must NOT create a critical issue.
 
 Approve only if the project is genuinely ready.
+
+FACTUAL REVIEW RULE:
+For NEWS content, use VERIFIED NEWS SOURCE CONTEXT as the
+primary evidence for factual claims.
+
+Do not mark a claim false merely because it is absent from
+your pretrained knowledge.
+
+Classify factual claims as:
+- CONFIRMED: directly supported by supplied article text.
+- REPORTED_OR_PROJECTED: explicitly described by the sources
+  as reported, expected, projected, rumored, or possible.
+- UNSUPPORTED: not supported by the supplied sources.
+- CONTRADICTED: supplied sources directly conflict with the claim.
+
+A reported or projected claim is not automatically a factual error,
+but the narration must use wording that preserves that uncertainty.
+
+Do not use outside knowledge to override supplied source evidence.
 
 APPROVE:
 score 75 or higher and no critical issue.
