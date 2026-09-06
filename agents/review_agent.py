@@ -171,6 +171,7 @@ def review_video(
     subtitles_exists,
     captions_enabled=True,
     source_context=None,
+    content_type="General Topic",
 ):
 
     print()
@@ -241,8 +242,10 @@ VISUAL PLAN:
 {visual_plan}
 
 
-VERIFIED NEWS SOURCE CONTEXT:
+CONTENT TYPE:
+{content_type}
 
+SOURCE CONTEXT:
 {formatted_source_context}
 
 
@@ -294,29 +297,35 @@ IMPORTANT CAPTION RULE:
 Approve only if the project is genuinely ready.
 
 FACTUAL REVIEW RULE:
-For NEWS content, use VERIFIED NEWS SOURCE CONTEXT as the
-primary evidence for factual claims.
 
-Do not mark a claim false merely because it is absent from
-your pretrained knowledge.
+The review behavior depends on CONTENT TYPE.
 
-Classify factual claims as:
-- CONFIRMED: directly supported by supplied article text.
-- REPORTED_OR_PROJECTED: explicitly described by the sources
-  as reported, expected, projected, rumored, or possible.
-- UNSUPPORTED: not supported by the supplied sources.
-- CONTRADICTED: supplied sources directly conflict with the claim.
+If CONTENT TYPE is NEWS:
+- Use the supplied SOURCE CONTEXT as the primary evidence for factual claims.
+- Do not mark a claim false merely because it is absent from your pretrained knowledge.
+- Classify factual claims as:
+  - CONFIRMED: directly supported by supplied article text.
+  - REPORTED_OR_PROJECTED: explicitly described by sources as reported, expected, projected, rumored, or possible.
+  - UNSUPPORTED: not supported by supplied sources.
+  - CONTRADICTED: supplied sources directly conflict with the claim.
+- A reported or projected claim is not automatically an error, but the narration must preserve that uncertainty.
+- Do not use outside knowledge to override supplied source evidence.
+- If no verified source context is supplied for NEWS content, factual verification is limited and this may be a critical issue when the script makes specific factual claims.
 
-A reported or projected claim is not automatically a factual error,
-but the narration must use wording that preserves that uncertainty.
-
-Do not use outside knowledge to override supplied source evidence.
+If CONTENT TYPE is GENERAL TOPIC:
+- Do NOT require verified news source context.
+- Do NOT create a critical issue merely because no news sources are supplied.
+- Evaluate factual quality using generally established knowledge and the internal consistency of the script.
+- Check for obvious factual errors, misleading statements, contradictions, invented quotations, implausible specific statistics, or unsupported highly specific claims.
+- Do not require every general educational statement to have a supplied news article.
+- Do not reject a General Topic project solely because SOURCE CONTEXT says "No verified news source context supplied."
+- If a claim is uncertain or highly specific and cannot reasonably be validated, flag it as a concern rather than automatically treating the absence of a news source as a factual failure.
 
 APPROVE:
-score 75 or higher and no critical issue.
+score 60 or higher and no critical issue.
 
 IMPROVE:
-score below 75 or any critical issue.
+score below 60 or any critical issue.
 
 Return ONLY JSON.
 
@@ -600,3 +609,4 @@ if __name__ == "__main__":
             ensure_ascii=False
         )
     )
+

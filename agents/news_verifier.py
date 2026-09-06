@@ -301,6 +301,17 @@ def _score_news_article(topic, title, snippet, article_text, published_at):
             "today",
             "technology",
             "tech",
+            "recent",
+            "breaking",
+            "current",
+            "newest",
+            "topic",
+            "your",
+            "video",
+            "create",
+            "make",
+            "about",
+            "please",
         }
     }
 
@@ -608,10 +619,105 @@ def verify_news_topic(topic, limit=5):
         reverse=True,
     )
 
+    # --------------------------------------------------------
+    # MINIMUM RELEVANCE GATE
+    # --------------------------------------------------------
+    #
+    # Google News may return articles because a generic word
+    # appears in the headline/snippet. That is not sufficient
+    # evidence that the article is actually about the topic.
+    #
+    # Require at least one meaningful topic word to appear in
+    # the article content before returning SOURCES_FOUND.
+    # --------------------------------------------------------
+
+    verification_words = {
+        word.lower()
+        for word in re.findall(
+            r"[A-Za-z0-9]+",
+            topic,
+        )
+        if len(word) >= 3
+        and word.lower() not in {
+            "latest",
+            "news",
+            "today",
+            "technology",
+            "tech",
+            "recent",
+            "breaking",
+            "current",
+            "newest",
+            "topic",
+            "your",
+            "video",
+            "create",
+            "make",
+            "about",
+            "please",
+        }
+    }
+
+    if verification_words:
+
+        relevant_candidates = []
+
+        for article in candidates:
+
+            combined = " ".join(
+                [
+                    article.get("headline", ""),
+                    article.get("snippet", ""),
+                    article.get("article_text", ""),
+                ]
+            ).lower()
+
+            matched_words = {
+                word
+                for word in verification_words
+                if word in combined
+            }
+
+            article_score = article.get(
+                "_score",
+                0,
+            )
+
+            # Accept the article when either:
+            #
+            # 1. A meaningful topic word is directly found
+            #    in the article content, OR
+            #
+            # 2. The article has a strong overall relevance
+            #    score from topic/location/technology/freshness.
+            #
+            # This prevents false positives such as
+            # "YOUR_TOPIC", while allowing legitimate articles
+            # whose publisher text does not repeat the exact
+            # location/topic wording.
+            if matched_words or article_score >= 40:
+
+                article["_matched_topic_words"] = len(
+                    matched_words
+                )
+
+                relevant_candidates.append(
+                    article
+                )
+
+        candidates = relevant_candidates
+
+    else:
+        # A query containing only generic words is not specific
+        # enough to safely verify as news.
+        candidates = []
+
     articles = candidates[:limit]
-    # Remove internal scoring field before returning.
+
+    # Remove internal scoring fields before returning.
     for article in articles:
         article.pop("_score", None)
+        article.pop("_matched_topic_words", None)
 
     # --------------------------------------------------------
     # RESULT

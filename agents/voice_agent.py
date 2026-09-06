@@ -2,14 +2,20 @@ import asyncio
 import os
 import re
 
-import edge_tts
+from dotenv import load_dotenv
+from kokoro import KPipeline
+import soundfile as sf
+import subprocess
+
+load_dotenv()
 
 
 # ============================================================
-# ENGLISH VOICE CONFIG
+# ENGLISH CREATOR VOICE CONFIG
 # ============================================================
 
-ENGLISH_VOICE = "en-US-AndrewNeural"
+KOKORO_VOICE = "af_heart"
+KOKORO_LANGUAGE = "a"
 
 
 # ============================================================
@@ -251,7 +257,7 @@ async def create_voice(
     pitch="+0Hz"
 ):
     """
-    Create English-only narration audio.
+    Create English-only narration using local Kokoro TTS.
     """
 
     script_path = "output/script.txt"
@@ -271,10 +277,6 @@ async def create_voice(
         print("Script is empty!")
         return None
 
-    # --------------------------------------------------------
-    # HARD ENGLISH CHECK
-    # --------------------------------------------------------
-
     telugu_chars = re.findall(
         r"[\u0C00-\u0C7F]",
         text
@@ -285,12 +287,6 @@ async def create_voice(
             "Telugu characters detected in script. "
             "English-only voice generation stopped."
         )
-
-    # --------------------------------------------------------
-    # Always use English voice
-    # --------------------------------------------------------
-
-    selected_voice = voice or ENGLISH_VOICE
 
     speech_text = make_tts_text(text)
 
@@ -308,40 +304,72 @@ async def create_voice(
 
     print()
     print("=" * 60)
-    print("ENGLISH TTS GENERATION")
+    print("KOKORO LOCAL TTS GENERATION")
     print("=" * 60)
     print()
-    print("Voice:", selected_voice)
-    print("Rate:", rate)
-    print("Pitch:", pitch)
+    print("Voice:", KOKORO_VOICE)
+    print("Language:", KOKORO_LANGUAGE)
     print()
     print("TTS text:")
     print(speech_text[:500])
     print()
 
-    communicate = edge_tts.Communicate(
-        speech_text,
-        selected_voice,
-        rate=rate,
-        pitch=pitch,
+    output_wav = "output/voice_kokoro.wav"
+    output_mp3 = "output/voice.mp3"
+
+    pipeline = KPipeline(
+        lang_code=KOKORO_LANGUAGE
     )
 
-    await communicate.save(
-        "output/voice.mp3"
+    generator = pipeline(
+        speech_text,
+        voice=KOKORO_VOICE
+    )
+
+    audio_parts = []
+
+    for _, _, audio in generator:
+        audio_parts.append(audio)
+
+    if not audio_parts:
+        raise RuntimeError(
+            "Kokoro did not generate any audio."
+        )
+
+    import numpy as np
+
+    full_audio = np.concatenate(
+        audio_parts
+    )
+
+    sf.write(
+        output_wav,
+        full_audio,
+        24000
+    )
+
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-i",
+            output_wav,
+            "-codec:a",
+            "libmp3lame",
+            "-q:a",
+            "2",
+            output_mp3,
+        ],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
     )
 
     print()
     print("Voice created successfully!")
-    print("Saved to: output/voice.mp3")
+    print("Saved to:", output_mp3)
     print("TTS text saved to: output/tts_script.txt")
     print()
 
-    return "output/voice.mp3"
+    return output_mp3
 
-
-# ============================================================
-# DIRECT TEST
-# ============================================================
-
-if __name__ == "__main__":
-    asyncio.run(create_voice())

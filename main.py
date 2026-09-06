@@ -163,7 +163,7 @@ else:
         title=title,
         description=description,
         tags=tags,
-        privacy="private"
+        privacy="public",
     )
 
     print("=" * 50)

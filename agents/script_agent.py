@@ -513,57 +513,48 @@ NEWS SOURCE CONTEXT:
 
 SOURCE GROUNDING RULES:
 
-The NEWS SOURCE CONTEXT contains verified source articles.
+CONTENT-TYPE BEHAVIOR:
 
-For a NEWS video, the verified article text is the
-primary factual source.
+If Content type is NEWS:
+- The supplied NEWS SOURCE CONTEXT is the primary factual source.
+- Every important factual claim must be supported by the supplied verified source material.
+- Do not invent facts, quotes, dates, statistics, names, events, partnerships or announcements.
+- If the supplied sources are insufficient, say so rather than inventing information.
+
+If Content type is GENERAL TOPIC:
+- Do NOT require NEWS SOURCE CONTEXT.
+- Do NOT say that sources are insufficient merely because no news sources were supplied.
+- Answer the requested topic normally using your general knowledge.
+- Explain educational or general topics clearly and accurately.
+- Do not invent highly specific facts, statistics, quotes, dates or claims when you are not confident they are correct.
 
 IMPORTANT SOURCE SELECTION RULES:
 
-1. First identify which verified source or sources are
-   directly relevant to the requested topic.
+1. First identify which verified source or sources are directly relevant to the requested topic.
 
-2. If the topic asks for a specific news story, build the
-   entire narration around that story. Do not combine it
-   with unrelated verified articles.
+2. If the topic asks for a specific news story, build the entire narration around that story. Do not combine it with unrelated verified articles.
 
-3. If the topic explicitly asks for a roundup, multiple
-   stories may be used. In that case, treat each story as
-   a separate news item and clearly transition between them.
+3. If the topic explicitly asks for a roundup, multiple stories may be used. In that case, treat each story as a separate news item and clearly transition between them.
 
-4. Do NOT create a broad "technology roundup" merely because
-   several verified articles contain technology-related words.
+4. Do NOT create a broad "technology roundup" merely because several verified articles contain technology-related words.
 
-5. Do NOT combine separate people, organizations, locations,
-   dates, projects, statistics or events into one event.
+5. Do NOT combine separate people, organizations, locations, dates, projects, statistics or events into one event.
 
-6. Every factual claim in the narration must be supported by
-   the supplied source context, preferably by the full
-   Article text field.
+6. For NEWS content, every factual claim in the narration must be supported by the supplied source context, preferably by the full Article text field.
 
-7. Headlines and snippets may identify a story, but do not
-   use them as evidence for additional facts that are not
-   present in the supplied Article text.
+7. Headlines and snippets may identify a story, but do not use them as evidence for additional facts that are not present in the supplied Article text.
 
-8. If Article text is available, prefer it over inference
-   from the headline or snippet.
+8. If Article text is available, prefer it over inference from the headline or snippet.
 
-9. If a verified source is older than the topic implies,
-   do not describe it as breaking, today's, or newly
-   announced news unless the source explicitly supports that.
+9. If a verified source is older than the topic implies, do not describe it as breaking, today's, or newly announced news unless the source explicitly supports that.
 
-10. Never invent names, titles, casualty figures, dates,
-    quotes, locations, statistics, investments, partnerships,
-    announcements or events.
+10. Never invent names, titles, casualty figures, dates, quotes, locations, statistics, investments, partnerships, announcements or events.
 
-11. Never merge facts from different articles unless the
-    relationship between those facts is explicitly supported
-    by the source material.
+11. Never merge facts from different articles unless the sources clearly support that connection.
 
-12. If the supplied sources do not contain enough evidence
-    to create a factual script about the requested topic,
-    state that the available sources are insufficient rather
-    than inventing information.
+12. For NEWS content, if the supplied sources do not contain enough evidence to create a factual script about the requested topic, state that the available sources are insufficient rather than inventing information.
+
+13. For GENERAL TOPIC content, absence of news source context is NOT a reason to refuse or shorten the script.
 
 SOURCE PRIORITY:
 

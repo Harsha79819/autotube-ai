@@ -1,6 +1,8 @@
+import os
 import re
 from pathlib import Path
 
+import requests
 import whisper
 from moviepy import AudioFileClip, ImageClip, VideoFileClip, concatenate_videoclips
 
@@ -240,6 +242,79 @@ def normalize_text(text):
     )
 
     return text.strip()
+
+
+def find_matching_video(visual_description):
+    """
+    Find the best local video clip using filename keywords
+    from the visual description.
+
+    Example:
+        "Grand Canyon flash flood rescue"
+        ->
+        assets/videos/grand_canyon_rescue.mp4
+    """
+
+    videos_dir = ASSETS_DIR / "videos"
+
+    if not videos_dir.exists():
+        return None
+
+    description_words = set(
+        normalize_text(visual_description).split()
+    )
+
+    if not description_words:
+        return None
+
+    candidates = []
+
+    for path in videos_dir.iterdir():
+
+        if not path.is_file():
+            continue
+
+        if path.suffix.lower() not in {
+            ".mp4",
+            ".mov",
+            ".m4v",
+            ".webm",
+        }:
+            continue
+
+        filename_words = set(
+            normalize_text(
+                path.stem.replace("_", " ")
+            ).split()
+        )
+
+        matches = (
+            description_words
+            & filename_words
+        )
+
+        if not matches:
+            continue
+
+        score = len(matches)
+
+        candidates.append(
+            (
+                score,
+                path,
+            )
+        )
+
+    if not candidates:
+        return None
+
+    candidates.sort(
+        key=lambda item: item[0],
+        reverse=True,
+    )
+
+    return candidates[0][1]
+
 
 
 def normalize_words(text):
@@ -1207,6 +1282,8 @@ def create_video():
             image_index
         ]
 
+        visual_description = visual_plan[visual_number - 1]
+
         print()
         print(
             f"[{start:06.2f}s - "
@@ -1245,26 +1322,17 @@ def create_video():
         # Fall back to the existing numbered image.
         # ----------------------------------------------------
 
-        video_path = None
+        visual_description = visual_plan[visual_number - 1]
 
-        videos_dir = Path("assets/videos")
+        video_path = find_matching_video(
+            visual_description
+        )
 
-        for extension in (
-            ".mp4",
-            ".mov",
-            ".m4v",
-            ".webm",
-        ):
-
-            candidate = (
-                videos_dir
-                / f"{visual_number}{extension}"
+        if video_path:
+            print(
+                f"AUTO VIDEO : "
+                f"{video_path.name}"
             )
-
-            if candidate.exists():
-
-                video_path = candidate
-                break
 
         if video_path:
 

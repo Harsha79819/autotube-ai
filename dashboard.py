@@ -27,15 +27,11 @@ UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 # ============================================================
 
 VOICE_IDS = {
-    "English Female": "en-US-AriaNeural",
-    "English Male": "en-US-AndrewNeural",
-    "English Creator": "en-US-GuyNeural",
+    "Creator Voice": "af_heart",
 }
 
 VOICE_TUNING = {
-    "English Female": ("+0%", "+0Hz"),
-    "English Male": ("+0%", "+0Hz"),
-    "English Creator": ("+8%", "+2Hz"),
+    "Creator Voice": ("-5%", "+0Hz"),
 }
 
 
@@ -361,6 +357,7 @@ def create_thumbnail(
 def create_ai_review(
     captions_enabled=True,
     source_context=None,
+    content_type="General Topic",
 ):
     """Run Gemini AI quality review on the generated project."""
 
@@ -380,6 +377,7 @@ def create_ai_review(
         subtitles_exists=project["subtitles_exists"],
         captions_enabled=captions_enabled,
         source_context=source_context,
+        content_type=content_type,
     )
 
 
@@ -474,6 +472,7 @@ def create_metadata(
 
 def improve_script_from_review(
     topic,
+    previous_script,
     review,
     language_style,
     attempt,
@@ -481,8 +480,10 @@ def improve_script_from_review(
     source_context=None,
 ):
     """
-    Ask the existing script generator to create a corrected version
-    of the same topic using the Review Agent feedback.
+    Revise the EXISTING script using AI review feedback.
+
+    The previous script is the source of truth.
+    Do NOT generate a completely new story.
     """
 
     from agents.script_agent import generate_script
@@ -497,43 +498,118 @@ def improve_script_from_review(
         [],
     )
 
-    feedback = "\n".join(
-        f"- {item}"
-        for item in critical_issues + improvements
+    feedback_items = (
+        critical_issues
+        + improvements
     )
 
-    revision_topic = f"""
-Original topic:
+    feedback = "\n".join(
+        f"- {item}"
+        for item in feedback_items
+    )
+
+    if not feedback.strip():
+        feedback = (
+            "- Improve only genuine problems identified by the review."
+        )
+
+    revision_prompt = f"""
+You are revising an EXISTING YouTube script.
+
+THIS IS NOT A NEW SCRIPT GENERATION TASK.
+
+ORIGINAL TOPIC:
 {topic}
 
-Content type:
+CONTENT TYPE:
 {content_type}
 
-Source context:
-{source_context or "No verified source context available."}
+REVISION ATTEMPT:
+{attempt} of 3
 
-This is revision attempt {attempt} of 3.
+PREVIOUS SCRIPT:
+====================
+{previous_script}
+====================
 
-Create a corrected YouTube news package about the SAME original topic.
+CUMULATIVE AI REVIEW FEEDBACK:
+===============================
+The feedback below comes from ALL previous review rounds.
 
-The previous AI quality review found these problems:
+Older feedback may already have been fixed in the PREVIOUS SCRIPT.
+DO NOT undo or unnecessarily rewrite a fix that is already correctly
+implemented.
 
+For every feedback item:
+1. Check whether the previous script already fixes it.
+2. If it is already fixed, preserve that fix.
+3. If it is still missing, fix it now.
+4. If a newer review conflicts with an older requirement, follow the
+   newer review only when it identifies a genuine problem.
+5. Do not make unrelated changes.
+
+FEEDBACK:
+====================
 {feedback}
+====================
 
-Correction requirements:
-- Keep the SAME underlying topic.
-- Fix every factual, structural, visual-planning, and narration issue identified above.
-- Do not mention this review or revision process in the narration.
-- Do not invent facts.
-- Remove unsupported claims.
-- For News content, use the supplied source context
-  as the factual basis.
-- Keep the narration in natural English.
-- Keep the visual plan directly aligned with the corrected narration.
+VERIFIED SOURCE CONTEXT:
+====================
+{source_context or "No additional verified source context available."}
+====================
+
+YOUR TASK:
+
+Revise the PREVIOUS SCRIPT above.
+
+The previous script is the SOURCE OF TRUTH.
+
+Make ONLY the changes necessary to fix the AI review feedback.
+
+STRICT RULES:
+
+1. KEEP THE SAME STORY.
+2. KEEP THE SAME TOPIC.
+3. KEEP THE SAME EVENTS.
+4. KEEP THE SAME PEOPLE.
+5. KEEP THE SAME PLACES.
+6. KEEP THE SAME DATES AND TIMES.
+7. KEEP THE SAME NUMBERS AND STATISTICS.
+8. KEEP the same factual details unless the review specifically
+   identifies that detail as incorrect or unsupported.
+9. DO NOT create a new story.
+10. DO NOT replace the story with another news story.
+11. DO NOT add unrelated information.
+12. DO NOT invent facts, people, numbers, dates, places, quotes,
+    casualties, statistics, or events.
+13. If the review identifies an unsupported claim, remove or correct
+    ONLY that claim using the verified source context.
+14. If the review identifies an incorrect fact, correct ONLY that fact.
+15. Preserve the original emotional tone and storytelling style.
+16. Preserve the original narrative structure wherever possible.
+17. Make the smallest necessary changes.
+18. The revised script must remain recognizably the SAME SCRIPT.
+19. Do not mention AI, review, revision, prompts, or these instructions.
+
+IMPORTANT:
+
+If the previous script was manually supplied by the user,
+NEVER rewrite it just because you can make it "better".
+
+Only change something when the review provides a real reason
+to change it.
+
+Return a complete YouTube content package using the SAME revised
+story and SAME revised narration.
+
+Keep the visual plan aligned with the revised narration.
+
+Do not change the topic.
+Do not start over.
 """
 
     return generate_script(
-        revision_topic,
+        revision_prompt,
         content_type=content_type,
         language_style=language_style,
         source_context=(
@@ -542,7 +618,6 @@ Correction requirements:
             else None
         ),
     )
-
 
 def generate_multi_media_video(
     topic,
@@ -599,6 +674,11 @@ def generate_multi_media_video(
         "improvements": [],
     }
 
+    # Cumulative AI review feedback.
+    # Review 1 → Attempt 2
+    # Review 1 + Review 2 → Attempt 3
+    review_history = []
+
     script = ""
     title = topic
     description = ""
@@ -620,8 +700,8 @@ def generate_multi_media_video(
     if (
         content_type == "News"
         and not script_override
-        and not media_files
     ):
+
 
         st.info(
             "📰 Verifying news sources..."
@@ -631,14 +711,21 @@ def generate_multi_media_video(
             verify_news_topic,
         )
 
+
         news_verification = (
             verify_news_topic(topic)
         )
+
+        print("DEBUG NEWS STATUS:", news_verification.get("status"))
+        print("DEBUG NEWS TOPIC:", topic)
+        print("DEBUG NEWS ARTICLES:", len(news_verification.get("articles", [])))
 
         articles = news_verification.get(
             "articles",
             [],
         )
+
+
 
         if articles:
 
@@ -728,9 +815,26 @@ def generate_multi_media_video(
 
         else:
 
+            # Use ALL previous review feedback.
+            # Attempt 2 → Review 1
+            # Attempt 3 → Review 1 + Review 2
+            cumulative_review = {
+                "critical_issues": [],
+                "improvements": [],
+            }
+
+            for previous_review in review_history:
+                cumulative_review["critical_issues"].extend(
+                    previous_review.get("critical_issues", [])
+                )
+                cumulative_review["improvements"].extend(
+                    previous_review.get("improvements", [])
+                )
+
             script = improve_script_from_review(
                 topic=topic,
-                review=review,
+                previous_script=script,
+                review=cumulative_review,
                 language_style=language_style,
                 attempt=attempt,
                 content_type=content_type,
@@ -883,6 +987,7 @@ def generate_multi_media_video(
                 if content_type == "News"
                 else None
             ),
+            content_type=content_type,
         )
 
         status = str(
@@ -896,6 +1001,17 @@ def generate_multi_media_video(
             "score",
             0,
         )
+
+        # Save this completed review so future attempts
+        # can carry forward ALL previous feedback.
+        review_history.append({
+            "critical_issues": list(
+                review.get("critical_issues", [])
+            ),
+            "improvements": list(
+                review.get("improvements", [])
+            ),
+        })
 
         print()
         print("=" * 60)
@@ -944,17 +1060,29 @@ def generate_multi_media_video(
         # PASS
         # ----------------------------------------------------
 
-        if (
-            status == "APPROVE"
-            and int(score or 0) >= 75
-            and not review.get(
+        review_has_critical_issues = bool(
+            review.get(
                 "critical_issues",
                 [],
             )
-        ):
+        )
+
+        review_score = int(
+            score or 0
+        )
+
+        review_is_approved = (
+            status == "APPROVE"
+            and review_score >= 60
+            and not review_has_critical_issues
+        )
+
+        if review_is_approved:
 
             stop_reason = (
-                "AI Review approved the current version."
+                "AI Review approved the current version "
+                "with a score of 60 or higher and no "
+                "critical issues."
             )
 
             stopped_after_review = True
@@ -970,41 +1098,48 @@ def generate_multi_media_video(
             break
 
         # ----------------------------------------------------
-        # IMPROVE
+        # IMPROVE / NON-QUALIFIED REVIEW
+        # ----------------------------------------------------
+        #
+        # Any review that is not a genuine PASS must be
+        # treated as needing improvement.
+        #
+        # This includes:
+        #   - IMPROVE
+        #   - APPROVE below 60
+        #   - APPROVE with critical issues
         # ----------------------------------------------------
 
-        if status == "IMPROVE":
+        if attempt < MAX_REVIEW_ATTEMPTS:
 
-            if attempt < MAX_REVIEW_ATTEMPTS:
-
-                progress.progress(
-                    94,
-                    text=(
-                        f"⚠️ Review {attempt} requested "
-                        "improvements. Regenerating..."
-                    ),
-                )
-
-                print(
-                    "Review requested improvements."
-                )
-
-                print(
-                    "Regenerating the SAME topic..."
-                )
-
-                continue
-
-            # Third IMPROVE → stop improving but keep
-            # the latest generated version.
-            stopped_after_review = True
-
-            stop_reason = (
-                "Maximum 3 AI review attempts reached. "
-                "Keeping the latest generated version."
+            progress.progress(
+                94,
+                text=(
+                    f"⚠️ Review {attempt} did not meet "
+                    "the approval requirements. "
+                    "Regenerating..."
+                ),
             )
 
-            break
+            print(
+                "Review did not meet approval requirements."
+            )
+
+            print(
+                "Regenerating the SAME topic..."
+            )
+
+            continue
+
+        # Third failed/non-qualified review → stop.
+        stopped_after_review = True
+
+        stop_reason = (
+            "Maximum 3 AI review attempts reached. "
+            "Keeping the latest generated version."
+        )
+
+        break
 
     # ========================================================
     # STOPPED AFTER REVIEW
@@ -1020,6 +1155,78 @@ def generate_multi_media_video(
             ),
         )
 
+    # --------------------------------------------------------
+    # FINAL AI REVIEW / YOUTUBE UPLOAD CONTROL
+    # --------------------------------------------------------
+    #
+    # Reviews 1 and 2 are improvement gates.
+    # Review 3 is the FINAL review.
+    #
+    # IMPORTANT:
+    # AI review status must NEVER block YouTube upload
+    # after the final review.
+    # --------------------------------------------------------
+
+    review_status_final = str(
+        review.get("status", "")
+    ).upper()
+
+    review_score_final = int(
+        review.get("score", 0) or 0
+    )
+
+    critical_issues_final = review.get(
+        "critical_issues",
+        [],
+    )
+
+    # AI review is informational after the final attempt.
+    # The user's YouTube Upload checkbox controls upload.
+    upload_blocked = False
+
+    review_approved = (
+        review_status_final == "APPROVE"
+        and review_score_final >= 60
+        and not critical_issues_final
+    )
+
+    if review_approved:
+        review_final_message = (
+            "AI Review approved the final version."
+        )
+    elif review_status_final == "IMPROVE":
+        review_final_message = (
+            "Final AI Review requested improvements. "
+            "No further review attempts remain. "
+            "The latest generated version will continue."
+        )
+    elif review_status_final in (
+        "REVIEW_FAILED",
+        "REVIEW_QUOTA_EXCEEDED",
+    ):
+        review_final_message = (
+            "AI Review was unavailable. "
+            "The latest generated version will continue."
+        )
+    else:
+        review_final_message = (
+            "Final AI Review completed. "
+            "The latest generated version will continue."
+        )
+
+    print()
+    print("=" * 60)
+    print("FINAL AI REVIEW")
+    print("=" * 60)
+    print(
+        f"Status: {review_status_final}"
+    )
+    print(
+        f"Score: {review_score_final}/100"
+    )
+    print(
+        review_final_message
+    )
     # --------------------------------------------------------
     # METADATA / OPTIONAL YOUTUBE UPLOAD
     # --------------------------------------------------------
@@ -1044,6 +1251,11 @@ def generate_multi_media_video(
         description = ""
         tags = []
 
+        print(
+            "Local video   : output/final_video.mp4"
+        )
+        print("=" * 60)
+
     progress.progress(
         100,
         text="✅ AutoTube AI generation completed!",
@@ -1063,7 +1275,7 @@ def generate_multi_media_video(
             if "attempt" in locals()
             else 0
         ),
-        "upload_blocked": False,
+        "upload_blocked": upload_blocked,
         "stop_reason": stop_reason,
     }
 
@@ -1071,6 +1283,29 @@ def generate_multi_media_video(
 # ============================================================
 # STREAMLIT DASHBOARD
 # ============================================================
+
+    """Find a verified news topic for the dashboard."""
+
+    from agents.news_verifier import verify_news_topic
+
+    verification = verify_news_topic(
+        f"latest {category} news in {location}"
+    )
+    articles = verification.get("articles", [])
+
+    if not articles:
+        return None
+
+    article = articles[0]
+
+    if isinstance(article, dict):
+        return (
+            article.get("title")
+            or article.get("headline")
+            or article.get("topic")
+        )
+
+    return str(article)
 
 st.set_page_config(
     page_title="AutoTube AI",
@@ -1091,10 +1326,65 @@ st.divider()
 # TOPIC
 # ============================================================
 
-topic = st.text_input(
+# TOPIC
+# ============================================================
+
+if "trend_topics" not in st.session_state:
+    st.session_state.trend_topics = []
+
+if "selected_topic" not in st.session_state:
+    st.session_state.selected_topic = ""
+
+manual_topic = st.text_input(
     "What do you want to create?",
+    value=st.session_state.selected_topic,
     placeholder="Enter a topic or video idea...",
 )
+
+if manual_topic.strip():
+    st.session_state.selected_topic = manual_topic.strip()
+
+if st.button(
+    "🔥 Get New Trendy Topics",
+    use_container_width=True,
+):
+    with st.spinner("🔥 Finding the latest trending topics..."):
+        from agents.trend_agent import discover_trending_topics
+        try:
+            st.session_state.trend_topics = discover_trending_topics(limit=6)
+        except Exception as exc:
+            st.session_state.trend_topics = []
+            st.error(f"Could not fetch trending topics: {exc}")
+
+if st.session_state.trend_topics:
+    st.subheader("🔥 Trending Topics")
+
+    topic_options = [
+        event["title"]
+        for event in st.session_state.trend_topics
+        if event.get("title")
+    ]
+
+    if topic_options:
+        current_index = 0
+
+        if st.session_state.selected_topic in topic_options:
+            current_index = topic_options.index(
+                st.session_state.selected_topic
+            )
+
+        selected_trend = st.radio(
+            "Select a topic:",
+            topic_options,
+            index=current_index,
+        )
+
+        st.session_state.selected_topic = selected_trend
+
+topic = st.session_state.selected_topic
+
+if topic:
+    st.success(f"Selected topic: **{topic}**")
 
 content_type = st.selectbox(
     "Content Type",
@@ -1102,7 +1392,7 @@ content_type = st.selectbox(
         "News",
         "General Topic",
     ],
-    index=0,
+    index=1,
     help=(
         "News verifies source context before script generation. "
         "General Topic uses normal topic generation."
@@ -1182,9 +1472,7 @@ language_style = st.selectbox(
 voice = st.selectbox(
     "Voice",
     [
-        "English Female",
-        "English Male",
-        "English Creator",
+        "Creator Voice",
     ],
 )
 
@@ -1216,7 +1504,7 @@ youtube_privacy = st.selectbox(
         "unlisted",
         "private",
     ],
-    index=0,
+    index=1,
     disabled=not youtube_upload,
 )
 
@@ -1237,304 +1525,296 @@ generate = st.button(
     use_container_width=True,
 )
 
+
+
 if generate:
+    try:
 
-    if not topic:
-
-        st.error(
-            "Please enter a topic or video idea."
+        all_media = list(
+            media_files or []
         )
 
-    else:
+        if flyer_file:
 
-        try:
-
-            all_media = list(
-                media_files or []
+            all_media.append(
+                flyer_file
             )
 
-            if flyer_file:
+        with st.spinner(
+            "AutoTube AI is creating your video..."
+        ):
 
-                all_media.append(
-                    flyer_file
-                )
+            result = generate_multi_media_video(
+                topic=topic,
 
-            with st.spinner(
-                "AutoTube AI is creating your video..."
-            ):
+                media_files=all_media,
+                content_type=(
+                    "General Topic"
+                    if flyer_file
+                    else content_type
+                ),
+                language_style=language_style,
+                voice=voice,
+                captions=captions,
+                thumbnail=thumbnail,
+                metadata=metadata,
+                youtube_upload=youtube_upload,
+                youtube_privacy=youtube_privacy,
+            )
 
-                result = generate_multi_media_video(
-                    topic=topic or "AI Generated Video",
-                    media_files=all_media,
-                    content_type=(
-                        "General Topic"
-                        if flyer_file
-                        else content_type
-                    ),
-                    language_style=language_style,
-                    voice=voice,
-                    captions=captions,
-                    thumbnail=thumbnail,
-                    metadata=metadata,
-                    youtube_upload=youtube_upload,
-                    youtube_privacy=youtube_privacy,
-                )
+        review = result.get(
+            "review",
+            {},
+        )
 
-            review = result.get(
-                "review",
+        review_status = str(
+            review.get(
+                "status",
+                "UNKNOWN",
+            )
+        ).upper()
+
+        review_score = review.get(
+            "score",
+            0,
+        )
+
+        upload_blocked = bool(
+            result.get(
+                "upload_blocked",
+                False,
+            )
+        )
+
+        review_attempts = result.get(
+            "review_attempts",
+            0,
+        )
+
+        # ------------------------------------------------
+        # AI QUALITY REVIEW
+        # ------------------------------------------------
+
+        st.divider()
+        st.subheader("🤖 AI Quality Review")
+
+        if review_status == "APPROVE" and not upload_blocked:
+
+            st.success(
+                f"✅ APPROVED — {review_score}/100 "
+                f"({review_attempts}/3 review attempts)"
+            )
+
+        elif review_status == "REVIEW_QUOTA_EXCEEDED":
+
+            st.warning(
+                "⚪ AI Review unavailable because the "
+                "Gemini quota/rate limit was reached. "
+                "The latest generated version will continue."
+            )
+
+        elif review_status == "IMPROVE":
+
+            st.warning(
+                f"⚠️ IMPROVE — {review_score}/100 "
+                f"({review_attempts}/3 review attempts)"
+            )
+
+        elif review_status == "REVIEW_FAILED":
+
+            st.warning(
+                f"⚪ AI Review unavailable — "
+                f"{review_score}/100"
+            )
+
+        else:
+
+            st.info(
+                f"Review status: {review_status} — "
+                f"{review_score}/100 "
+                f"({review_attempts}/3 review attempts)"
+            )
+
+        if review.get("summary"):
+
+            st.write(
+                review["summary"]
+            )
+
+        section_labels = [
+            ("script", "Script"),
+            ("factual_quality", "Factual Quality"),
+            ("hook", "Hook"),
+            ("visuals", "Visuals"),
+            ("subtitles", "Subtitles"),
+            ("thumbnail", "Thumbnail"),
+        ]
+
+        for key, label in section_labels:
+
+            data = review.get(
+                key,
                 {},
             )
 
-            review_status = str(
-                review.get(
+            if data:
+
+                score = data.get(
+                    "score",
+                    0,
+                )
+
+                section_status = data.get(
                     "status",
-                    "UNKNOWN",
+                    "",
                 )
-            ).upper()
-
-            review_score = review.get(
-                "score",
-                0,
-            )
-
-            upload_blocked = bool(
-                result.get(
-                    "upload_blocked",
-                    False,
-                )
-            )
-
-            review_attempts = result.get(
-                "review_attempts",
-                0,
-            )
-
-            # ------------------------------------------------
-            # AI QUALITY REVIEW
-            # ------------------------------------------------
-
-            st.divider()
-            st.subheader("🤖 AI Quality Review")
-
-            if review_status == "APPROVE" and not upload_blocked:
-
-                st.success(
-                    f"✅ APPROVED — {review_score}/100 "
-                    f"({review_attempts}/3 review attempts)"
-                )
-
-            elif review_status == "REVIEW_QUOTA_EXCEEDED":
-
-                st.warning(
-                    "⚪ AI Review unavailable because the "
-                    "Gemini quota/rate limit was reached. "
-                    "The latest generated version will continue."
-                )
-
-            elif review_status == "IMPROVE":
-
-                st.warning(
-                    f"⚠️ IMPROVE — {review_score}/100 "
-                    f"({review_attempts}/3 review attempts)"
-                )
-
-            elif review_status == "REVIEW_FAILED":
-
-                st.warning(
-                    f"⚪ AI Review unavailable — "
-                    f"{review_score}/100"
-                )
-
-            else:
-
-                st.info(
-                    f"Review status: {review_status} — "
-                    f"{review_score}/100 "
-                    f"({review_attempts}/3 review attempts)"
-                )
-
-            if review.get("summary"):
 
                 st.write(
-                    review["summary"]
+                    f"**{label}:** "
+                    f"{score}/100 — "
+                    f"{section_status}"
                 )
 
-            section_labels = [
-                ("script", "Script"),
-                ("factual_quality", "Factual Quality"),
-                ("hook", "Hook"),
-                ("visuals", "Visuals"),
-                ("subtitles", "Subtitles"),
-                ("thumbnail", "Thumbnail"),
-            ]
+                if data.get("feedback"):
 
-            for key, label in section_labels:
-
-                data = review.get(
-                    key,
-                    {},
-                )
-
-                if data:
-
-                    score = data.get(
-                        "score",
-                        0,
+                    st.caption(
+                        data["feedback"]
                     )
 
-                    section_status = data.get(
-                        "status",
-                        "",
-                    )
+        critical = review.get(
+            "critical_issues",
+            [],
+        )
 
-                    st.write(
-                        f"**{label}:** "
-                        f"{score}/100 — "
-                        f"{section_status}"
-                    )
+        if critical:
 
-                    if data.get("feedback"):
-
-                        st.caption(
-                            data["feedback"]
-                        )
-
-            critical = review.get(
-                "critical_issues",
-                [],
+            st.markdown(
+                "**Critical Issues**"
             )
 
-            if critical:
+            for issue in critical:
 
-                st.markdown(
-                    "**Critical Issues**"
+                st.error(
+                    str(issue)
                 )
 
-                for issue in critical:
+        improvements = review.get(
+            "improvements",
+            [],
+        )
 
-                    st.error(
-                        str(issue)
-                    )
+        if improvements:
 
-            improvements = review.get(
-                "improvements",
-                [],
+            st.markdown(
+                "**Improvements**"
             )
 
-            if improvements:
+            for improvement in improvements:
 
-                st.markdown(
-                    "**Improvements**"
+                st.info(
+                    str(improvement)
                 )
 
-                for improvement in improvements:
+        if result.get("stop_reason"):
 
-                    st.info(
-                        str(improvement)
-                    )
+            st.caption(
+                result["stop_reason"]
+            )
 
-            if result.get("stop_reason"):
+        if youtube_upload:
 
-                st.caption(
-                    result["stop_reason"]
-                )
-
-            if (
-                youtube_upload
-                and review_status == "APPROVE"
-            ):
-
+            if review_status == "APPROVE":
                 st.success(
-                    "✅ AI Review approved. "
+                    "✅ Final AI Review approved. "
                     f"YouTube upload: {youtube_privacy.upper()}"
                 )
 
-            elif (
-                youtube_upload
-                and review_status == "IMPROVE"
-            ):
-
+            elif review_status == "IMPROVE":
                 st.info(
-                    "ℹ️ Review feedback is advisory. "
-                    "The latest generated version will continue "
+                    "ℹ️ Final AI Review requested improvements. "
+                    "Review limit reached. "
+                    "The latest version will continue "
                     f"to YouTube as {youtube_privacy.upper()}."
                 )
 
-            elif (
-                youtube_upload
-                and review_status in {
-                    "REVIEW_QUOTA_EXCEEDED",
-                    "REVIEW_FAILED",
-                }
-            ):
-
+            elif review_status in {
+                "REVIEW_QUOTA_EXCEEDED",
+                "REVIEW_FAILED",
+            }:
                 st.info(
                     "ℹ️ AI Review was unavailable. "
                     "The latest generated version will continue "
                     f"to YouTube as {youtube_privacy.upper()}."
                 )
 
-            # ------------------------------------------------
-            # VIDEO RESULT
-            # ------------------------------------------------
+            else:
+                st.info(
+                    "ℹ️ Final AI Review completed. "
+                    "The latest generated version will continue "
+                    f"to YouTube as {youtube_privacy.upper()}."
+                )
 
-            st.success(
-                "🎉 Video generated successfully!"
+        # ------------------------------------------------
+        # VIDEO RESULT
+        # ------------------------------------------------
+
+        st.success(
+            "🎉 Video generated successfully!"
+        )
+
+        video_path = Path(
+            result["video"]
+        )
+
+        if video_path.exists():
+
+            st.video(
+                str(video_path)
             )
 
-            video_path = Path(
-                result["video"]
+            st.download_button(
+                "⬇️ Download Final Video",
+                data=video_path.read_bytes(),
+                file_name="autotube_final_video.mp4",
+                mime="video/mp4",
             )
 
-            if video_path.exists():
+        if result["title"]:
 
-                st.video(
-                    str(video_path)
-                )
-
-                st.download_button(
-                    "⬇️ Download Final Video",
-                    data=video_path.read_bytes(),
-                    file_name="autotube_final_video.mp4",
-                    mime="video/mp4",
-                )
-
-            if result["title"]:
-
-                st.subheader(
-                    "Generated Title"
-                )
-
-                st.write(
-                    result["title"]
-                )
-
-            if result["description"]:
-
-                st.subheader(
-                    "Generated Description"
-                )
-
-                st.write(
-                    result["description"]
-                )
-
-            if result["tags"]:
-
-                st.subheader(
-                    "Generated Tags"
-                )
-
-                st.write(
-                    ", ".join(result["tags"])
-                )
-
-        except Exception as error:
-
-            st.error(
-                "AutoTube AI failed."
+            st.subheader(
+                "Generated Title"
             )
 
-            st.exception(
-                error
+            st.write(
+                result["title"]
             )
+
+        if result["description"]:
+
+            st.subheader(
+                "Generated Description"
+            )
+
+            st.write(
+                result["description"]
+            )
+
+        if result["tags"]:
+
+            st.subheader(
+                "Generated Tags"
+            )
+
+            st.write(
+                ", ".join(result["tags"])
+            )
+
+    except Exception as error:
+
+        st.error(
+            "AutoTube AI failed."
+        )
+
+        st.exception(
+            error
+        )
