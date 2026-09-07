@@ -8,3 +8,4 @@ gtts
 python-dotenv
 requests
 beautifulsoup4
+googlenewsdecoder
