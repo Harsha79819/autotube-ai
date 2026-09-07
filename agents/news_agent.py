@@ -1370,3 +1370,130 @@ def get_news(category="General News", location="Vijayawada"):
         return (
             f"{category} latest news"
         )
+
+
+def get_trending_news(
+    category="Technology",
+    location="Vijayawada",
+    limit=10,
+):
+    """
+    Return current trending news stories for the dashboard.
+    Existing get_news() remains unchanged.
+    """
+
+    query = NEWS_QUERIES.get(
+        category,
+        "latest news",
+    )
+
+    if category == "Local News":
+        query = f"latest news {location}"
+    elif location:
+        query = f"{query} {location}"
+
+    url = (
+        "https://news.google.com/rss/search?q="
+        + quote_plus(query)
+        + "&hl=en-IN&gl=IN&ceid=IN:en"
+    )
+
+    try:
+        response = requests.get(
+            url,
+            timeout=15,
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 "
+                    "(Macintosh; Intel Mac OS X 10_15_7) "
+                    "AppleWebKit/537.36 "
+                    "(KHTML, like Gecko) "
+                    "Chrome/151.0 Safari/537.36"
+                )
+            },
+        )
+
+        response.raise_for_status()
+
+        root = ET.fromstring(
+            response.content
+        )
+
+        results = []
+        seen = set()
+
+        for item in root.findall(".//item"):
+
+            title_element = item.find("title")
+
+            if title_element is None:
+                continue
+
+            title = (
+                title_element.text or ""
+            ).strip()
+
+            if not title:
+                continue
+
+            title = re.sub(
+                r"\s+[-|–—]\s+[^-|–—]+$",
+                "",
+                title,
+            ).strip()
+
+            key = title.lower()
+
+            if key in seen:
+                continue
+
+            seen.add(key)
+
+            source_element = item.find(
+                "source"
+            )
+
+            source = ""
+
+            if source_element is not None:
+                source = (
+                    source_element.text or ""
+                ).strip()
+
+            published_element = item.find(
+                "pubDate"
+            )
+
+            published = ""
+
+            if published_element is not None:
+                published = (
+                    published_element.text or ""
+                ).strip()
+
+            results.append(
+                {
+                    "title": title,
+                    "source": source,
+                    "published": published,
+                }
+            )
+
+            if len(results) >= limit:
+                break
+
+        print(
+            f"🔥 Trending News: "
+            f"{len(results)} stories found"
+        )
+
+        return results
+
+    except Exception as error:
+
+        print(
+            "⚠️ Trending news search failed:",
+            str(error),
+        )
+
+        return []

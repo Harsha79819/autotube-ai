@@ -1281,540 +1281,761 @@ def generate_multi_media_video(
 
 
 # ============================================================
+# ============================================================
 # STREAMLIT DASHBOARD
 # ============================================================
+import streamlit as st
+from pathlib import Path
+import json
 
-    """Find a verified news topic for the dashboard."""
 
-    from agents.news_verifier import verify_news_topic
-
-    verification = verify_news_topic(
-        f"latest {category} news in {location}"
-    )
-    articles = verification.get("articles", [])
-
-    if not articles:
-        return None
-
-    article = articles[0]
-
-    if isinstance(article, dict):
-        return (
-            article.get("title")
-            or article.get("headline")
-            or article.get("topic")
-        )
-
-    return str(article)
+# ============================================================
+# LIQUID GLASS UI
+# ============================================================
 
 st.set_page_config(
     page_title="AutoTube AI",
     page_icon="🎬",
     layout="wide",
+    initial_sidebar_state="collapsed",
 )
 
-st.title("🎬 AutoTube AI")
 
-st.write(
-    "Create an English AI video from a topic, "
-    "image, flyer, or uploaded video."
+# ============================================================
+# GLASS UI CSS
+# ============================================================
+
+st.markdown(
+    """
+<style>
+
+.stApp {
+    background:
+        radial-gradient(circle at 15% 10%, rgba(88, 70, 180, 0.18), transparent 30%),
+        radial-gradient(circle at 85% 15%, rgba(0, 180, 255, 0.12), transparent 28%),
+        #0B0F17;
+    color: #F5F7FA;
+}
+
+.block-container {
+    max-width: 1450px;
+    padding-top: 2rem;
+    padding-bottom: 4rem;
+}
+
+header[data-testid="stHeader"] {
+    background: transparent;
+}
+
+section[data-testid="stSidebar"] {
+    display: none;
+}
+
+/* Glass cards */
+
+.glass-card {
+    background: rgba(255,255,255,0.055);
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 18px;
+    padding: 24px;
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    box-shadow:
+        0 20px 60px rgba(0,0,0,0.30),
+        inset 0 1px 0 rgba(255,255,255,0.06);
+    margin-bottom: 18px;
+}
+
+/* Header */
+
+.brand {
+    font-size: 30px;
+    font-weight: 800;
+    letter-spacing: -1px;
+}
+
+.brand span {
+    background: linear-gradient(90deg,#8B5CF6,#22D3EE);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.status {
+    display: inline-block;
+    padding: 7px 12px;
+    margin-left: 7px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.10);
+    font-size: 12px;
+    color: #CBD5E1;
+}
+
+/* Hero */
+
+.hero-title {
+    font-size: 46px;
+    line-height: 1.05;
+    font-weight: 850;
+    letter-spacing: -2px;
+    margin-top: 20px;
+}
+
+.hero-gradient {
+    background: linear-gradient(
+        90deg,
+        #FFFFFF 0%,
+        #A78BFA 45%,
+        #22D3EE 100%
+    );
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.hero-subtitle {
+    color: #94A3B8;
+    font-size: 17px;
+    margin-top: 12px;
+    margin-bottom: 30px;
+}
+
+/* Section titles */
+
+.section-title {
+    font-size: 20px;
+    font-weight: 750;
+    margin-bottom: 5px;
+}
+
+.section-subtitle {
+    color: #94A3B8;
+    font-size: 13px;
+    margin-bottom: 18px;
+}
+
+/* Streamlit inputs */
+
+div[data-baseweb="input"] > div,
+div[data-baseweb="select"] > div,
+textarea {
+    background: rgba(255,255,255,0.045) !important;
+    border: 1px solid rgba(255,255,255,0.10) !important;
+    border-radius: 12px !important;
+    color: white !important;
+}
+
+label {
+    color: #CBD5E1 !important;
+}
+
+/* Buttons */
+
+.stButton > button {
+    width: 100%;
+    border-radius: 13px;
+    border: 1px solid rgba(139,92,246,0.55);
+    background: linear-gradient(
+        135deg,
+        rgba(139,92,246,0.90),
+        rgba(34,211,238,0.78)
+    );
+    color: white;
+    font-weight: 750;
+    min-height: 48px;
+    box-shadow: 0 10px 30px rgba(91,70,180,0.25);
+    transition: all 0.2s ease;
+}
+
+.stButton > button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 15px 40px rgba(34,211,238,0.22);
+}
+
+/* Pipeline */
+
+.pipeline {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 15px;
+    overflow-x: auto;
+}
+
+.pipeline-step {
+    min-width: 105px;
+    text-align: center;
+    padding: 13px 10px;
+    border-radius: 14px;
+    background: rgba(255,255,255,0.045);
+    border: 1px solid rgba(255,255,255,0.08);
+}
+
+.pipeline-icon {
+    font-size: 21px;
+}
+
+.pipeline-name {
+    font-size: 11px;
+    color: #CBD5E1;
+    margin-top: 5px;
+}
+
+.pipeline-arrow {
+    color: #64748B;
+    font-size: 18px;
+}
+
+/* Chips */
+
+.chip {
+    display: inline-block;
+    padding: 7px 11px;
+    margin-right: 6px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.055);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: #CBD5E1;
+    font-size: 12px;
+}
+
+/* Success */
+
+.success-box {
+    padding: 16px;
+    border-radius: 14px;
+    background: rgba(34,197,94,0.08);
+    border: 1px solid rgba(34,197,94,0.25);
+    color: #BBF7D0;
+}
+
+/* Responsive */
+
+@media (max-width: 900px) {
+
+    .hero-title {
+        font-size: 34px;
+    }
+
+    .pipeline {
+        justify-content: flex-start;
+    }
+
+}
+
+</style>
+""",
+    unsafe_allow_html=True,
 )
 
-st.divider()
 
 # ============================================================
-# TOPIC
+# HEADER
 # ============================================================
 
-# TOPIC
-# ============================================================
+st.markdown(
+    """
+<div class="glass-card">
 
-if "trend_topics" not in st.session_state:
-    st.session_state.trend_topics = []
+<div style="
+display:flex;
+justify-content:space-between;
+align-items:center;
+gap:20px;
+flex-wrap:wrap;
+">
 
-if "selected_topic" not in st.session_state:
-    st.session_state.selected_topic = ""
+<div class="brand">
+🎬 <span>AutoTube AI</span>
+</div>
 
-manual_topic = st.text_input(
-    "What do you want to create?",
-    value=st.session_state.selected_topic,
-    placeholder="Enter a topic or video idea...",
+<div>
+<span class="status">● AI READY</span>
+<span class="status">ENGLISH</span>
+<span class="status">1080P</span>
+</div>
+
+</div>
+
+</div>
+""",
+    unsafe_allow_html=True,
 )
 
-if manual_topic.strip():
-    st.session_state.selected_topic = manual_topic.strip()
 
-if st.button(
-    "🔥 Get New Trendy Topics",
-    use_container_width=True,
-):
-    with st.spinner("🔥 Finding the latest trending topics..."):
-        from agents.trend_agent import discover_trending_topics
-        try:
-            st.session_state.trend_topics = discover_trending_topics(limit=6)
-        except Exception as exc:
-            st.session_state.trend_topics = []
-            st.error(f"Could not fetch trending topics: {exc}")
+# ============================================================
+# HERO
+# ============================================================
 
-if st.session_state.trend_topics:
-    st.subheader("🔥 Trending Topics")
+st.markdown(
+    """
+<div class="hero-title">
+Transform Ideas into<br>
+<span class="hero-gradient">Instant Videos.</span>
+</div>
 
-    topic_options = [
-        event["title"]
-        for event in st.session_state.trend_topics
-        if event.get("title")
-    ]
+<div class="hero-subtitle">
+AI-powered video creation — from topic to script, voice, visuals,
+subtitles, thumbnail and YouTube publishing.
+</div>
+""",
+    unsafe_allow_html=True,
+)
 
-    if topic_options:
-        current_index = 0
 
-        if st.session_state.selected_topic in topic_options:
-            current_index = topic_options.index(
-                st.session_state.selected_topic
-            )
+# ============================================================
+# MAIN COLUMNS
+# ============================================================
 
-        selected_trend = st.radio(
-            "Select a topic:",
-            topic_options,
-            index=current_index,
+left, right = st.columns([1.55, 1], gap="large")
+
+
+# ============================================================
+# LEFT — CREATE VIDEO
+# ============================================================
+
+with left:
+
+    st.markdown(
+        """
+<div class="glass-card">
+
+<div class="section-title">Create Video</div>
+<div class="section-subtitle">
+Tell AutoTube AI what you want to create.
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
+    content_type = st.selectbox(
+        "Content Type",
+        [
+            "News",
+            "Explainer",
+            "Uploaded Flyer",
+            "Custom Topic",
+        ],
+    )
+
+    # ========================================================
+    # 🔥 TRENDING NEWS
+    # ========================================================
+
+    if content_type == "News":
+
+        from agents.news_agent import get_trending_news
+
+        if "trending_news" not in st.session_state:
+            st.session_state.trending_news = []
+
+        st.markdown(
+            '<div class="section-title" style="font-size:16px;">🔥 Trending News</div>',
+            unsafe_allow_html=True,
         )
 
-        st.session_state.selected_topic = selected_trend
+        trend_col1, trend_col2 = st.columns([5, 1])
 
-topic = st.session_state.selected_topic
+        with trend_col2:
+            refresh_trending = st.button(
+                "↻",
+                key="refresh_trending_news",
+            )
 
-if topic:
-    st.success(f"Selected topic: **{topic}**")
+        if refresh_trending or not st.session_state.trending_news:
+            st.session_state.trending_news = get_trending_news(
+                category="Technology",
+                location="Vijayawada",
+                limit=10,
+            )
 
-content_type = st.selectbox(
-    "Content Type",
-    [
-        "News",
-        "General Topic",
-    ],
-    index=1,
-    help=(
-        "News verifies source context before script generation. "
-        "General Topic uses normal topic generation."
-    ),
-)
+        trending_options = [
+            item["title"]
+            for item in st.session_state.trending_news
+        ]
 
-# ============================================================
-# MEDIA UPLOAD
-# ============================================================
+        selected_trending = st.selectbox(
+            "Choose a trending story",
+            ["— Select a story —"] + trending_options,
+            key="selected_trending_story",
+        )
 
-st.subheader("Upload Media")
+        if selected_trending != "— Select a story —":
+            if st.button(
+                "Use Selected Story",
+                key="use_selected_trending_story",
+            ):
+                st.session_state.topic_input = selected_trending
+                st.rerun()
 
-media_files = st.file_uploader(
-    "Upload images or videos",
-    type=[
-        "png",
-        "jpg",
-        "jpeg",
-        "webp",
-        "mp4",
-        "mov",
-        "m4v",
-        "avi",
-    ],
-    accept_multiple_files=True,
-)
-
-if media_files:
-
-    st.success(
-        f"{len(media_files)} media file(s) selected."
+    topic = st.text_area(
+        "Topic",
+        placeholder="Enter your video topic...",
+        height=100,
+        key="topic_input",
     )
 
-
-# ============================================================
-# FLYER
-# ============================================================
-
-st.subheader("Flyer")
-
-flyer_file = st.file_uploader(
-    "Optional: Upload a flyer separately",
-    type=[
-        "png",
-        "jpg",
-        "jpeg",
-        "webp",
-    ],
-    accept_multiple_files=False,
-)
-
-if flyer_file:
-
-    st.success(
-        f"Flyer selected: {flyer_file.name}"
+    language_style = st.selectbox(
+        "Language / Style",
+        [
+            "English news style",
+            "English creator style",
+            "English documentary style",
+            "English short-form style",
+        ],
     )
 
-
-# ============================================================
-# SETTINGS
-# ============================================================
-
-st.subheader("Settings")
-
-language_style = st.selectbox(
-    "Language / Style",
-    [
-        "English",
-        "English news style",
-        "English YouTube creator style",
-        "Educational English",
-        "English documentary style",
-        "English promotional style",
-    ],
-)
-
-voice = st.selectbox(
-    "Voice",
-    [
-        "Creator Voice",
-    ],
-)
-
-captions = st.checkbox(
-    "Auto captions",
-    value=True,
-    help="Turn captions on or off for the final video.",
-)
-
-thumbnail = st.checkbox(
-    "Create thumbnail",
-    value=True,
-)
-
-metadata = st.checkbox(
-    "Generate YouTube metadata",
-    value=True,
-)
-
-youtube_upload = st.checkbox(
-    "Upload to YouTube",
-    value=False,
-)
-
-youtube_privacy = st.selectbox(
-    "YouTube Privacy",
-    [
-        "public",
-        "unlisted",
-        "private",
-    ],
-    index=1,
-    disabled=not youtube_upload,
-)
-
-if youtube_upload:
-    st.info(
-        f"YouTube upload enabled → {youtube_privacy.upper()}"
+    voice = st.selectbox(
+        "Voice",
+        [
+            "Creator Voice",
+        ],
     )
+
+    captions = st.toggle(
+        "Auto Subtitles",
+        value=True,
+    )
+
+    thumbnail = st.toggle(
+        "Create Thumbnail",
+        value=True,
+    )
+
+    metadata = st.toggle(
+        "Generate YouTube Metadata",
+        value=True,
+    )
+
+    youtube_upload = st.toggle(
+        "Upload to YouTube",
+        value=False,
+    )
+
+    youtube_privacy = "private"
+
+    if youtube_upload:
+        youtube_privacy = st.selectbox(
+            "YouTube Privacy",
+            [
+                "private",
+                "unlisted",
+                "public",
+            ],
+        )
+
+    generate = st.button(
+        "🚀 Generate Video",
+        type="primary",
+    )
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+# ============================================================
+# RIGHT — MEDIA
+# ============================================================
+
+with right:
+
+    st.markdown(
+        """
+<div class="glass-card">
+
+<div class="section-title">Media & Assets</div>
+<div class="section-subtitle">
+Add images, videos or flyers for your generation.
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
+    uploaded_files = st.file_uploader(
+        "Upload media",
+        type=[
+            "png",
+            "jpg",
+            "jpeg",
+            "webp",
+            "mp4",
+            "mov",
+            "avi",
+        ],
+        accept_multiple_files=True,
+    )
+
+    if uploaded_files:
+        st.success(
+            f"{len(uploaded_files)} file(s) ready"
+        )
+
+        for file in uploaded_files:
+            st.caption(f"📎 {file.name}")
+
+    else:
+        st.markdown(
+            """
+<div style="
+padding:35px 15px;
+text-align:center;
+border:1px dashed rgba(255,255,255,0.14);
+border-radius:15px;
+color:#64748B;
+">
+📁<br>
+Upload images, videos or flyers
+</div>
+""",
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+# ============================================================
+# PIPELINE
+# ============================================================
+
+st.markdown(
+    """
+<div class="glass-card">
+
+<div class="section-title">AI Production Pipeline</div>
+<div class="section-subtitle">
+One workflow. From idea to published video.
+</div>
+
+<div class="pipeline">
+
+<div class="pipeline-step">
+<div class="pipeline-icon">📰</div>
+<div class="pipeline-name">News</div>
+</div>
+
+<div class="pipeline-arrow">→</div>
+
+<div class="pipeline-step">
+<div class="pipeline-icon">✍️</div>
+<div class="pipeline-name">Script</div>
+</div>
+
+<div class="pipeline-arrow">→</div>
+
+<div class="pipeline-step">
+<div class="pipeline-icon">🎙️</div>
+<div class="pipeline-name">Voice</div>
+</div>
+
+<div class="pipeline-arrow">→</div>
+
+<div class="pipeline-step">
+<div class="pipeline-icon">🖼️</div>
+<div class="pipeline-name">Visuals</div>
+</div>
+
+<div class="pipeline-arrow">→</div>
+
+<div class="pipeline-step">
+<div class="pipeline-icon">🎬</div>
+<div class="pipeline-name">Video</div>
+</div>
+
+<div class="pipeline-arrow">→</div>
+
+<div class="pipeline-step">
+<div class="pipeline-icon">💬</div>
+<div class="pipeline-name">Subtitles</div>
+</div>
+
+<div class="pipeline-arrow">→</div>
+
+<div class="pipeline-step">
+<div class="pipeline-icon">✨</div>
+<div class="pipeline-name">Thumbnail</div>
+</div>
+
+<div class="pipeline-arrow">→</div>
+
+<div class="pipeline-step">
+<div class="pipeline-icon">▶️</div>
+<div class="pipeline-name">YouTube</div>
+</div>
+
+</div>
+
+</div>
+""",
+    unsafe_allow_html=True,
+)
+
 
 # ============================================================
 # GENERATE
 # ============================================================
 
-st.divider()
-
-generate = st.button(
-    "🚀 Generate Video",
-    type="primary",
-    use_container_width=True,
-)
-
-
-
 if generate:
-    try:
 
-        all_media = list(
-            media_files or []
+    media_paths = []
+
+    if uploaded_files:
+
+        upload_dir = Path("output/uploads")
+        upload_dir.mkdir(
+            parents=True,
+            exist_ok=True,
         )
 
-        if flyer_file:
+        for file in uploaded_files:
 
-            all_media.append(
-                flyer_file
+            file_path = upload_dir / file.name
+
+            with open(file_path, "wb") as f:
+                f.write(file.getbuffer())
+
+            media_paths.append(
+                str(file_path)
             )
 
-        with st.spinner(
-            "AutoTube AI is creating your video..."
-        ):
-
-            result = generate_multi_media_video(
-                topic=topic,
-
-                media_files=all_media,
-                content_type=(
-                    "General Topic"
-                    if flyer_file
-                    else content_type
-                ),
-                language_style=language_style,
-                voice=voice,
-                captions=captions,
-                thumbnail=thumbnail,
-                metadata=metadata,
-                youtube_upload=youtube_upload,
-                youtube_privacy=youtube_privacy,
-            )
-
-        review = result.get(
-            "review",
-            {},
+    if (
+        content_type != "Uploaded Flyer"
+        and not topic.strip()
+    ):
+        st.warning(
+            "Please enter a topic first."
         )
 
-        review_status = str(
-            review.get(
-                "status",
-                "UNKNOWN",
-            )
-        ).upper()
-
-        review_score = review.get(
-            "score",
-            0,
+    elif (
+        content_type == "Uploaded Flyer"
+        and not media_paths
+    ):
+        st.warning(
+            "Please upload a flyer or image."
         )
 
-        upload_blocked = bool(
-            result.get(
-                "upload_blocked",
-                False,
-            )
-        )
+    else:
 
-        review_attempts = result.get(
-            "review_attempts",
-            0,
-        )
+        try:
 
-        # ------------------------------------------------
-        # AI QUALITY REVIEW
-        # ------------------------------------------------
+            with st.spinner(
+                "AutoTube AI is creating your video..."
+            ):
 
-        st.divider()
-        st.subheader("🤖 AI Quality Review")
 
-        if review_status == "APPROVE" and not upload_blocked:
+                result = generate_multi_media_video(
+                    topic=topic.strip(),
+                    media_files=media_paths,
+                    content_type=content_type,
+                    language_style=language_style,
+                    voice=voice,
+                    captions=captions,
+                    thumbnail=thumbnail,
+                    metadata=metadata,
+                    youtube_upload=youtube_upload,
+                    youtube_privacy=youtube_privacy,
+                )
+
+            st.session_state["pipeline_result"] = result
 
             st.success(
-                f"✅ APPROVED — {review_score}/100 "
-                f"({review_attempts}/3 review attempts)"
+                "🎉 Video generation completed!"
             )
 
-        elif review_status == "REVIEW_QUOTA_EXCEEDED":
+        except Exception as e:
 
-            st.warning(
-                "⚪ AI Review unavailable because the "
-                "Gemini quota/rate limit was reached. "
-                "The latest generated version will continue."
+            st.error(
+                f"AutoTube AI failed: {e}"
             )
 
-        elif review_status == "IMPROVE":
 
-            st.warning(
-                f"⚠️ IMPROVE — {review_score}/100 "
-                f"({review_attempts}/3 review attempts)"
-            )
+# ============================================================
+# OUTPUT
+# ============================================================
 
-        elif review_status == "REVIEW_FAILED":
+result = st.session_state.get(
+    "pipeline_result"
+)
 
-            st.warning(
-                f"⚪ AI Review unavailable — "
-                f"{review_score}/100"
-            )
+final_video = Path(
+    "output/final_video.mp4"
+)
 
-        else:
+thumbnail_file = Path(
+    "output/thumbnail.jpg"
+)
 
-            st.info(
-                f"Review status: {review_status} — "
-                f"{review_score}/100 "
-                f"({review_attempts}/3 review attempts)"
-            )
+if result or final_video.exists():
 
-        if review.get("summary"):
+    st.markdown(
+        """
+<div class="glass-card">
 
-            st.write(
-                review["summary"]
-            )
+<div class="section-title">
+Your Output
+</div>
 
-        section_labels = [
-            ("script", "Script"),
-            ("factual_quality", "Factual Quality"),
-            ("hook", "Hook"),
-            ("visuals", "Visuals"),
-            ("subtitles", "Subtitles"),
-            ("thumbnail", "Thumbnail"),
-        ]
+<div class="section-subtitle">
+Your latest AutoTube AI generation.
+</div>
+""",
+        unsafe_allow_html=True,
+    )
 
-        for key, label in section_labels:
+    if final_video.exists():
 
-            data = review.get(
-                key,
-                {},
-            )
-
-            if data:
-
-                score = data.get(
-                    "score",
-                    0,
-                )
-
-                section_status = data.get(
-                    "status",
-                    "",
-                )
-
-                st.write(
-                    f"**{label}:** "
-                    f"{score}/100 — "
-                    f"{section_status}"
-                )
-
-                if data.get("feedback"):
-
-                    st.caption(
-                        data["feedback"]
-                    )
-
-        critical = review.get(
-            "critical_issues",
-            [],
+        st.video(
+            str(final_video)
         )
 
-        if critical:
-
-            st.markdown(
-                "**Critical Issues**"
-            )
-
-            for issue in critical:
-
-                st.error(
-                    str(issue)
-                )
-
-        improvements = review.get(
-            "improvements",
-            [],
+        st.markdown(
+            """
+<span class="chip">🎬 MP4</span>
+<span class="chip">📺 1080p</span>
+<span class="chip">🔊 AI Voice</span>
+<span class="chip">💬 Subtitles</span>
+""",
+            unsafe_allow_html=True,
         )
 
-        if improvements:
-
-            st.markdown(
-                "**Improvements**"
-            )
-
-            for improvement in improvements:
-
-                st.info(
-                    str(improvement)
-                )
-
-        if result.get("stop_reason"):
-
-            st.caption(
-                result["stop_reason"]
-            )
-
-        if youtube_upload:
-
-            if review_status == "APPROVE":
-                st.success(
-                    "✅ Final AI Review approved. "
-                    f"YouTube upload: {youtube_privacy.upper()}"
-                )
-
-            elif review_status == "IMPROVE":
-                st.info(
-                    "ℹ️ Final AI Review requested improvements. "
-                    "Review limit reached. "
-                    "The latest version will continue "
-                    f"to YouTube as {youtube_privacy.upper()}."
-                )
-
-            elif review_status in {
-                "REVIEW_QUOTA_EXCEEDED",
-                "REVIEW_FAILED",
-            }:
-                st.info(
-                    "ℹ️ AI Review was unavailable. "
-                    "The latest generated version will continue "
-                    f"to YouTube as {youtube_privacy.upper()}."
-                )
-
-            else:
-                st.info(
-                    "ℹ️ Final AI Review completed. "
-                    "The latest generated version will continue "
-                    f"to YouTube as {youtube_privacy.upper()}."
-                )
-
-        # ------------------------------------------------
-        # VIDEO RESULT
-        # ------------------------------------------------
-
-        st.success(
-            "🎉 Video generated successfully!"
-        )
-
-        video_path = Path(
-            result["video"]
-        )
-
-        if video_path.exists():
-
-            st.video(
-                str(video_path)
-            )
+        with open(
+            final_video,
+            "rb",
+        ) as video_file:
 
             st.download_button(
-                "⬇️ Download Final Video",
-                data=video_path.read_bytes(),
-                file_name="autotube_final_video.mp4",
+                "⬇️ Download Video",
+                data=video_file,
+                file_name="autotube_ai_video.mp4",
                 mime="video/mp4",
             )
 
-        if result["title"]:
+    if thumbnail_file.exists():
 
-            st.subheader(
-                "Generated Title"
-            )
-
-            st.write(
-                result["title"]
-            )
-
-        if result["description"]:
-
-            st.subheader(
-                "Generated Description"
-            )
-
-            st.write(
-                result["description"]
-            )
-
-        if result["tags"]:
-
-            st.subheader(
-                "Generated Tags"
-            )
-
-            st.write(
-                ", ".join(result["tags"])
-            )
-
-    except Exception as error:
-
-        st.error(
-            "AutoTube AI failed."
+        st.markdown(
+            "### Thumbnail"
         )
 
-        st.exception(
-            error
+        st.image(
+            str(thumbnail_file),
+            use_container_width=True,
         )
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+# ============================================================
+# FOOTER
+# ============================================================
+
+st.markdown(
+    """
+<div style="
+text-align:center;
+padding:25px;
+color:#475569;
+font-size:12px;
+">
+AutoTube AI • AI Video Automation
+</div>
+""",
+    unsafe_allow_html=True,
+)
