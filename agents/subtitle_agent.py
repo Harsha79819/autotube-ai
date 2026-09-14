@@ -1,3 +1,4 @@
+import json
 import re
 from pathlib import Path
 
@@ -170,6 +171,22 @@ def load_section_map():
 # ============================================================
 
 def transcribe_audio():
+    cache_file = Path("output/transcription.json")
+    if cache_file.exists() and VOICE_FILE.exists():
+        try:
+            if cache_file.stat().st_mtime >= VOICE_FILE.stat().st_mtime:
+                with open(cache_file, "r", encoding="utf-8") as f:
+                    cached = json.load(f)
+                cached_words = cached.get("words", [])
+                if cached_words:
+                    print("=" * 60)
+                    print("USING CACHED WHISPER TRANSCRIPTION")
+                    print("=" * 60)
+                    print(f"Whisper words loaded from cache: {len(cached_words)}")
+                    return cached_words
+        except Exception:
+            pass
+
     print()
     print("=" * 60)
     print("WHISPER AUDIO TRANSCRIPTION")
@@ -186,9 +203,8 @@ def transcribe_audio():
         f"{WHISPER_MODEL}"
     )
 
-    model = whisper.load_model(
-        WHISPER_MODEL
-    )
+    from agents.video_agent import get_whisper_model
+    model = get_whisper_model()
 
     print()
     print("Transcribing voice.mp3...")

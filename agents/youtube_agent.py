@@ -2,6 +2,8 @@ import os
 import json
 import importlib
 import re
+from supervisor import autonomous_recover
+
 
 
 SCOPES = [
@@ -410,6 +412,7 @@ def print_video_status(
 # UPLOAD VIDEO
 # ============================================================
 
+@autonomous_recover("youtube_agent")
 def upload_video(
     video_file,
     title,
@@ -577,12 +580,20 @@ def upload_video(
             and creds.expired
             and creds.refresh_token
         ):
+            try:
+                creds.refresh(
+                    Request()
+                )
+            except Exception as ref_err:
+                print(f"⚠️ YouTube token refresh failed: {ref_err}")
+                creds = None
+                if os.path.exists("token.json"):
+                    try:
+                        os.remove("token.json")
+                    except OSError:
+                        pass
 
-            creds.refresh(
-                Request()
-            )
-
-        else:
+        if not creds or not creds.valid:
 
             try:
 
@@ -601,6 +612,11 @@ def upload_video(
                     "pip install google-auth-oauthlib"
                 ) from exc
 
+            if not os.path.exists("client_secret.json"):
+                raise FileNotFoundError(
+                    "client_secret.json not found. Cannot authenticate YouTube."
+                )
+
             flow = (
                 InstalledAppFlow.from_client_secrets_file(
                     "client_secret.json",
@@ -612,15 +628,16 @@ def upload_video(
                 port=0
             )
 
-        with open(
-            "token.json",
-            "w",
-            encoding="utf-8",
-        ) as token:
+        if creds and creds.valid:
+            with open(
+                "token.json",
+                "w",
+                encoding="utf-8",
+            ) as token:
 
-            token.write(
-                creds.to_json()
-            )
+                token.write(
+                    creds.to_json()
+                )
 
     # --------------------------------------------------------
     # YOUTUBE CLIENT

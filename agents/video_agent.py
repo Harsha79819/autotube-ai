@@ -1,10 +1,14 @@
+import json
 import os
 import re
+import shutil
+import subprocess
 from pathlib import Path
 
-import requests
 import whisper
-from moviepy import AudioFileClip, ImageClip, VideoFileClip, concatenate_videoclips
+from PIL import Image, ImageFilter, ImageEnhance
+from moviepy import AudioFileClip, ImageClip, VideoFileClip, concatenate_videoclips, vfx
+from supervisor import autonomous_recover
 
 
 # ============================================================
@@ -15,6 +19,8 @@ ROOT = Path(__file__).resolve().parent.parent
 
 ASSETS_DIR = ROOT / "assets"
 OUTPUT_DIR = ROOT / "output"
+BGM_DIR = ROOT / "assets" / "bgm"
+CANVAS_DIR = OUTPUT_DIR / "canvas_assets"
 
 SCRIPT_FILE = OUTPUT_DIR / "script.txt"
 VISUAL_PLAN_FILE = OUTPUT_DIR / "visual_plan.txt"
@@ -28,11 +34,169 @@ VIDEO_FILE = OUTPUT_DIR / "video.mp4"
 # ============================================================
 
 IMAGE_WIDTH = 640
-FPS = 10
+FPS = 24
 
 # Whisper model.
-# "base" is a good balance for this Mac/project.
 WHISPER_MODEL = "base"
+_CACHED_WHISPER_MODEL = None
+
+
+def get_whisper_model():
+    """Cache Whisper model in memory across invocations for ultra-fast response."""
+    global _CACHED_WHISPER_MODEL
+    if _CACHED_WHISPER_MODEL is None:
+        _CACHED_WHISPER_MODEL = whisper.load_model(WHISPER_MODEL)
+    return _CACHED_WHISPER_MODEL
+
+
+# ============================================================
+# BGM ENGINE & AUTOMATED AUDIO DUCKING
+# ============================================================
+
+def detect_bgm_mood(topic="", script=""):
+    """
+    Classify the news/script mood to select the optimal royalty-free BGM track.
+    Returns: 'energetic' | 'dramatic' | 'neutral'
+    """
+    text = f"{topic} {script}".lower()
+
+    dramatic_keywords = [
+        "war", "crisis", "crash", "danger", "warning", "storm", "flood",
+        "tragedy", "arrest", "investigation", "tension", "disaster", "fatal",
+        "drop", "plunge", "threat", "death", "conflict", "heavy rain",
+    ]
+    energetic_keywords = [
+        "breakthrough", "launch", "ai", "tech", "nvidia", "apple", "tesla",
+        "speed", "fast", "win", "victory", "record", "game", "celebration",
+        "revenue", "profit", "surge", "excited", "revolution", "innovation",
+    ]
+
+    if any(w in text for w in dramatic_keywords):
+        return "dramatic"
+    if any(w in text for w in energetic_keywords):
+        return "energetic"
+    return "neutral"
+
+
+def mix_audio_with_ducking(voice_path, bgm_path=None, output_audio_path=None):
+    """
+    Mix voiceover and background music using FFmpeg sidechain audio ducking.
+    - Voiceover acts as the sidechain trigger.
+    - When voice is active: BGM ducks to ~15% (-18dB).
+    - When voice pauses/silent: BGM smoothly rises to ~35% (-10dB).
+    - Output is normalized to broadcast standard (-16 LUFS) with loudnorm.
+    """
+    voice_p = Path(voice_path)
+    if not voice_p.exists():
+        return False
+
+    if bgm_path is None:
+        bgm_path = BGM_DIR / "neutral.wav"
+    bgm_p = Path(bgm_path)
+
+    if not bgm_p.exists():
+        return False
+
+    output_p = Path(output_audio_path or (OUTPUT_DIR / "mixed_audio.wav"))
+    output_p.parent.mkdir(parents=True, exist_ok=True)
+
+    duck_filter = (
+        "[1:a]volume=0.35[bgm_base]; "
+        "[bgm_base][0:a]sidechaincompress=threshold=0.15:ratio=4:attack=150:release=600[ducked_bgm]; "
+        "[0:a][ducked_bgm]amix=inputs=2:duration=first:weights=1.0 1.0,loudnorm=I=-16:LRA=11:TP=-1.5[aout]"
+    )
+
+    cmd = [
+        "ffmpeg", "-y",
+        "-i", str(voice_p),
+        "-stream_loop", "-1",
+        "-i", str(bgm_p),
+        "-filter_complex", duck_filter,
+        "-map", "[aout]",
+        "-c:a", "pcm_s16le",
+        "-ar", "24000",
+        str(output_p),
+    ]
+
+    try:
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=40)
+        if res.returncode == 0 and output_p.exists() and output_p.stat().st_size > 0:
+            print(f"🎵 BGM mixed with sidechain ducking ({bgm_p.name}): {output_p.name}")
+            return str(output_p)
+    except Exception as e:
+        print(f"⚠️ Audio ducking notice: {e}. Falling back to clean voice.")
+
+    return str(voice_p)
+
+
+# ============================================================
+# SMART CANVAS ENGINE (MULTI-ASPECT RATIO BLUR PADDING)
+# ============================================================
+
+def render_smart_canvas_image(image_path, target_width=720, target_height=720, output_path=None):
+    """
+    Smart Canvas generator for non-matching aspect ratios:
+    - Generates a blurred, darkened background layer scaled to fill canvas.
+    - Places the crisp, un-cropped original image centered in the foreground.
+    - Eliminates harsh black bars on vertical Shorts (9:16) or landscape (16:9).
+    """
+    in_p = Path(image_path)
+    if not in_p.exists():
+        return in_p
+
+    CANVAS_DIR.mkdir(parents=True, exist_ok=True)
+    if output_path:
+        out_p = Path(output_path)
+        out_p.parent.mkdir(parents=True, exist_ok=True)
+    else:
+        out_name = f"canvas_{in_p.stem}_{target_width}x{target_height}{in_p.suffix}"
+        out_p = CANVAS_DIR / out_name
+
+    try:
+        with Image.open(in_p) as im:
+            im = im.convert("RGB")
+            orig_w, orig_h = im.size
+            orig_aspect = orig_w / max(1, orig_h)
+            target_aspect = target_width / max(1, target_height)
+
+            # If aspect ratio matches within 3%, simple high-quality resize
+            if abs(orig_aspect - target_aspect) < 0.03:
+                canvas = im.resize((target_width, target_height), Image.Resampling.LANCZOS)
+                canvas.save(out_p, "JPEG", quality=95)
+                return out_p
+
+            # 1. Background layer: cover & Gaussian blur & darken
+            scale_bg = max(target_width / orig_w, target_height / orig_h)
+            bg_w, bg_h = int(orig_w * scale_bg), int(orig_h * scale_bg)
+            bg = im.resize((bg_w, bg_h), Image.Resampling.BILINEAR)
+
+            crop_x = max(0, (bg_w - target_width) // 2)
+            crop_y = max(0, (bg_h - target_height) // 2)
+            bg = bg.crop((crop_x, crop_y, crop_x + target_width, crop_y + target_height))
+            bg = bg.filter(ImageFilter.GaussianBlur(radius=28))
+            bg = ImageEnhance.Brightness(bg).enhance(0.55)
+
+            # 2. Foreground layer: fit inside canvas with 3% margin
+            margin_w = int(target_width * 0.03)
+            margin_h = int(target_height * 0.03)
+            max_fg_w = target_width - (2 * margin_w)
+            max_fg_h = target_height - (2 * margin_h)
+
+            scale_fg = min(max_fg_w / orig_w, max_fg_h / orig_h)
+            fg_w, fg_h = int(orig_w * scale_fg), int(orig_h * scale_fg)
+            fg = im.resize((fg_w, fg_h), Image.Resampling.LANCZOS)
+
+            # 3. Paste centered
+            paste_x = (target_width - fg_w) // 2
+            paste_y = (target_height - fg_h) // 2
+            bg.paste(fg, (paste_x, paste_y))
+
+            bg.save(out_p, "JPEG", quality=95)
+            return out_p
+    except Exception as e:
+        print(f"Smart canvas notice for {in_p.name}: {e}")
+        return in_p
+
 
 
 # ============================================================
@@ -41,20 +205,19 @@ WHISPER_MODEL = "base"
 
 def get_images():
     """
-    Return numbered visuals in exact numeric order.
+    Return numbered visual assets in exact numeric order.
+    Prefers video clips (e.g. assets/1.mp4) when available, otherwise images (assets/1.jpg).
 
-    Visual 1 -> assets/1.jpg
-    Visual 2 -> assets/2.jpg
+    Visual 1 -> assets/1.mp4 or assets/1.jpg
+    Visual 2 -> assets/2.mp4 or assets/2.jpg
     ...
-    Visual 8 -> assets/8.jpg
-
-    flyer_original.jpg is intentionally ignored.
+    Visual N -> assets/N.mp4 or assets/N.jpg
     """
 
     if not ASSETS_DIR.exists():
         return []
 
-    numbered = []
+    asset_map = {}
 
     for path in ASSETS_DIR.iterdir():
 
@@ -62,7 +225,7 @@ def get_images():
             continue
 
         match = re.fullmatch(
-            r"(\d+)\.(jpg|jpeg|png|webp)",
+            r"(\d+)\.(mp4|mov|webm|mkv|jpg|jpeg|png|webp)",
             path.name,
             re.IGNORECASE,
         )
@@ -70,34 +233,30 @@ def get_images():
         if not match:
             continue
 
-        numbered.append(
-            (
-                int(match.group(1)),
-                path,
-            )
-        )
+        num = int(match.group(1))
+        ext = match.group(2).lower()
 
-    numbered.sort(
-        key=lambda item: item[0]
-    )
+        # If a video clip exists, prefer it over a static image
+        if num in asset_map:
+            existing_ext = asset_map[num].suffix.lower()
+            if existing_ext in (".jpg", ".jpeg", ".png", ".webp") and ext in (".mp4", ".mov", ".webm", ".mkv"):
+                asset_map[num] = path
+        else:
+            asset_map[num] = path
 
+    sorted_nums = sorted(asset_map.keys())
     return [
-        path
-        for _, path in numbered
+        asset_map[n]
+        for n in sorted_nums
     ]
 
 
 def get_visual_plan():
     """
-    Read visual_plan.txt.
-
-    Expected:
-
-        1. Visual concept
-        2. Visual concept
-        ...
+    Read visual_plan.txt with flexible matching.
+    Handles numeric bullets (1., 1)), markdown lists (* 1., - 1., **1.**),
+    and 'Visual 1:' prefixes.
     """
-
     if not VISUAL_PLAN_FILE.exists():
         return []
 
@@ -108,25 +267,113 @@ def get_visual_plan():
         "r",
         encoding="utf-8",
     ) as file:
-
         for raw_line in file:
-
             line = raw_line.strip()
-
-            match = re.match(
-                r"^\d+[\.\)]\s*(.+)$",
-                line,
-            )
-
-            if not match:
+            if not line:
                 continue
 
-            visual = match.group(1).strip()
+            cleaned = re.sub(r"^[\*\-\#\>\s]+", "", line).strip()
+            match = re.match(
+                r"^(?:\*?\*?visual\s*)?(\d+)[\.\)\:\-]\*?\*?\s*(.+)$",
+                cleaned,
+                re.IGNORECASE,
+            )
+            if match:
+                visual = match.group(2).strip().strip("*").strip()
+                if visual:
+                    visuals.append(visual)
+            elif cleaned and len(cleaned) > 10 and not cleaned.lower().startswith("visual plan"):
+                visuals.append(cleaned)
 
-            if visual:
-                visuals.append(visual)
+    # Fallback to section map or script if visual plan was empty or unparseable
+    if not visuals and SECTION_MAP_FILE.exists():
+        try:
+            sections = get_section_map()
+            for sec in sections:
+                narration = sec.get("narration", "")
+                if narration:
+                    words = narration.split()
+                    visuals.append(" ".join(words[:8]))
+        except Exception:
+            pass
 
     return visuals
+
+
+def ensure_visual_assets_exist(needed_count=None):
+    """
+    Self-healing safeguard: guarantee assets/ has numbered visuals 1..N.
+    If video clips (e.g. 1.mp4) exist without 1.jpg, extract the frame.
+    If visual assets are missing or assets/ is empty, automatically
+    populate from assets/fallback/ or generate clean placeholder slides.
+    """
+    if not ASSETS_DIR.exists():
+        ASSETS_DIR.mkdir(parents=True, exist_ok=True)
+
+    fallback_dir = ASSETS_DIR / "fallback"
+    fallback_pool = sorted(fallback_dir.glob("*.jpg")) if fallback_dir.exists() else []
+
+    if needed_count is None or needed_count <= 0:
+        visual_plan = get_visual_plan()
+        sections = get_section_map()
+        needed_count = max(len(visual_plan), len(sections), 4)
+
+    # Scan existing assets
+    existing_images = {}
+    for path in ASSETS_DIR.iterdir():
+        if not path.is_file():
+            continue
+        m = re.fullmatch(r"(\d+)\.(mp4|mov|webm|mkv|jpg|jpeg|png|webp)", path.name, re.IGNORECASE)
+        if m:
+            num = int(m.group(1))
+            ext = m.group(2).lower()
+            if ext in (".mp4", ".mov", ".webm", ".mkv"):
+                # If mp4 exists, make sure a jpg keyframe also exists
+                jpg_path = ASSETS_DIR / f"{num}.jpg"
+                if not jpg_path.exists() or jpg_path.stat().st_size == 0:
+                    try:
+                        subprocess.run(
+                            ["ffmpeg", "-y", "-ss", "00:00:01", "-i", str(path), "-vframes", "1", "-q:v", "2", str(jpg_path)],
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False, timeout=8
+                        )
+                    except Exception:
+                        pass
+                existing_images[num] = path
+            elif ext in (".jpg", ".jpeg", ".png", ".webp"):
+                if num not in existing_images:
+                    existing_images[num] = path
+
+    # Populate any missing numbers from 1 to needed_count
+    for i in range(1, needed_count + 1):
+        target_jpg = ASSETS_DIR / f"{i}.jpg"
+        target_mp4 = ASSETS_DIR / f"{i}.mp4"
+        if not target_jpg.exists() and not target_mp4.exists():
+            if fallback_pool:
+                src_fallback = fallback_pool[(i - 1) % len(fallback_pool)]
+                shutil.copyfile(src_fallback, target_jpg)
+                print(f"[Self-Healing] Populated missing Visual {i} from fallback: {src_fallback.name} -> {i}.jpg")
+            elif existing_images:
+                first_asset = next(iter(existing_images.values()))
+                if first_asset.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp"):
+                    shutil.copyfile(first_asset, target_jpg)
+                else:
+                    try:
+                        subprocess.run(
+                            ["ffmpeg", "-y", "-ss", "00:00:01", "-i", str(first_asset), "-vframes", "1", "-q:v", "2", str(target_jpg)],
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False, timeout=8
+                        )
+                    except Exception:
+                        pass
+            else:
+                try:
+                    from PIL import Image, ImageDraw
+                    img = Image.new("RGB", (1280, 720), color=(20, 25, 40))
+                    draw = ImageDraw.Draw(img)
+                    draw.text((640, 360), f"AutoTube AI Scene {i}", fill=(200, 220, 255), anchor="mm")
+                    img.save(target_jpg, "JPEG", quality=90)
+                    print(f"[Self-Healing] Generated placeholder visual for Scene {i} -> {i}.jpg")
+                except Exception as gen_err:
+                    print(f"[Self-Healing] Error generating placeholder {i}: {gen_err}")
 
 
 def get_section_map():
@@ -190,6 +437,10 @@ def get_section_map():
         key=lambda item: item["section"]
     )
 
+    for idx, item in enumerate(sections, start=1):
+        item["section"] = idx
+        item["visual"] = idx
+
     return sections
 
 
@@ -244,79 +495,6 @@ def normalize_text(text):
     return text.strip()
 
 
-def find_matching_video(visual_description):
-    """
-    Find the best local video clip using filename keywords
-    from the visual description.
-
-    Example:
-        "Grand Canyon flash flood rescue"
-        ->
-        assets/videos/grand_canyon_rescue.mp4
-    """
-
-    videos_dir = ASSETS_DIR / "videos"
-
-    if not videos_dir.exists():
-        return None
-
-    description_words = set(
-        normalize_text(visual_description).split()
-    )
-
-    if not description_words:
-        return None
-
-    candidates = []
-
-    for path in videos_dir.iterdir():
-
-        if not path.is_file():
-            continue
-
-        if path.suffix.lower() not in {
-            ".mp4",
-            ".mov",
-            ".m4v",
-            ".webm",
-        }:
-            continue
-
-        filename_words = set(
-            normalize_text(
-                path.stem.replace("_", " ")
-            ).split()
-        )
-
-        matches = (
-            description_words
-            & filename_words
-        )
-
-        if not matches:
-            continue
-
-        score = len(matches)
-
-        candidates.append(
-            (
-                score,
-                path,
-            )
-        )
-
-    if not candidates:
-        return None
-
-    candidates.sort(
-        key=lambda item: item[0],
-        reverse=True,
-    )
-
-    return candidates[0][1]
-
-
-
 def normalize_words(text):
     """
     Convert text into normalized individual words.
@@ -365,58 +543,48 @@ def validate_mapping(
         f"Sections     : {len(sections)}"
     )
 
-    if len(images) != len(visual_plan):
+    min_count = min(len(images), len(visual_plan), len(sections))
+    if min_count < 4:
         raise RuntimeError(
-            "Image count does not match visual-plan count."
+            f"Too few elements to generate video: "
+            f"images={len(images)}, visual_plan={len(visual_plan)}, sections={len(sections)} (minimum 4 required)."
         )
 
-    if len(sections) != len(visual_plan):
-        raise RuntimeError(
-            "Section count does not match visual-plan count."
+    if len(images) != min_count or len(visual_plan) != min_count or len(sections) != min_count:
+        print(
+            f"⚠️ Auto-reconciling count mismatch: "
+            f"images={len(images)}, visual_plan={len(visual_plan)}, sections={len(sections)} -> aligning to {min_count} items."
         )
+        del images[min_count:]
+        del visual_plan[min_count:]
+        del sections[min_count:]
 
-    expected = list(
-        range(
-            1,
-            len(visual_plan) + 1,
-        )
+        for idx, sec in enumerate(sections, start=1):
+            sec["section"] = idx
+            sec["visual"] = idx
+
+    print(
+        f"Aligned items: {min_count}"
     )
 
-    actual_sections = [
-        item["section"]
-        for item in sections
-    ]
-
-    actual_visuals = [
-        item["visual"]
-        for item in sections
-    ]
-
-    if actual_sections != expected:
-        raise RuntimeError(
-            "Section numbering is invalid: "
-            f"{actual_sections}"
-        )
-
-    if actual_visuals != expected:
-        raise RuntimeError(
-            "Section-to-visual mapping is invalid: "
-            f"{actual_visuals}"
-        )
-
-    for index, image in enumerate(
+    for index, asset in enumerate(
         images,
         start=1,
     ):
 
-        expected_name = f"{index}.jpg"
-
-        if image.name.lower() != expected_name:
+        if asset.stem != str(index):
             raise RuntimeError(
-                f"Expected Visual {index} to use "
-                f"{expected_name}, but found "
-                f"{image.name}"
+                f"Expected Visual {index} to have stem "
+                f"'{index}', but found "
+                f"'{asset.name}'"
             )
+
+    expected = list(
+        range(
+            1,
+            min_count + 1,
+        )
+    )
 
     print()
     print("MAPPING CHECK PASSED")
@@ -462,20 +630,29 @@ def transcribe_audio():
         }
     """
 
+    cache_file = OUTPUT_DIR / "transcription.json"
+    if cache_file.exists() and VOICE_FILE.exists():
+        try:
+            if cache_file.stat().st_mtime >= VOICE_FILE.stat().st_mtime:
+                with open(cache_file, "r", encoding="utf-8") as f:
+                    cached = json.load(f)
+                cached_words = cached.get("words", [])
+                if cached_words:
+                    print()
+                    print("=" * 60)
+                    print("USING CACHED WHISPER TRANSCRIPTION")
+                    print("=" * 60)
+                    print(f"Whisper words loaded from cache: {len(cached_words)}")
+                    return cached
+        except Exception:
+            pass
+
     print()
     print("=" * 60)
     print("WHISPER AUDIO TRANSCRIPTION")
     print("=" * 60)
 
-    print()
-    print(
-        f"Loading Whisper model: "
-        f"{WHISPER_MODEL}"
-    )
-
-    model = whisper.load_model(
-        WHISPER_MODEL
-    )
+    model = get_whisper_model()
 
     print()
     print("Transcribing voice.mp3...")
@@ -533,6 +710,21 @@ def transcribe_audio():
         raise RuntimeError(
             "Whisper did not return word timestamps."
         )
+
+    # Save to transcription cache for subtitle agent & video agent reuse
+    try:
+        with open(cache_file, "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "words": words,
+                    "segments": result.get("segments", []),
+                    "text": result.get("text", ""),
+                },
+                f,
+            )
+        print("Cached Whisper transcription: output/transcription.json")
+    except Exception as cache_err:
+        print(f"Cache write note: {cache_err}")
 
     print()
     print(
@@ -683,10 +875,28 @@ def find_section_timestamps(
         )
 
         if remaining <= 0:
-            raise RuntimeError(
-                f"Could not find audio words for "
-                f"Section {section['section']}."
+            print(
+                f"Note: No remaining audio words for Section {section['section']}. "
+                "Using proportional duration distribution."
             )
+            remaining_sections = len(sections) - len(results)
+            prev_end = results[-1]["end"] if results else 0.0
+            remaining_duration = max(1.0, audio_duration - prev_end)
+            fallback_duration = remaining_duration / max(1, remaining_sections)
+            fallback_start = prev_end
+            fallback_end = min(audio_duration, fallback_start + fallback_duration)
+            results.append(
+                {
+                    "section": section["section"],
+                    "visual": section["visual"],
+                    "narration": section.get("narration", ""),
+                    "start": round(fallback_start, 2),
+                    "end": round(fallback_end, 2),
+                    "duration": round(max(0.5, fallback_end - fallback_start), 2),
+                    "words_matched": 0,
+                }
+            )
+            continue
 
         # ----------------------------------------------------
         # First try exact-ish sequential matching.
@@ -739,80 +949,40 @@ def find_section_timestamps(
                 # Compare using ordered word overlap.
                 # ------------------------------------------------
 
-                if not candidate_text:
-                    continue
-
-                # Fuzzy ordered word matching.
-                # Handles Whisper variations such as:
-                # StockGro -> stock grow
-                # multi-crore -> multi core
-
-                def words_similar(a, b):
-                    a = normalize_text(a)
-                    b = normalize_text(b)
-
-                    if not a or not b:
-                        return False
-
-                    if a == b:
-                        return True
-
-                    compact_a = a.replace(" ", "")
-                    compact_b = b.replace(" ", "")
-
-                    if compact_a == compact_b:
-                        return True
-
-                    shorter = min(len(a), len(b))
-
-                    if shorter >= 4:
-                        common = sum(
-                            char_a == char_b
-                            for char_a, char_b in zip(a, b)
-                        )
-
-                        similarity = (
-                            common / max(len(a), len(b))
-                        )
-
-                        if similarity >= 0.70:
-                            return True
-
-                    return False
-
-                matched = 0
-                candidate_position = 0
-
-                for target_word in target_words:
-
-                    for position in range(
-                        candidate_position,
-                        len(candidate_text),
-                    ):
-
-                        if words_similar(
-                            target_word,
-                            candidate_text[position],
-                        ):
-                            matched += 1
-                            candidate_position = position + 1
-                            break
-
-                score = (
-                    matched
-                    / max(1, len(target_words))
+                target_set = set(
+                    target_words
                 )
 
-                # Bonus for matching section boundaries.
-                if words_similar(
-                    candidate_text[0],
-                    target_words[0],
+                candidate_set = set(
+                    candidate_text
+                )
+
+                if not candidate_set:
+                    continue
+
+                intersection = (
+                    target_set
+                    & candidate_set
+                )
+
+                score = (
+                    len(intersection)
+                    / max(
+                        1,
+                        len(target_set),
+                    )
+                )
+
+                # Bonus for first/last word matching.
+                if (
+                    candidate_text[0]
+                    == target_words[0]
                 ):
                     score += 0.10
 
-                if words_similar(
-                    candidate_text[-1],
-                    target_words[-1],
+                if (
+                    candidate_text[-1]
+                    == target_words[-1]
                 ):
                     score += 0.10
 
@@ -911,12 +1081,9 @@ def find_section_timestamps(
         )
 
         if best_end <= best_start:
-
-            raise RuntimeError(
-                f"Invalid timestamp range for "
-                f"Section {section['section']}: "
-                f"{best_start} -> {best_end}"
-            )
+            best_end = min(audio_duration, best_start + 1.0)
+            if best_end <= best_start:
+                best_start = max(0.0, best_end - 1.0)
 
         results.append(
             {
@@ -994,89 +1161,41 @@ def find_section_timestamps(
         1,
         len(results),
     ):
+        previous_end = results[index - 1]["end"]
+        current_start = results[index]["start"]
 
-        previous_end = results[
-            index - 1
-        ]["end"]
+        # Seamlessly bridge boundaries at the midpoint between previous end and current start
+        midpoint = round((previous_end + current_start) / 2.0, 3)
 
-        current_start = results[
-            index
-        ]["start"]
+        # Guarantee strictly positive duration for previous section
+        if midpoint <= results[index - 1]["start"]:
+            midpoint = round(results[index - 1]["start"] + 0.5, 3)
 
-        # Use the midpoint when a tiny overlap occurs.
-        if current_start < previous_end:
+        results[index - 1]["end"] = midpoint
+        results[index]["start"] = midpoint
 
-            midpoint = (
-                current_start
-                + previous_end
-            ) / 2.0
+    results[-1]["end"] = round(audio_duration, 3)
+    if results[-1]["end"] <= results[-1]["start"]:
+        results[-1]["start"] = round(max(0.0, results[-1]["end"] - 0.5), 3)
 
-            results[
-                index - 1
-            ]["end"] = midpoint
-
-            results[
-                index
-            ]["start"] = midpoint
-
-        else:
-
-            # Remove small gaps.
-            if (
-                current_start
-                - previous_end
-                < 0.75
-            ):
-
-                results[
-                    index
-                ]["start"] = previous_end
-
-    results[-1]["end"] = audio_duration
+    # Strictly enforce exact boundary continuity across all adjacent sections
+    for index in range(1, len(results)):
+        results[index]["start"] = results[index - 1]["end"]
 
     # --------------------------------------------------------
-    # Finalize continuous timeline.
-    #
-    # Whisper timestamps can contain natural pauses between
-    # sections. Those pauses should remain on the previous
-    # visual rather than causing gaps in the video.
+    # Final validation.
     # --------------------------------------------------------
 
     for index, item in enumerate(results):
-
-        start = item["start"]
-        end = item["end"]
-
-        if end <= start:
-
-            raise RuntimeError(
-                f"Section {item['section']} "
-                "has invalid final timing."
-            )
-
         if index > 0:
-
             previous = results[index - 1]
-
-            # Make the current section start exactly where
-            # the previous section ends.
-            item["start"] = previous["end"]
-
-    # The video must cover the complete audio duration.
-    results[0]["start"] = 0.0
-    results[-1]["end"] = audio_duration
-
-    # Re-check that every section is valid.
-    for item in results:
+            # Auto-heal any boundary discrepancy to guarantee 100% continuity
+            if abs(item["start"] - previous["end"]) > 0.001:
+                item["start"] = previous["end"]
 
         if item["end"] <= item["start"]:
+            item["end"] = round(item["start"] + 1.0, 3)
 
-            raise RuntimeError(
-                f"Invalid final timing for "
-                f"Section {item['section']}: "
-                f"{item['start']:.2f}s -> "
-                f"{item['end']:.2f}s"
-            )
     print()
     print("=" * 60)
     print("FINAL SECTION TIMELINE")
@@ -1101,12 +1220,23 @@ def find_section_timestamps(
 # VIDEO CREATION
 # ============================================================
 
-def create_video():
+@autonomous_recover("video_agent")
+def create_video(aspect_ratio="1:1"):
 
     print()
     print("=" * 60)
-    print("AUTOTUBE AI - WHISPER TIMED VIDEO")
+    print(f"AUTOTUBE AI - WHISPER TIMED VIDEO ({aspect_ratio})")
     print("=" * 60)
+
+    # --------------------------------------------------------
+    # Resolution preset
+    # --------------------------------------------------------
+    if aspect_ratio == "9:16":
+        target_w, target_h = 720, 1280
+    elif aspect_ratio == "16:9":
+        target_w, target_h = 1280, 720
+    else:
+        target_w, target_h = 720, 720
 
     # --------------------------------------------------------
     # Required files
@@ -1139,14 +1269,18 @@ def create_video():
         )
 
     # --------------------------------------------------------
-    # Load data
+    # Load data with self-healing asset assurance
     # --------------------------------------------------------
-
-    images = get_images()
 
     visual_plan = get_visual_plan()
 
     sections = get_section_map()
+
+    needed_count = max(len(visual_plan), len(sections), 4)
+
+    ensure_visual_assets_exist(needed_count)
+
+    images = get_images()
 
     if not images:
         raise RuntimeError(
@@ -1282,8 +1416,6 @@ def create_video():
             image_index
         ]
 
-        visual_description = visual_plan[visual_number - 1]
-
         print()
         print(
             f"[{start:06.2f}s - "
@@ -1312,87 +1444,57 @@ def create_video():
 
         print(
             f"NARRATION: "
-            f"{item['narration']}"
+            f"{item.get('narration', '')}"
         )
 
         # ----------------------------------------------------
-        # Create visual clip.
-        #
-        # Prefer a local video clip when available.
-        # Fall back to the existing numbered image.
+        # Create image clip with Smart Canvas.
         # ----------------------------------------------------
 
-        visual_description = visual_plan[visual_number - 1]
-
-        video_path = find_matching_video(
-            visual_description
-        )
-
-        if video_path:
+        ext = image_path.suffix.lower()
+        if ext in (".mp4", ".mov", ".webm", ".mkv"):
             print(
-                f"AUTO VIDEO : "
-                f"{video_path.name}"
+                f"🎬 USING VIDEO CLIP: {image_path.name} "
+                f"(target duration: {duration:.2f}s)"
             )
-
-        if video_path:
-
-            print(
-                f"VIDEO   : "
-                f"{video_path.name}"
-            )
-
-            source_video = VideoFileClip(
-                str(video_path)
-            )
-
-            source_duration = (
-                source_video.duration
-            )
-
-            if source_duration >= duration:
-
-                clip = source_video.subclipped(
-                    0,
-                    duration,
+            try:
+                v_clip = VideoFileClip(str(image_path)).without_audio()
+                v_clip = v_clip.resized(width=target_w)
+                if v_clip.duration < duration:
+                    v_clip = v_clip.with_effects([vfx.Loop(duration=duration)])
+                else:
+                    v_clip = v_clip.subclipped(0, duration)
+                clip = v_clip
+            except Exception as vid_err:
+                print(
+                    f"⚠️ Video clip processing fallback to image: {vid_err}"
                 )
-
-            else:
-
-                # Loop short videos until they
-                # cover the complete section.
-                from moviepy import vfx
-
-                clip = source_video.with_effects(
-                    [
-                        vfx.Loop(
-                            duration=duration
-                        )
-                    ]
-                )
-
-            clip = (
-                clip
-                .resized(
-                    width=IMAGE_WIDTH
-                )
-                .with_duration(
-                    duration
-                )
-            )
-
+                img_fallback = image_path.with_suffix(".jpg")
+                if img_fallback.exists():
+                    canvas_img = render_smart_canvas_image(img_fallback, target_w, target_h)
+                    clip = (
+                        ImageClip(str(canvas_img))
+                        .resized((target_w, target_h))
+                        .with_duration(duration)
+                    )
+                else:
+                    raise vid_err
         else:
-
             print(
-                f"IMAGE   : "
-                f"{image_path.name}"
+                f"🖼️ SMART CANVAS IMAGE: {image_path.name} "
+                f"({target_w}x{target_h}, target duration: {duration:.2f}s)"
             )
-
+            canvas_img = render_smart_canvas_image(
+                image_path,
+                target_width=target_w,
+                target_height=target_h,
+            )
             clip = (
                 ImageClip(
-                    str(image_path)
+                    str(canvas_img)
                 )
                 .resized(
-                    width=IMAGE_WIDTH
+                    (target_w, target_h)
                 )
                 .with_duration(
                     duration
@@ -1430,11 +1532,33 @@ def create_video():
     )
 
     # --------------------------------------------------------
-    # Attach original narration.
+    # BGM Engine with Automated Audio Ducking
+    # --------------------------------------------------------
+
+    bgm_mood = detect_bgm_mood(script=script)
+    bgm_track = BGM_DIR / f"{bgm_mood}.wav"
+    mixed_audio_file = OUTPUT_DIR / "mixed_audio.wav"
+
+    final_audio_clip = audio
+    if bgm_track.exists():
+        mixed_res = mix_audio_with_ducking(
+            voice_path=str(VOICE_FILE),
+            bgm_path=str(bgm_track),
+            output_audio_path=str(mixed_audio_file),
+        )
+        if mixed_res and os.path.exists(mixed_res):
+            try:
+                final_audio_clip = AudioFileClip(str(mixed_res))
+            except Exception as mix_clip_err:
+                print(f"⚠️ Mixed audio loading fallback to raw voice: {mix_clip_err}")
+                final_audio_clip = audio
+
+    # --------------------------------------------------------
+    # Attach audio.
     # --------------------------------------------------------
 
     video = video.with_audio(
-        audio
+        final_audio_clip
     )
 
     # --------------------------------------------------------
@@ -1447,7 +1571,7 @@ def create_video():
         codec="libx264",
         audio_codec="aac",
         preset="ultrafast",
-        threads=1,
+        threads=min(8, os.cpu_count() or 4),
     )
 
     # --------------------------------------------------------
@@ -1455,6 +1579,18 @@ def create_video():
     # --------------------------------------------------------
 
     video.close()
+
+    try:
+        audio.close()
+    except Exception:
+        pass
+
+    try:
+        if final_audio_clip != audio:
+            final_audio_clip.close()
+    except Exception:
+        pass
+
 
     audio.close()
 

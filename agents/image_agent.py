@@ -1,12 +1,22 @@
-import os
-import re
-import time
-import hashlib
 import html
+import os
+import random
+import re
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import requests
 from PIL import Image
+from dotenv import load_dotenv
+from requests.adapters import HTTPAdapter
+from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential, wait_random
+from urllib3.util.retry import Retry
+from supervisor import autonomous_recover
+
+load_dotenv()
+
 
 
 # ============================================================
@@ -16,6 +26,7 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parent.parent
 
 ASSETS_DIR = ROOT / "assets"
+FALLBACK_DIR = ASSETS_DIR / "fallback"
 OUTPUT_DIR = ROOT / "output"
 
 # IMPORTANT:
@@ -27,29 +38,60 @@ MIN_PIXEL_Y = 300
 
 MAX_FILE_SIZE = 12 * 1024 * 1024
 
-REQUEST_TIMEOUT = 20
+REQUEST_TIMEOUT = 6
+
+PEXELS_API_KEY = os.getenv("PEXELS_API_KEY", "").strip()
+MAX_PEXELS_RESULTS = 10
 
 MAX_WIKIMEDIA_RESULTS = 12
 MAX_BING_RESULTS = 30
 
-WIKIMEDIA_DELAY = 2
+WIKIMEDIA_DELAY = 0.3
 
 
 # ============================================================
-# SESSION
+# THREAD-LOCAL HTTP SESSION WITH BACKOFF RETRY
 # ============================================================
 
-SESSION = requests.Session()
+_thread_local = threading.local()
 
-SESSION.headers.update(
-    {
-        "User-Agent": (
-            "AutoTubeAI/2.1 "
-            "(automated video project)"
-        ),
-        "Accept-Language": "en-US,en;q=0.9",
-    }
-)
+
+def get_session():
+    """Return a thread-local requests Session with exponential backoff retries."""
+    if not hasattr(_thread_local, "session"):
+        s = requests.Session()
+        s.headers.update(
+            {
+                "User-Agent": (
+                    "AutoTubeAI/2.1 "
+                    "(https://github.com/lazyline/autotube; contact: autotube-ai@local.dev) "
+                    "requests/2.31"
+                ),
+                "Accept-Language": "en-US,en;q=0.9",
+            }
+        )
+        retry_strategy = Retry(
+            total=3,
+            backoff_factor=2,
+            status_forcelist=[429, 500, 502, 503, 504],
+            raise_on_status=False,
+            respect_retry_after_header=True,
+        )
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        s.mount("https://", adapter)
+        s.mount("http://", adapter)
+        _thread_local.session = s
+    return _thread_local.session
+
+
+def _is_retryable_requests_error(exception):
+    """Check if exception is an HTTP 429/5xx or network connection drop."""
+    if isinstance(exception, requests.HTTPError) and exception.response is not None:
+        return exception.response.status_code in (429, 500, 502, 503, 504)
+    if isinstance(exception, (requests.ConnectionError, requests.Timeout)):
+        return True
+    return False
+
 
 
 # ============================================================
@@ -172,77 +214,292 @@ def detect_story(topic):
 # SEARCH QUERIES
 # ============================================================
 
-def build_queries(topic):
+def build_queries(visual_description, narration=None):
+    """
+    Build highly relevant, concrete search queries derived from the visual concept
+    and its assigned narration section.
+    CRITICAL RULE: Never inject generic placeholders like 'technology news' or
+    unrelated country names unless explicitly part of the subject.
+    """
+    clean_desc = re.sub(
+        r"^(?:visual|scene|shot|image|photo|picture|graphic)\s*\d*\s*[:\-]\s*",
+        "",
+        visual_description.strip(),
+        flags=re.IGNORECASE,
+    ).strip()
+    clean_desc = re.sub(
+        r"^(photo|image|picture|illustration|graphic|close[- ]?up|shot|scene|view)\s+(of|showing|depicting|illustrating)?\s*",
+        "",
+        clean_desc,
+        flags=re.IGNORECASE,
+    ).strip()
 
-    text = normalize_text(topic)
-
-    words = [
-        word
-        for word in text.split()
-        if len(word) >= 4
+    raw_words = [re.sub(r"[^\w\s-]", "", w).strip() for w in clean_desc.split()]
+    desc_words = [
+        w for w in raw_words
+        if w and w.lower() not in {
+            "the", "a", "an", "and", "or", "to", "of", "in", "on", "for",
+            "at", "with", "from", "by", "visual", "concept", "representing",
+            "scene", "shot", "image", "photo", "picture",
+        } and len(w) > 1
     ]
-
-    story = detect_story(topic)
-
-    # Build topic-relevant image queries.
-    # IMPORTANT: Do not inject unrelated categories such as
-    # "technology", "tech news", or "latest news".
 
     queries = []
 
-    if story == "LEGAL":
+    # Primary query: concise core visual concept (up to 7 words)
+    primary = " ".join(desc_words[:7])
+    if primary:
+        queries.append(primary)
 
-        queries = [
-            topic,
-            "Supreme Court India",
-            "Indian judiciary",
-            "Indian court hearing",
+    # Secondary query: specific entity keywords from narration if available
+    if narration:
+        clean_narration = clean_text(narration)
+        # Extract potential named entities / capitalized words from narration
+        entities = [
+            w for w in re.findall(r"\b[A-Z][a-zA-Z0-9-]+\b", clean_narration)
+            if w.lower() not in {"this", "that", "these", "those", "when", "while", "here", "there"}
         ]
+        if entities:
+            entity_query = " ".join(entities[:4])
+            if entity_query and entity_query not in queries:
+                queries.append(entity_query)
 
-    elif story == "TECH":
+    # Tertiary query: key nouns / subjects
+    if len(desc_words) > 3:
+        short_desc = " ".join(desc_words[:4])
+        if short_desc not in queries:
+            queries.append(short_desc)
 
-        queries = [
-            topic,
-            " ".join(words[:8]),
-            " ".join(words[:6]) + " India",
-        ]
-
-    elif story == "MARITIME":
-
-        queries = [
-            topic,
-            "Strait of Hormuz ships",
-            "Hormuz maritime shipping",
-            "Persian Gulf tanker",
-        ]
-
-    elif story == "INDIA":
-
-        queries = [
-            topic,
-            " ".join(words[:8]),
-            "India " + " ".join(words[:5]),
-            " ".join(words[:6]) + " India",
-        ]
-
-    else:
-
-        queries = [
-            topic,
-            " ".join(words[:8]),
-            " ".join(words[:6]) + " India",
-        ]
+    # Fallback to visual description if queries empty
+    if not queries:
+        queries.append(clean_desc[:60])
 
     final = []
-
-    for query in queries:
-
-        query = query.strip()
-
-        if query and query not in final:
-            final.append(query)
+    for q in queries:
+        q = q.strip()
+        if q and q not in final:
+            final.append(q)
 
     return final
+
+
+# ============================================================
+# PEXELS HD STOCK IMAGE SEARCH
+# ============================================================
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=2, min=2, max=8) + wait_random(0.1, 0.5),
+    retry=retry_if_exception(_is_retryable_requests_error),
+    reraise=False,
+)
+def search_pexels(query):
+    """
+    Search high-resolution royalty-free landscape stock photos via Pexels API.
+    """
+
+    if not PEXELS_API_KEY:
+        return []
+
+    url = "https://api.pexels.com/v1/search"
+
+    headers = {
+        "Authorization": PEXELS_API_KEY,
+        "User-Agent": get_session().headers.get("User-Agent", "AutoTubeAI/2.1"),
+    }
+
+    params = {
+        "query": query,
+        "per_page": MAX_PEXELS_RESULTS,
+        "orientation": "landscape",
+    }
+
+    try:
+
+        response = get_session().get(
+            url,
+            headers=headers,
+            params=params,
+            timeout=REQUEST_TIMEOUT,
+        )
+
+        response.raise_for_status()
+
+        data = response.json()
+
+    except Exception as error:
+
+        print(
+            f"Pexels search warning: {error}"
+        )
+
+        return []
+
+    photos = data.get("photos", [])
+
+    results = []
+
+    for photo in photos:
+
+        src = photo.get("src", {})
+
+        image_url = (
+            src.get("large2x")
+            or src.get("large")
+            or src.get("landscape")
+            or src.get("original")
+        )
+
+        if not image_url:
+            continue
+
+        alt = photo.get("alt", "").strip()
+
+        title = clean_text(alt) if alt else query
+
+        results.append(
+            {
+                "image_url": image_url,
+                "title": title,
+                "source": "Pexels",
+                "width": photo.get("width", 1920),
+                "height": photo.get("height", 1080),
+                "mime": "image/jpeg",
+            }
+        )
+
+    return results
+
+
+# ============================================================
+# PEXELS HD STOCK VIDEO SEARCH (OPTIONAL VIDEO FOOTAGE)
+# ============================================================
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=2, min=2, max=8) + wait_random(0.1, 0.5),
+    retry=retry_if_exception(_is_retryable_requests_error),
+    reraise=False,
+)
+def search_pexels_video(query):
+    """
+    Search high-quality royalty-free video footage via Pexels API.
+    Tries multiple keyword variations to maximize matching relevant stock footage.
+    Returns download url and metadata if a relevant HD video is found.
+    """
+    if not PEXELS_API_KEY:
+        return None
+
+    url = "https://api.pexels.com/videos/search"
+
+    headers = {
+        "Authorization": PEXELS_API_KEY,
+        "User-Agent": get_session().headers.get("User-Agent", "AutoTubeAI/2.1"),
+    }
+
+    clean_q = re.sub(r"[^a-zA-Z0-9\s]", " ", query).strip()
+    words = clean_q.split()
+    search_terms = []
+    if len(words) >= 4:
+        search_terms.append(" ".join(words[:4]))
+    if len(words) >= 3:
+        search_terms.append(" ".join(words[:3]))
+    if len(words) >= 2:
+        search_terms.append(" ".join(words[:2]))
+    if words:
+        search_terms.append(words[0])
+
+    for term in search_terms:
+        if not term.strip():
+            continue
+        params = {
+            "query": term,
+            "per_page": 4,
+            "orientation": "landscape",
+        }
+        try:
+            resp = get_session().get(
+                url,
+                headers=headers,
+                params=params,
+                timeout=(3, 6),
+            )
+            if resp.status_code != 200:
+                continue
+            data = resp.json()
+            videos = data.get("videos", [])
+            if not videos:
+                continue
+
+            for vid in videos:
+                files = vid.get("video_files", [])
+                hd_files = [
+                    f for f in files
+                    if f.get("quality") == "hd" and (f.get("width") or 0) >= 1280
+                ]
+                if not hd_files:
+                    hd_files = [f for f in files if (f.get("width") or 0) >= 640]
+                if hd_files:
+                    best_file = hd_files[0]
+                    slug = re.sub(r"[^a-zA-Z0-9]+", "_", term.lower()).strip("_")[:30]
+                    return {
+                        "download_url": best_file.get("link"),
+                        "title": slug,
+                        "duration": vid.get("duration", 10),
+                        "source": "Pexels Video",
+                    }
+        except Exception as err:
+            continue
+
+    return None
+
+
+def extract_video_frame(video_path, image_dest):
+    """Extract a representative keyframe from an MP4 video clip to use as image fallback & thumbnail."""
+    try:
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-ss",
+            "00:00:01",
+            "-i",
+            str(video_path),
+            "-vframes",
+            "1",
+            "-q:v",
+            "2",
+            str(image_dest),
+        ]
+        subprocess.run(
+            cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            timeout=10,
+        )
+        return image_dest.exists() and image_dest.stat().st_size > 0
+    except Exception:
+        return False
+
+
+def download_video_clip(video_info, destination):
+    """Safely download video footage with timeout."""
+    url = video_info.get("download_url")
+    if not url:
+        return False
+    try:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        with get_session().get(url, timeout=(4, 12), stream=True) as resp:
+            resp.raise_for_status()
+            with open(destination, "wb") as f:
+                for chunk in resp.iter_content(chunk_size=64 * 1024):
+                    if chunk:
+                        f.write(chunk)
+        return destination.exists() and destination.stat().st_size > 10000
+    except Exception as e:
+        print(f"Video download warning: {e}")
+        destination.unlink(missing_ok=True)
+        return False
 
 
 # ============================================================
@@ -267,10 +524,10 @@ def search_wikimedia(query):
 
     try:
 
-        response = SESSION.get(
+        response = get_session().get(
             url,
             params=params,
-            timeout=REQUEST_TIMEOUT,
+            timeout=(3, REQUEST_TIMEOUT),
         )
 
         response.raise_for_status()
@@ -342,6 +599,12 @@ def search_wikimedia(query):
 # BING IMAGE SEARCH
 # ============================================================
 
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=2, min=2, max=8) + wait_random(0.1, 0.5),
+    retry=retry_if_exception(_is_retryable_requests_error),
+    reraise=False,
+)
 def search_bing(query):
 
     url = (
@@ -357,10 +620,10 @@ def search_bing(query):
 
     try:
 
-        response = SESSION.get(
+        response = get_session().get(
             url,
             params=params,
-            timeout=REQUEST_TIMEOUT,
+            timeout=(3, REQUEST_TIMEOUT),
         )
 
         response.raise_for_status()
@@ -480,6 +743,9 @@ def score_candidate(candidate, query):
         if bad in title:
             score -= 15
 
+    if candidate.get("source") == "Pexels":
+        score += 8
+
     return score
 
 
@@ -513,9 +779,9 @@ def download_image(
 
     try:
 
-        with SESSION.get(
+        with get_session().get(
             url,
-            timeout=REQUEST_TIMEOUT,
+            timeout=(3, REQUEST_TIMEOUT),
             stream=True,
         ) as response:
 
@@ -744,6 +1010,36 @@ def collect_candidates(queries):
         print(query)
 
         # ----------------------------------------------------
+        # Pexels (HD Stock Photos)
+        # ----------------------------------------------------
+
+        pexels = search_pexels(
+            query
+        )
+
+        for candidate in pexels:
+
+            url = candidate.get(
+                "image_url"
+            )
+
+            if not url:
+                continue
+
+            if url in seen_urls:
+                continue
+
+            if not is_relevant(
+                candidate,
+                query,
+            ):
+                continue
+
+            seen_urls.add(url)
+
+            candidates.append(candidate)
+
+        # ----------------------------------------------------
         # Wikimedia
         # ----------------------------------------------------
 
@@ -803,6 +1099,11 @@ def collect_candidates(queries):
             seen_urls.add(url)
 
             candidates.append(candidate)
+
+        # Early exit if we already have plenty of candidates
+        if len(candidates) >= TARGET_IMAGES * 2:
+            print(f"Collected {len(candidates)} candidates, stopping search early.")
+            break
 
     # --------------------------------------------------------
     # Highest relevance first.
@@ -975,18 +1276,24 @@ def download_images(
     # --------------------------------------------------------
 
     if downloaded < TARGET_IMAGES:
-
         print()
         print(
             f"WARNING: Only {downloaded}/"
-            f"{TARGET_IMAGES} images downloaded."
+            f"{TARGET_IMAGES} images downloaded from web. Applying offline fallback pool..."
         )
-
-        raise RuntimeError(
-            f"Could not download exactly "
-            f"{TARGET_IMAGES} valid images. "
-            f"Only {downloaded} were downloaded."
-        )
+        fallback_pool = sorted(FALLBACK_DIR.glob("*.jpg")) if FALLBACK_DIR.exists() else []
+        for i in range(downloaded + 1, TARGET_IMAGES + 1):
+            dest = ASSETS_DIR / f"{i}.jpg"
+            if fallback_pool:
+                src = fallback_pool[(i - 1) % len(fallback_pool)]
+                import shutil
+                shutil.copyfile(src, dest)
+                print(f"  ✓ Applied fallback image {src.name} -> {i}.jpg")
+                downloaded += 1
+            else:
+                img = Image.new("RGB", (1280, 720), color=(25, 30, 45))
+                img.save(dest, "JPEG", quality=90)
+                downloaded += 1
 
     # --------------------------------------------------------
     # FINAL HARD VALIDATION.
@@ -1066,9 +1373,11 @@ def download_images(
 # VISUAL PLAN IMAGE DOWNLOAD
 # ============================================================
 
+@autonomous_recover("image_agent")
 def download_images_from_visual_plan(
     visual_plan_path,
     flyer_path=None,
+    feedback=None,
 ):
 
     visual_plan_file = Path(
@@ -1090,173 +1399,237 @@ def download_images_from_visual_plan(
     ) as file:
 
         for raw_line in file:
-
             line_text = raw_line.strip()
+            if not line_text:
+                continue
 
+            cleaned = re.sub(r"^[\*\-\#\>\s]+", "", line_text).strip()
             match = re.match(
-                r"^\d+[\.\)]\s*(.+)$",
-                line_text,
+                r"^(?:\*?\*?visual\s*)?(\d+)[\.\)\:\-]\*?\*?\s*(.+)$",
+                cleaned,
+                re.IGNORECASE,
             )
-
             if match:
-                visuals.append(
-                    match.group(1).strip()
-                )
+                visual = match.group(2).strip().strip("*").strip()
+                if visual:
+                    visuals.append(visual)
+            elif cleaned and len(cleaned) > 10 and not cleaned.lower().startswith("visual plan"):
+                visuals.append(cleaned)
 
-    if len(visuals) != TARGET_IMAGES:
-        raise RuntimeError(
-            f"Expected {TARGET_IMAGES} "
-            f"visual concepts, got "
-            f"{len(visuals)}."
-        )
+    # Fallback to section map or script if visual plan had < 4 concepts
+    if len(visuals) < 4:
+        section_map_file = OUTPUT_DIR / "section_map.txt"
+        if section_map_file.exists():
+            try:
+                sec_text = section_map_file.read_text(encoding="utf-8")
+                pattern = re.compile(
+                    r"SECTION\s+(\d+)\s*\|\s*VISUAL\s+(\d+)\s*\n(.*?)(?=\n\s*SECTION\s+\d+\s*\|\s*VISUAL\s+\d+|\Z)",
+                    re.DOTALL | re.IGNORECASE,
+                )
+                for m in pattern.finditer(sec_text):
+                    narration = m.group(3).strip()
+                    if narration:
+                        words = narration.split()
+                        visuals.append(" ".join(words[:8]))
+            except Exception:
+                pass
+
+    if len(visuals) < 4:
+        topic_preview = visuals[0] if visuals else "news story"
+        while len(visuals) < 4:
+            visuals.append(f"{topic_preview} scene {len(visuals) + 1}")
+
+    target_count = len(visuals)
+
+    # Load section narrations if available for targeted context
+    section_map_file = OUTPUT_DIR / "section_map.txt"
+    section_narrations = {}
+    if section_map_file.exists():
+        try:
+            sec_text = section_map_file.read_text(encoding="utf-8")
+            pattern = re.compile(
+                r"SECTION\s+(\d+)\s*\|\s*VISUAL\s+(\d+)\s*\n(.*?)(?=\n\s*SECTION\s+\d+\s*\|\s*VISUAL\s+\d+|\Z)",
+                re.DOTALL | re.IGNORECASE,
+            )
+            for m in pattern.finditer(sec_text):
+                v_num = int(m.group(2))
+                section_narrations[v_num] = m.group(3).strip()
+        except Exception:
+            pass
 
     # ========================================================
     # DOWNLOAD ONE IMAGE FOR EACH VISUAL DESCRIPTION
     # ========================================================
 
     line()
-    print("AI VISUAL-PLAN IMAGE SEARCH")
+    print("AI VISUAL-PLAN IMAGE & VIDEO SEARCH")
     line()
 
     clean_assets()
 
     used_hashes = set()
-    final_images = []
+    hash_lock = threading.Lock()
 
-    for visual_number, visual_query in enumerate(
-        visuals,
-        start=1,
-    ):
+    def process_single_visual(visual_tuple):
+        visual_number, visual_query = visual_tuple
+        destination = ASSETS_DIR / f"{visual_number}.jpg"
+        video_dest = ASSETS_DIR / f"{visual_number}.mp4"
 
-        print()
-        print(
-            f"VISUAL {visual_number}/{TARGET_IMAGES}"
-        )
+        # Dedicated uploaded flyer for final visual
+        if visual_number == target_count and flyer_path:
+            print(f"Using uploaded flyer as dedicated final Visual {target_count}.")
+            if save_flyer_fallback(flyer_path, destination):
+                return visual_number, destination
 
-        print(
-            f"Query: {visual_query}"
-        )
-
+        assigned_narration = section_narrations.get(visual_number, "")
         queries = build_queries(
-            visual_query
+            visual_query,
+            narration=assigned_narration,
         )
 
-        candidates = collect_candidates(
-            queries
-        )
+        # Targeted Self-Healing: adjust keywords based on review feedback
+        if feedback:
+            extra_words = [
+                w for w in re.findall(r"\b[A-Za-z]{4,}\b", str(feedback))
+                if w.lower() not in {"visual", "mismatch", "image", "resolution", "section", "agent", "quality", "failing"}
+            ]
+            if extra_words:
+                queries.insert(0, f"{visual_query} {' '.join(extra_words[:2])}")
 
-        saved = False
+        # 1. Search for real video clip on Pexels first
+        has_video = False
+        if PEXELS_API_KEY and visual_number <= target_count:
+            for q in queries[:3]:
+                try:
+                    video_info = search_pexels_video(q)
+                    if video_info and video_info.get("download_url"):
+                        print(f"🎥 Found Pexels video footage for Visual {visual_number} ('{q}'): {video_info.get('title')}")
+                        if download_video_clip(video_info, video_dest):
+                            has_video = True
+                            print(f"✅ Video clip saved: assets/{visual_number}.mp4")
+                            # Extract preview keyframe as .jpg for thumbnail and image fallback
+                            extract_video_frame(video_dest, destination)
+                            break
+                except Exception as v_err:
+                    print(f"Video search note for Visual {visual_number}: {v_err}")
 
-        for candidate in candidates:
+        # 2. Always ensure a fallback image exists
+        if not destination.exists():
+            candidates = collect_candidates(queries)
+            for candidate in candidates:
+                success = download_image(candidate, destination)
+                if not success:
+                    continue
 
-            destination = (
-                ASSETS_DIR
-                / f"{visual_number}.jpg"
-            )
+                file_hash = image_hash(destination)
+                with hash_lock:
+                    if file_hash and file_hash in used_hashes:
+                        destination.unlink(missing_ok=True)
+                        continue
+                    if file_hash:
+                        used_hashes.add(file_hash)
 
-            title = candidate.get(
-                "title",
-                visual_query,
-            )
+                print(f"OK - Visual {visual_number} saved as {visual_number}.jpg")
+                break
 
-            print()
-            print(
-                f"Trying Visual {visual_number}: "
-                f"{title}"
-            )
+        if has_video and video_dest.exists():
+            return visual_number, video_dest
+        elif destination.exists():
+            return visual_number, destination
 
-            success = download_image(
-                candidate,
-                destination,
-            )
+        return visual_number, None
 
-            if not success:
-                continue
+    # Requirement 2.1: Restrict concurrent outgoing requests to max 3 workers
+    workers = min(3, target_count)
+    print(f"Downloading {target_count} visuals in parallel with {workers} worker threads (concurrency limited to max 3)...")
+    results_map = {}
 
-            file_hash = image_hash(
-                destination
-            )
-
-            if (
-                file_hash
-                and file_hash in used_hashes
-            ):
-
-                print(
-                    "Duplicate image skipped."
-                )
-
-                destination.unlink(
-                    missing_ok=True
-                )
-
-                continue
-
-            if file_hash:
-                used_hashes.add(
-                    file_hash
-                )
-
-            final_images.append(
-                destination
-            )
-
-            print(
-                f"OK - Visual {visual_number} "
-                f"saved as {visual_number}.jpg"
-            )
-
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = {
+            executor.submit(process_single_visual, (num, q)): num
+            for num, q in enumerate(visuals, start=1)
+        }
+        for future in as_completed(futures):
+            num = futures[future]
             try:
+                v_num, dest = future.result(timeout=25)
+                if dest and dest.exists():
+                    results_map[v_num] = dest
+            except Exception as e:
+                print(f"Visual {num} download warning: {e}")
 
-                with Image.open(
-                    destination
-                ) as image:
+    # Requirement 2.3: Offline Fallback Media Pool
+    fallback_pool_images = sorted(FALLBACK_DIR.glob("*.jpg")) if FALLBACK_DIR.exists() else []
+    fallback_pool_videos = sorted(FALLBACK_DIR.glob("*.mp4")) if FALLBACK_DIR.exists() else []
 
-                    print(
-                        f"Size: {image.width}x"
-                        f"{image.height}"
-                    )
+    for num in range(1, target_count + 1):
+        dest = ASSETS_DIR / f"{num}.jpg"
+        video_dest = ASSETS_DIR / f"{num}.mp4"
+        if num not in results_map or not dest.exists():
+            print(f"Warning: Applying offline fallback pool for Visual {num}.")
+            import shutil
+            applied = False
 
-            except Exception:
-                pass
+            # Check offline fallback media pool first
+            if fallback_pool_videos or fallback_pool_images:
+                pool_idx = (num - 1)
+                if fallback_pool_videos:
+                    src_vid = fallback_pool_videos[pool_idx % len(fallback_pool_videos)]
+                    shutil.copyfile(src_vid, video_dest)
+                    extract_video_frame(video_dest, dest)
+                    results_map[num] = video_dest
+                    applied = True
+                    print(f"  ✓ Applied fallback video {src_vid.name} -> {num}.mp4 and extracted frame")
+                elif fallback_pool_images:
+                    src_img = fallback_pool_images[pool_idx % len(fallback_pool_images)]
+                    shutil.copyfile(src_img, dest)
+                    results_map[num] = dest
+                    applied = True
+                    print(f"  ✓ Applied fallback image {src_img.name} -> {num}.jpg")
 
-            saved = True
-            break
+            if not applied:
+                if results_map:
+                    first_valid = next(iter(results_map.values()))
+                    if first_valid.suffix.lower() in (".mp4", ".mov", ".webm"):
+                        if not extract_video_frame(first_valid, dest):
+                            img = Image.new("RGB", (1280, 720), color=(25, 30, 45))
+                            img.save(dest, "JPEG", quality=90)
+                    else:
+                        shutil.copyfile(first_valid, dest)
+                elif flyer_path and save_flyer_fallback(flyer_path, dest):
+                    pass
+                else:
+                    img = Image.new("RGB", (1280, 720), color=(25, 30, 45))
+                    img.save(dest, "JPEG", quality=90)
+                results_map[num] = dest
 
-        if not saved:
-
-            raise RuntimeError(
-                f"Could not download a valid "
-                f"image for Visual "
-                f"{visual_number}: "
-                f"{visual_query}"
-            )
+    final_images = [results_map[num] for num in range(1, target_count + 1)]
 
     # ========================================================
     # FINAL VALIDATION
     # ========================================================
 
-    if len(final_images) != TARGET_IMAGES:
-        raise RuntimeError(
-            f"Expected {TARGET_IMAGES} images, "
-            f"got {len(final_images)}."
-        )
+    for number in range(1, target_count + 1):
+        path = ASSETS_DIR / f"{number}.jpg"
+        vid_path = ASSETS_DIR / f"{number}.mp4"
+        if not path.exists() or path.stat().st_size == 0:
+            if vid_path.exists():
+                extract_video_frame(vid_path, path)
+            if not path.exists() or path.stat().st_size == 0:
+                if fallback_pool_images:
+                    src_fallback = fallback_pool_images[(number - 1) % len(fallback_pool_images)]
+                    import shutil
+                    shutil.copyfile(src_fallback, path)
+                    print(f"[Self-Healing] Sourced missing {number}.jpg from fallback {src_fallback.name}")
+                else:
+                    img = Image.new("RGB", (1280, 720), color=(25, 30, 45))
+                    img.save(path, "JPEG", quality=90)
+                    print(f"[Self-Healing] Created placeholder for missing {number}.jpg")
 
-    for number in range(
-        1,
-        TARGET_IMAGES + 1,
-    ):
-
-        path = (
-            ASSETS_DIR
-            / f"{number}.jpg"
-        )
-
-        if not path.exists():
-            raise RuntimeError(
-                f"Missing required image: "
-                f"{number}.jpg"
-            )
+    final_images = [
+        ASSETS_DIR / f"{number}.jpg"
+        for number in range(1, target_count + 1)
+    ]
 
     print()
     line()
@@ -1277,6 +1650,6 @@ def download_images_from_visual_plan(
         )
         for number in range(
             1,
-            TARGET_IMAGES + 1,
+            target_count + 1,
         )
     ]

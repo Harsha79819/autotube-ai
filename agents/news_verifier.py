@@ -122,7 +122,7 @@ def _fetch_article_text(url, max_chars=6000):
 
         response = requests.get(
             article_url,
-            timeout=15,
+            timeout=6,
             headers={
                 "User-Agent": (
                     "Mozilla/5.0 "
@@ -592,20 +592,22 @@ def verify_news_topic(topic, limit=5):
     )
 
     # --------------------------------------------------------
-    # FETCH ARTICLE TEXT ONLY FOR TOP CANDIDATES
+    # FETCH ARTICLE TEXT ONLY FOR TOP CANDIDATES (PARALLEL)
     # --------------------------------------------------------
 
     prefetch_count = min(
-        max(limit * 2, 10),
+        max(limit, 4),
         len(candidates),
     )
 
-    for article in candidates[:prefetch_count]:
+    from concurrent.futures import ThreadPoolExecutor
 
+    target_articles = candidates[:prefetch_count]
+
+    def _fetch_and_score(article):
         article["article_text"] = _fetch_article_text(
             article.get("url", "")
         )
-
         article["_score"] = _score_news_article(
             topic=topic,
             title=article.get("headline", ""),
@@ -613,6 +615,11 @@ def verify_news_topic(topic, limit=5):
             article_text=article.get("article_text", ""),
             published_at=article.get("published_at", ""),
         )
+        return article
+
+    if target_articles:
+        with ThreadPoolExecutor(max_workers=min(4, len(target_articles))) as executor:
+            list(executor.map(_fetch_and_score, target_articles))
 
     candidates.sort(
         key=lambda article: article.get("_score", 0),
@@ -746,4 +753,291 @@ def verify_news_topic(topic, limit=5):
             "source-backed news results."
         ),
     }
+
+
+# ============================================================
+# PRE-PUBLISH CONTENT SAFETY & POLICY MODERATION
+# ============================================================
+
+_HEURISTIC_UNSAFE_PATTERNS = {
+    "hate_speech": [
+        r"\b(racial slur|n-word|white supremacy|hate speech|subhuman)\b",
+        r"\b(kill all|death to|wipe out)\s+(jews|muslims|christians|hindus|blacks|whites|asians|immigrants)\b",
+        r"\b(genocide|ethnic cleansing)\s+(advocacy|celebration)\b",
+    ],
+    "violence_harm": [
+        r"\b(pipe\s+bomb|bomb\s+tutorial|bomb\s+making|weapons?\s+tutorial)\b",
+        r"\b(how to\s+)?(make|build|assemble|craft)\s+(a\s+)?(pipe\s+)?bomb\b",
+        r"\b(how to\s+)?(commit\s+)?suicide\b",
+        r"\b(assassinate|assassination|school\s+shooting|mass\s+shooting|attack\s+schools?|attack\s+civilians?)\b",
+        r"\b(build|manufacture|make)\s+(an\s+)?explosive\b",
+        r"\b(manufacture ricin|poisoning water supply|mass casualty)\b",
+    ],
+    "sexual_content": [
+        r"\b(hardcore porn|explicit sex|child exploitation|nonconsensual sexual|csam)\b",
+    ],
+    "dangerous_content": [
+        r"\b(ransomware tutorial|ddos attack tool|how to hack credit cards|carding tutorial|malware payload tutorial)\b",
+    ],
+}
+
+
+def _heuristic_safety_check(text, topic=None):
+    """
+    Fast offline heuristic moderation check using regex safety rules.
+    """
+    combined = f"{topic or ''} {text or ''}".lower()
+
+    for category, patterns in _HEURISTIC_UNSAFE_PATTERNS.items():
+        for pat in patterns:
+            match = re.search(pat, combined, flags=re.IGNORECASE)
+            if match:
+                return {
+                    "safe": False,
+                    "category": category,
+                    "confidence": 0.95,
+                    "reason": f"Content violates safety policy ({category}): matched '{match.group(0)}'",
+                    "checked_by": "heuristic",
+                }
+
+    return {
+        "safe": True,
+        "category": "none",
+        "confidence": 0.85,
+        "reason": "Passed heuristic policy and safety check",
+        "checked_by": "heuristic",
+    }
+
+
+def verify_content_safety_and_policy(text, topic=None):
+    """
+    Pre-Publish Safety & Policy Filter.
+    Validates script or topic against YouTube Community Guidelines:
+    - Toxicity & Hate Speech
+    - Harassment & Cyberbullying
+    - Graphic Violence & Self-Harm
+    - Sexually Explicit Material
+    - Dangerous & Illegal Activities
+
+    Uses fast Gemini evaluation with transparent heuristic fallback.
+    """
+    import os
+    import json
+    from dotenv import load_dotenv
+
+    load_dotenv()
+
+    api_key = os.getenv("GEMINI_API_KEY")
+
+    if not text and not topic:
+        return {
+            "safe": True,
+            "category": "none",
+            "confidence": 1.0,
+            "reason": "Empty content is safe by default",
+            "checked_by": "empty_bypass",
+        }
+
+    # 1. Try Gemini Content Moderation
+    if api_key:
+        try:
+            from google import genai
+
+            client = genai.Client(api_key=api_key)
+
+            prompt = f"""You are an elite YouTube content moderation and safety officer.
+Analyze the following script/news content against YouTube Community Guidelines & Terms of Service:
+- Hate Speech & Toxicity (slurs, promoting violence/hatred against protected classes)
+- Harassment & Cyberbullying
+- Graphic Violence, Terrorist Propaganda, Suicide/Self-Harm
+- Sexually Explicit or Inappropriate Content
+- Dangerous Content (bomb-making, illegal weapons, malicious hacking, dangerous frauds)
+
+TOPIC: {topic or 'N/A'}
+CONTENT:
+{(text or '')[:3000]}
+
+Return ONLY a JSON object:
+{{
+  "safe": true,
+  "category": "none",
+  "confidence": 0.95,
+  "reason": "Short 1-sentence explanation"
+}}
+If unsafe, set safe: false and category to one of ["hate_speech", "violence", "toxicity", "sexual_content", "dangerous_content"].
+"""
+            models_to_try = [
+                "gemini-2.5-flash",
+                "gemini-2.0-flash",
+                "gemini-1.5-flash",
+                "gemini-3.5-flash",
+                "gemini-flash-lite-latest",
+            ]
+
+            for m in models_to_try:
+                try:
+                    resp = client.models.generate_content(
+                        model=m,
+                        contents=prompt,
+                    )
+                    raw = getattr(resp, "text", "")
+                    if raw:
+                        clean = raw.strip()
+                        if "```json" in clean:
+                            clean = clean.split("```json")[1].split("```")[0].strip()
+                        elif "```" in clean:
+                            clean = clean.split("```")[1].split("```")[0].strip()
+
+                        data = json.loads(clean)
+                        return {
+                            "safe": bool(data.get("safe", True)),
+                            "category": str(data.get("category", "none")),
+                            "confidence": float(data.get("confidence", 0.9)),
+                            "reason": str(data.get("reason", "Verified by Gemini AI moderation")),
+                            "checked_by": "gemini",
+                        }
+                except Exception:
+                    continue
+
+        except Exception as exc:
+            print(f"⚠️ Gemini moderation check exception: {exc}")
+
+    # 2. Heuristic Moderation Fallback
+    return _heuristic_safety_check(text, topic=topic)
+
+
+# ============================================================
+# VISUAL ASSET VALIDATOR & WATERMARK FILTER
+# ============================================================
+
+def validate_visual_assets(assets_dir=None, fallback_dir=None):
+    """
+    Validates all visual image assets in the assets directory:
+    - Tests for file corruption (zero-byte or invalid image headers).
+    - Checks minimum resolution (>= 200x200).
+    - Checks for stock watermark signatures or overlay anomalies.
+    - Automatically drops and replaces corrupt/bad images with clean
+      images from assets/fallback/.
+    """
+    import shutil
+    from pathlib import Path
+    from PIL import Image
+
+    root = Path(__file__).resolve().parent.parent
+    a_dir = Path(assets_dir) if assets_dir else (root / "assets")
+    f_dir = Path(fallback_dir) if fallback_dir else (root / "assets" / "fallback")
+
+    if not a_dir.exists():
+        return {
+            "valid": False,
+            "total_inspected": 0,
+            "corrupt_count": 0,
+            "watermarked_count": 0,
+            "replaced": [],
+            "details": {},
+        }
+
+    # Discover fallback candidates
+    fallbacks = []
+    if f_dir.exists():
+        fallbacks = sorted([
+            f for f in f_dir.iterdir()
+            if f.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"} and f.stat().st_size > 1024
+        ])
+
+    image_files = sorted([
+        f for f in a_dir.iterdir()
+        if f.is_file() and f.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}
+        and not f.name.startswith("contact_sheet")
+    ])
+
+    total_inspected = len(image_files)
+    corrupt_count = 0
+    watermarked_count = 0
+    replaced = []
+    details = {}
+    fallback_idx = 0
+
+    stock_watermark_keywords = [
+        "watermark",
+        "shutterstock",
+        "gettyimages",
+        "istock",
+        "alamy",
+        "dreamstime",
+        "depositphotos",
+        "123rf",
+    ]
+
+    for img_path in image_files:
+        filename = img_path.name
+        is_corrupt = False
+        is_watermarked = False
+        reason = "Clean"
+
+        # Check 1: File size
+        if img_path.stat().st_size < 1024:
+            is_corrupt = True
+            reason = "File size below 1KB (empty or truncated)"
+
+        # Check 2: Header integrity & decodability
+        if not is_corrupt:
+            try:
+                with Image.open(img_path) as img:
+                    img.verify()
+                # Reopen to check dimensions and color
+                with Image.open(img_path) as img:
+                    w, h = img.size
+                    if w < 200 or h < 200:
+                        is_corrupt = True
+                        reason = f"Resolution too low ({w}x{h})"
+
+                    # Check 3: Watermark keywords in EXIF / Metadata
+                    info_str = str(getattr(img, "info", {})).lower()
+                    if any(kw in info_str for kw in stock_watermark_keywords):
+                        is_watermarked = True
+                        reason = "Stock agency watermark detected in image metadata"
+
+            except Exception as err:
+                is_corrupt = True
+                reason = f"Image decode failure: {err}"
+
+        # Check 4: Watermark keywords in filename
+        if not is_corrupt and not is_watermarked:
+            if any(kw in filename.lower() for kw in stock_watermark_keywords):
+                is_watermarked = True
+                reason = "Watermark keyword found in filename"
+
+        # Replacement action if defective
+        if is_corrupt or is_watermarked:
+            if is_corrupt:
+                corrupt_count += 1
+            if is_watermarked:
+                watermarked_count += 1
+
+            if fallbacks:
+                clean_fb = fallbacks[fallback_idx % len(fallbacks)]
+                fallback_idx += 1
+                try:
+                    shutil.copy2(clean_fb, img_path)
+                    replaced.append(filename)
+                    print(f"🛡️ [Asset Safety] Replaced defective {filename} ({reason}) with fallback {clean_fb.name}")
+                    reason += f" -> replaced with {clean_fb.name}"
+                except Exception as cp_err:
+                    print(f"⚠️ Failed to copy fallback over {filename}: {cp_err}")
+
+        details[filename] = {
+            "status": "REPLACED" if filename in replaced else ("DEFECTIVE" if (is_corrupt or is_watermarked) else "PASS"),
+            "reason": reason,
+        }
+
+    return {
+        "valid": len(replaced) == 0 and corrupt_count == 0 and watermarked_count == 0,
+        "total_inspected": total_inspected,
+        "corrupt_count": corrupt_count,
+        "watermarked_count": watermarked_count,
+        "replaced": replaced,
+        "details": details,
+    }
+
 

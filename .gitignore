@@ -239,17 +239,31 @@ output/
 *.zip
 # AutoTube AI local secrets
 .env.*
+!.env.example
 client_secret*.json
 token.json
 
-# Local editor
+# Local editor & system
 .vscode/
+.DS_Store
+Library/
 
 # Local backup files
 *.backup
 *.bak
+*.before_*
 dashboard_backup*.py
 main_backup*.py
+dashboard_before_*
+dashboard_liquid_current_*
+liquid_ui_v2_before_fix_*
+
+# Runtime logs, queues, and caches
+logs/
+failed_queue/
+failed_runs/
+.matplotlib/
+.streamlit/credentials.toml
 
 # Generated/local assets
 assets/

@@ -1,6 +1,9 @@
 from dotenv import load_dotenv
 load_dotenv()
 
+from supervisor import autonomous_recover
+
+
 """
 AUTOTUBE AI - TREND DISCOVERY ENGINE V5
 
@@ -30,9 +33,11 @@ import re
 import time
 import urllib.parse
 import urllib.request
+import urllib.error
 import xml.etree.ElementTree as ET
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception, wait_random
 
 
 # ============================================================
@@ -419,6 +424,20 @@ def youtube_score(title):
 # HTTP / RSS
 # ============================================================
 
+def _is_retryable_http_error(exception):
+    if isinstance(exception, urllib.error.HTTPError):
+        return exception.code in (429, 500, 502, 503, 504)
+    if isinstance(exception, (urllib.error.URLError, TimeoutError, ConnectionResetError)):
+        return True
+    return False
+
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=2, min=2, max=8) + wait_random(0.1, 0.5),
+    retry=retry_if_exception(_is_retryable_http_error),
+    reraise=True,
+)
 def fetch_xml(url):
     request = urllib.request.Request(
         url,
@@ -1325,15 +1344,24 @@ Candidates:
 {candidates}
 """
 
-        response = client.models.generate_content(
-            model="gemini-flash-latest",
-            contents=prompt,
-        )
-
-        text = (
-            getattr(response, "text", "")
-            or ""
-        ).strip()
+        text = ""
+        for model_name in [
+            "gemini-3.5-flash-lite",
+            "gemini-3.5-flash",
+            "gemini-3.6-flash",
+            "gemini-3.1-flash-lite",
+        ]:
+            try:
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                )
+                text = (getattr(response, "text", "") or "").strip()
+                if text:
+                    break
+            except Exception as model_err:
+                print(f"Trend selection model {model_name} error: {model_err}")
+                continue
 
         match = re.search(
             r"\{.*\}",
@@ -1407,6 +1435,7 @@ Candidates:
 # PUBLIC API
 # ============================================================
 
+@autonomous_recover("trend_agent")
 def discover_trending_topics(limit=10):
     print("=" * 60)
     print(

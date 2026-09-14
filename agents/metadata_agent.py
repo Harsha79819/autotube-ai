@@ -63,10 +63,13 @@ client = genai.Client(
 # ============================================================
 
 METADATA_MODELS = [
-    "gemini-3.6-flash",
+    "gemini-3.8-flash",
+    "gemini-3.7-flash",
     "gemini-3.5-flash",
     "gemini-3.1-flash-lite",
-    "gemini-flash-latest",
+    "gemini-3.5-flash-lite",
+    "gemini-flash-lite-latest",
+    "gemini-3.6-flash",
 ]
 
 
@@ -275,91 +278,75 @@ Rules:
     )
 
     # --------------------------------------------------------
-    # ONE GEMINI ATTEMPT ONLY
+    # GEMINI ATTEMPTS WITH FALLBACK
     # --------------------------------------------------------
 
-    try:
+    for model in METADATA_MODELS:
+        try:
+            print(f"Trying metadata model: {model}")
 
-        model = METADATA_MODELS[0]
-
-        print(
-            f"Trying metadata model once: {model}"
-        )
-
-        response = client.models.generate_content(
-            model=model,
-            contents=prompt
-        )
-
-        text = (
-            response.text.strip()
-            if response.text
-            else ""
-        )
-
-        title, description, tags = parse_metadata(
-            text
-        )
-
-        if valid_metadata(
-            title,
-            description,
-            tags
-        ):
-
-            metadata = {
-                "title": title,
-                "description": description,
-                "tags": tags
-            }
-
-            os.makedirs(
-                os.path.dirname(metadata_file),
-                exist_ok=True
+            response = client.models.generate_content(
+                model=model,
+                contents=prompt
             )
 
-            with open(
-                metadata_file,
-                "w",
-                encoding="utf-8"
-            ) as f:
+            text = (
+                response.text.strip()
+                if getattr(response, "text", "")
+                else ""
+            )
 
-                json.dump(
-                    metadata,
-                    f,
-                    ensure_ascii=False,
-                    indent=2
+            title, description, tags = parse_metadata(
+                text
+            )
+
+            if valid_metadata(
+                title,
+                description,
+                tags
+            ):
+                metadata = {
+                    "title": title,
+                    "description": description,
+                    "tags": tags
+                }
+
+                os.makedirs(
+                    os.path.dirname(metadata_file),
+                    exist_ok=True
                 )
 
-            print(
-                f"Metadata generated using {model}"
-            )
+                with open(
+                    metadata_file,
+                    "w",
+                    encoding="utf-8"
+                ) as f:
+                    json.dump(
+                        metadata,
+                        f,
+                        ensure_ascii=False,
+                        indent=2
+                    )
+
+                print(
+                    f"Metadata generated using {model}"
+                )
+                print(
+                    "Metadata generated successfully!"
+                )
+                print(
+                    f"Metadata saved: {metadata_file}"
+                )
+
+                return title, description, tags
 
             print(
-                "Metadata generated successfully!"
+                f"Model {model} metadata response was incomplete."
             )
 
-            print(
-                f"Metadata saved: {metadata_file}"
-            )
-
-            return title, description, tags
-
-        print(
-            "Gemini metadata response was incomplete."
-        )
-
-    except Exception as error:
-
-        print(
-            "Gemini metadata generation failed."
-        )
-
-        print(
-            type(error).__name__
-        )
-
-        print(error)
+        except Exception as error:
+            print(f"Metadata model {model} failed: {error}")
+            continue
 
     # --------------------------------------------------------
     # LOCAL FALLBACK

@@ -1,8 +1,10 @@
 import os
 import subprocess
+from supervisor import autonomous_recover
 
 
-def create_final_video(add_captions=True):
+@autonomous_recover("final_video_agent")
+def create_final_video(add_captions=True, aspect_ratio="1:1"):
     input_video = "output/video.mp4"
     subtitles = "output/subtitles.srt"
     output_video = "output/final_video.mp4"
@@ -18,12 +20,19 @@ def create_final_video(add_captions=True):
     if os.path.exists(output_video):
         os.remove(output_video)
 
+    if aspect_ratio == "9:16":
+        target_w, target_h = 1080, 1920
+    elif aspect_ratio == "16:9":
+        target_w, target_h = 1920, 1080
+    else:
+        target_w, target_h = 1080, 1080
+
     print("=" * 60)
     print("FINAL VIDEO RENDERING")
     print("=" * 60)
     print("Input:", input_video)
     print("Output:", output_video)
-    print("Target: 1080x1080")
+    print(f"Target: {target_w}x{target_h} ({aspect_ratio})")
     print("Captions:", add_captions)
 
     # --------------------------------------------------------
@@ -32,18 +41,41 @@ def create_final_video(add_captions=True):
     # --------------------------------------------------------
 
     video_filter = (
-        "scale=1080:1080:force_original_aspect_ratio=decrease:flags=lanczos,"
-        "pad=1080:1080:(ow-iw)/2:(oh-ih)/2"
+        f"scale={target_w}:{target_h}:force_original_aspect_ratio=decrease:flags=lanczos,"
+        f"pad={target_w}:{target_h}:(ow-iw)/2:(oh-ih)/2"
     )
 
     if add_captions:
         subtitle_path = subtitles.replace("\\", "/")
         subtitle_path = subtitle_path.replace(":", "\\:")
 
+        if aspect_ratio == "9:16":
+            # Safe zone for vertical shorts: avoid bottom 260px (channel UI) and right 160px (action buttons)
+            style = (
+                "force_style='FontName=Helvetica,FontSize=24,Bold=1,"
+                "PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,"
+                "BorderStyle=1,Outline=2.5,Shadow=1.5,Alignment=2,"
+                "MarginV=260,MarginR=160,MarginL=80'"
+            )
+        elif aspect_ratio == "16:9":
+            style = (
+                "force_style='FontName=Helvetica,FontSize=22,Bold=1,"
+                "PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,"
+                "BorderStyle=1,Outline=2.5,Shadow=1.5,Alignment=2,"
+                "MarginV=55,MarginR=60,MarginL=60'"
+            )
+        else:
+            style = (
+                "force_style='FontName=Helvetica,FontSize=20,Bold=1,"
+                "PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,"
+                "BorderStyle=1,Outline=2.5,Shadow=1.5,Alignment=2,"
+                "MarginV=45,MarginR=40,MarginL=40'"
+            )
+
         video_filter = (
-            "scale=1080:1080:force_original_aspect_ratio=decrease:flags=lanczos,"
-            "pad=1080:1080:(ow-iw)/2:(oh-ih)/2,"
-            f"subtitles={subtitle_path}"
+            f"scale={target_w}:{target_h}:force_original_aspect_ratio=decrease:flags=lanczos,"
+            f"pad={target_w}:{target_h}:(ow-iw)/2:(oh-ih)/2,"
+            f"subtitles={subtitle_path}:{style}"
         )
 
         print("Subtitle file:", subtitles)
@@ -61,7 +93,7 @@ def create_final_video(add_captions=True):
         "-c:v",
         "libx264",
         "-preset",
-        "medium",
+        "fast",
         "-crf",
         "18",
         "-pix_fmt",
@@ -91,7 +123,7 @@ def create_final_video(add_captions=True):
     if result.returncode == 0 and os.path.exists(output_video):
         print("=" * 60)
         print("FINAL VIDEO CREATED!")
-        print("1080x1080")
+        print(f"{target_w}x{target_h} ({aspect_ratio})")
         print(output_video)
         print("=" * 60)
 
@@ -101,4 +133,5 @@ def create_final_video(add_captions=True):
     print("FFmpeg failed.")
     print("=" * 60)
 
-    return None
+    raise RuntimeError(f"FFmpeg encoding failed with exit code {result.returncode}: {result.stdout[-300:] if result.stdout else 'unknown error'}")
+

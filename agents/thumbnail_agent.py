@@ -10,25 +10,28 @@ ASSETS_DIR = ROOT / "assets"
 OUTPUT_DIR = ROOT / "output"
 
 
-def _find_best_background():
+def _find_best_background(aspect_ratio="16:9"):
     """
-    Select the best landscape image from assets.
+    Select the best image from assets matching the desired aspect ratio.
 
     Avoids:
     - contact sheets
     - very small images
-    - portrait images when possible
 
     Prefers:
-    - landscape orientation
+    - aspect ratio closest to target
     - larger resolution
-    - good aspect ratio for YouTube thumbnails
     """
 
     candidates = []
 
     if not ASSETS_DIR.exists():
         return None
+
+    target_ratio = (
+        9 / 16 if aspect_ratio == "9:16"
+        else (1.0 if aspect_ratio == "1:1" else 16 / 9)
+    )
 
     for path in ASSETS_DIR.iterdir():
 
@@ -52,39 +55,21 @@ def _find_best_background():
 
                 width, height = img.size
 
-                if width < 500 or height < 300:
+                if width < 300 or height < 300:
                     continue
 
                 aspect = width / height
 
-                # Strong preference for landscape images.
-                if aspect >= 1.5:
-                    orientation_score = 100
-                elif aspect >= 1.2:
-                    orientation_score = 70
-                elif aspect >= 1.0:
-                    orientation_score = 25
-                else:
-                    orientation_score = 0
+                # Prefer images close to requested aspect ratio
+                ratio_difference = abs(aspect - target_ratio)
+                ratio_score = max(0, 60 - (ratio_difference * 35))
 
                 resolution_score = min(
                     (width * height) / 1_000_000,
-                    10,
+                    20,
                 )
 
-                # Prefer images close to 16:9.
-                ratio_difference = abs(aspect - (16 / 9))
-
-                ratio_score = max(
-                    0,
-                    30 - (ratio_difference * 30),
-                )
-
-                score = (
-                    orientation_score
-                    + resolution_score
-                    + ratio_score
-                )
+                score = ratio_score + resolution_score
 
                 candidates.append(
                     (score, path)
@@ -106,7 +91,7 @@ def _find_best_background():
     selected = candidates[0][1]
 
     print(
-        f"🖼️ Thumbnail background selected: "
+        f"🖼️ Thumbnail background selected ({aspect_ratio}): "
         f"{selected.name}"
     )
 
@@ -174,59 +159,64 @@ def _clean_title(title):
     return result.upper()
 
 
-def _crop_to_thumbnail(image):
+def _fit_to_aspect_ratio(image, aspect_ratio="16:9"):
     """
-    Center-crop image to exactly 16:9.
+    Fits and sizes the image to the specified aspect ratio with smart canvas:
+    - 16:9 -> 1280x720
+    - 9:16 -> 1080x1920
+    - 1:1 -> 1080x1080
+    If aspect ratio differs substantially (e.g. landscape image on 9:16 vertical),
+    uses blurred background canvas padding rather than cropping away all context.
     """
+    from PIL import ImageEnhance
 
-    target_ratio = 16 / 9
+    if aspect_ratio == "9:16":
+        target_w, target_h = 1080, 1920
+    elif aspect_ratio == "1:1":
+        target_w, target_h = 1080, 1080
+    else:
+        target_w, target_h = 1280, 720
 
+    target_ratio = target_w / target_h
     width, height = image.size
     current_ratio = width / height
 
-    if current_ratio > target_ratio:
-
-        # Image is too wide.
-        new_width = int(
-            height * target_ratio
-        )
-
-        left = (width - new_width) // 2
-
-        image = image.crop(
-            (
-                left,
-                0,
-                left + new_width,
-                height,
-            )
-        )
-
+    # If aspect ratio is close (within 25%), clean center-crop
+    if abs(current_ratio - target_ratio) / target_ratio < 0.25:
+        if current_ratio > target_ratio:
+            new_w = int(height * target_ratio)
+            left = (width - new_w) // 2
+            cropped = image.crop((left, 0, left + new_w, height))
+        else:
+            new_h = int(width / target_ratio)
+            top = (height - new_h) // 2
+            cropped = image.crop((0, top, width, top + new_h))
+        return cropped.resize((target_w, target_h), Image.Resampling.LANCZOS)
     else:
+        # Smart canvas:
+        # 1. Background: scale to fill canvas and apply heavy blur + darkening
+        bg_scale = max(target_w / width, target_h / height)
+        bg_w, bg_h = int(width * bg_scale), int(height * bg_scale)
+        bg = image.resize((bg_w, bg_h), Image.Resampling.BILINEAR)
+        left = (bg_w - target_w) // 2
+        top = (bg_h - target_h) // 2
+        bg = bg.crop((left, top, left + target_w, top + target_h))
+        bg = bg.filter(ImageFilter.GaussianBlur(radius=28))
+        bg = ImageEnhance.Brightness(bg).enhance(0.45)
 
-        # Image is too tall.
-        new_height = int(
-            width / target_ratio
-        )
+        # 2. Foreground: scale to fit within canvas cleanly
+        fg_scale = min(target_w / width, target_h / height)
+        fg_w, fg_h = int(width * fg_scale), int(height * fg_scale)
+        fg = image.resize((fg_w, fg_h), Image.Resampling.LANCZOS)
 
-        top = (height - new_height) // 2
-
-        image = image.crop(
-            (
-                0,
-                top,
-                width,
-                top + new_height,
-            )
-        )
-
-    return image.resize(
-        (1280, 720),
-        Image.Resampling.LANCZOS,
-    )
+        # 3. Paste centered
+        fg_x = (target_w - fg_w) // 2
+        fg_y = (target_h - fg_h) // 2
+        bg.paste(fg, (fg_x, fg_y))
+        return bg
 
 
-def create_thumbnail(title):
+def create_thumbnail(title, aspect_ratio="16:9"):
 
     OUTPUT_DIR.mkdir(
         parents=True,
@@ -235,10 +225,10 @@ def create_thumbnail(title):
 
     print()
     print("=" * 60)
-    print("THUMBNAIL GENERATION")
+    print(f"THUMBNAIL GENERATION ({aspect_ratio})")
     print("=" * 60)
 
-    background_path = _find_best_background()
+    background_path = _find_best_background(aspect_ratio=aspect_ratio)
 
     if background_path is None:
 
@@ -263,12 +253,15 @@ def create_thumbnail(title):
         return None
 
     # --------------------------------------------------------
-    # CROP / RESIZE
+    # FIT / RESIZE ACCORDING TO ASPECT RATIO
     # --------------------------------------------------------
 
-    image = _crop_to_thumbnail(
-        image
+    image = _fit_to_aspect_ratio(
+        image,
+        aspect_ratio=aspect_ratio,
     )
+
+    canvas_w, canvas_h = image.size
 
     # --------------------------------------------------------
     # SLIGHT CONTRAST / SHARPNESS
@@ -283,7 +276,7 @@ def create_thumbnail(title):
     )
 
     # --------------------------------------------------------
-    # DARK GRADIENT OVERLAY
+    # DARK GRADIENT / SAFE ZONE OVERLAY
     # --------------------------------------------------------
 
     image = image.convert("RGBA")
@@ -298,17 +291,48 @@ def create_thumbnail(title):
         overlay
     )
 
-    # Bottom dark area.
-    overlay_draw.rectangle(
-        (0, 390, 1280, 720),
-        fill=(0, 0, 0, 165),
-    )
-
-    # Extra subtle top/bottom darkness.
-    overlay_draw.rectangle(
-        (0, 0, 1280, 90),
-        fill=(0, 0, 0, 45),
-    )
+    if aspect_ratio == "9:16":
+        # Centered safe-zone banner for vertical shorts (avoiding top & bottom UI)
+        overlay_draw.rectangle(
+            (0, 860, canvas_w, 1420),
+            fill=(0, 0, 0, 185),
+        )
+        overlay_draw.rectangle(
+            (0, 0, canvas_w, 120),
+            fill=(0, 0, 0, 40),
+        )
+        font_size = 66
+        line_height = 80
+        target_center_y = 1140
+        max_text_width = canvas_w - 140
+    elif aspect_ratio == "1:1":
+        # Lower-third dark band for square
+        overlay_draw.rectangle(
+            (0, 680, canvas_w, canvas_h),
+            fill=(0, 0, 0, 175),
+        )
+        overlay_draw.rectangle(
+            (0, 0, canvas_w, 90),
+            fill=(0, 0, 0, 40),
+        )
+        font_size = 60
+        line_height = 74
+        target_center_y = 880
+        max_text_width = canvas_w - 120
+    else:  # 16:9
+        # Bottom dark area
+        overlay_draw.rectangle(
+            (0, 390, canvas_w, canvas_h),
+            fill=(0, 0, 0, 165),
+        )
+        overlay_draw.rectangle(
+            (0, 0, canvas_w, 90),
+            fill=(0, 0, 0, 45),
+        )
+        font_size = 58
+        line_height = 68
+        target_center_y = 555
+        max_text_width = canvas_w - 160
 
     image = Image.alpha_composite(
         image,
@@ -325,7 +349,7 @@ def create_thumbnail(title):
         title
     )
 
-    font = _load_font(58)
+    font = _load_font(font_size)
 
     # Wrap based on pixel width rather than
     # blindly using a fixed word count.
@@ -354,7 +378,7 @@ def create_thumbnail(title):
         )
 
         if (
-            text_width <= 1120
+            text_width <= max_text_width
             and len(lines) < 3
         ):
             current = test
@@ -371,15 +395,14 @@ def create_thumbnail(title):
     lines = lines[:3]
 
     # --------------------------------------------------------
-    # CENTER TITLE VERTICALLY
+    # CENTER TITLE VERTICALLY IN TARGET ZONE
     # --------------------------------------------------------
 
-    line_height = 68
     total_height = (
         len(lines) * line_height
     )
 
-    y = 555 - (
+    y = target_center_y - (
         total_height // 2
     )
 
@@ -397,10 +420,10 @@ def create_thumbnail(title):
         )
 
         x = (
-            1280 - text_width
+            canvas_w - text_width
         ) // 2
 
-        # Strong shadow.
+        # Strong shadow
         draw.text(
             (x + 5, y + 5),
             line,
@@ -410,7 +433,7 @@ def create_thumbnail(title):
             stroke_fill=(0, 0, 0, 220),
         )
 
-        # Main white text.
+        # Main white text
         draw.text(
             (x, y),
             line,
@@ -439,7 +462,7 @@ def create_thumbnail(title):
     )
 
     print(
-        f"✅ Thumbnail created: {output}"
+        f"✅ Thumbnail created ({canvas_w}x{canvas_h}): {output}"
     )
 
     print(
