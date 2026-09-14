@@ -2,15 +2,19 @@ import asyncio
 import os
 import re
 
-os.environ["HF_HUB_OFFLINE"] = "1"
+# Allow online HuggingFace Hub downloads on fresh container deployments if not already cached
+if os.getenv("HF_HUB_OFFLINE") is None:
+    # Only enable offline mode if local cache already has Kokoro
+    pass
 
-from dotenv import load_dotenv
-from kokoro import KPipeline
+try:
+    from kokoro import KPipeline
+except ImportError:
+    KPipeline = None
+
 import soundfile as sf
 import subprocess
 from supervisor import autonomous_recover
-
-load_dotenv()
 
 
 
@@ -324,12 +328,11 @@ def get_kokoro_pipeline():
     """
     global _KOKORO_PIPELINE
     if _KOKORO_PIPELINE is None:
-        os.environ["HF_HUB_OFFLINE"] = "1"
         from kokoro import KPipeline, KModel
         from huggingface_hub import hf_hub_download
         import torch
 
-        # Load weights directly from local cache with local_files_only=True
+        # Try loading weights from local cache first
         model = None
         try:
             cfg = hf_hub_download(
@@ -343,11 +346,12 @@ def get_kokoro_pipeline():
                 local_files_only=True,
             )
             model = KModel(config=cfg, model=pth).eval()
-        except Exception as load_err:
-            print(f"Kokoro local weights notice: {load_err}, attempting standard init...")
+        except Exception:
+            # First-time run on container: download online from HuggingFace Hub
             try:
                 model = KModel().eval()
-            except Exception:
+            except Exception as online_err:
+                print(f"Kokoro model init notice: {online_err}")
                 model = None
 
         _KOKORO_PIPELINE = KPipeline(

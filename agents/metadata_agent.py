@@ -38,24 +38,28 @@ def load_env_file(path):
                 os.environ.setdefault(key, value)
 
 
-load_env_file(ENV_FILE)
+try:
+    from agents.env_loader import get_gemini_api_key
+except ImportError:
+    from env_loader import get_gemini_api_key
 
-api_key = os.environ.get("GEMINI_API_KEY")
+api_key = get_gemini_api_key()
 
-print("ENV FILE:", ENV_FILE)
-print(
-    "API KEY:",
-    "FOUND" if api_key else "MISSING"
-)
+client = genai.Client(api_key=api_key) if api_key else None
 
-if not api_key:
-    raise ValueError(
-        "GEMINI_API_KEY not found in .env"
-    )
 
-client = genai.Client(
-    api_key=api_key
-)
+def get_client():
+    """Lazily load or refresh the Gemini client from environment/secrets."""
+    global client
+    if client is None:
+        key = get_gemini_api_key()
+        if not key:
+            raise RuntimeError(
+                "GEMINI_API_KEY is not configured. "
+                "Please add it to Hugging Face Space Secrets, Streamlit Secrets, or your .env file."
+            )
+        client = genai.Client(api_key=key)
+    return client
 
 
 # ============================================================
@@ -285,7 +289,8 @@ Rules:
         try:
             print(f"Trying metadata model: {model}")
 
-            response = client.models.generate_content(
+            active_client = get_client()
+            response = active_client.models.generate_content(
                 model=model,
                 contents=prompt
             )

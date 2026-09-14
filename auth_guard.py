@@ -13,14 +13,14 @@ load_dotenv(ROOT / ".env")
 
 DEFAULT_PIN = "8501"
 
+try:
+    from agents.env_loader import get_app_pin
+except ImportError:
+    from env_loader import get_app_pin
+
 def get_configured_pin() -> str:
     """Fetch configured PIN from env or Streamlit secrets, defaulting to 8501."""
-    try:
-        if hasattr(st, "secrets") and "APP_PIN" in st.secrets:
-            return str(st.secrets["APP_PIN"]).strip()
-    except Exception:
-        pass
-    return str(os.getenv("APP_PIN", DEFAULT_PIN)).strip()
+    return get_app_pin(DEFAULT_PIN)
 
 def is_authenticated() -> bool:
     """Check if current session has been validated."""

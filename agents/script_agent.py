@@ -20,14 +20,28 @@ from supervisor import autonomous_recover
 # CONFIG
 # ============================================================
 
-load_dotenv()
+try:
+    from agents.env_loader import get_gemini_api_key
+except ImportError:
+    from env_loader import get_gemini_api_key
 
-API_KEY = os.getenv("GEMINI_API_KEY")
+API_KEY = get_gemini_api_key()
+client = genai.Client(api_key=API_KEY) if API_KEY else None
 
-if not API_KEY:
-    raise RuntimeError("GEMINI_API_KEY not found in .env file")
 
-client = genai.Client(api_key=API_KEY)
+def get_client():
+    """Lazily load or refresh the Gemini client from environment/secrets."""
+    global client
+    if client is None:
+        key = get_gemini_api_key()
+        if not key:
+            raise RuntimeError(
+                "GEMINI_API_KEY is not configured. "
+                "Please add it to Hugging Face Space Secrets, Streamlit Secrets, or your .env file."
+            )
+        client = genai.Client(api_key=key)
+    return client
+
 
 MODELS = [
     "gemini-3.8-flash",
@@ -45,12 +59,12 @@ def _call_gemini_with_retry(contents, model, max_retries=2):
     Call Gemini API with automatic reconnection, client refresh,
     and fast failover on quota / load limits.
     """
-    global client
     import time
+    active_client = get_client()
 
     for attempt in range(1, max_retries + 1):
         try:
-            return client.models.generate_content(
+            return active_client.models.generate_content(
                 model=model,
                 contents=contents,
             )

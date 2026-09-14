@@ -40,7 +40,12 @@ MAX_FILE_SIZE = 12 * 1024 * 1024
 
 REQUEST_TIMEOUT = 6
 
-PEXELS_API_KEY = os.getenv("PEXELS_API_KEY", "").strip()
+try:
+    from agents.env_loader import get_pexels_api_key
+except ImportError:
+    from env_loader import get_pexels_api_key
+
+PEXELS_API_KEY = get_pexels_api_key()
 MAX_PEXELS_RESULTS = 10
 
 MAX_WIKIMEDIA_RESULTS = 12
@@ -297,6 +302,9 @@ def search_pexels(query):
     """
     Search high-resolution royalty-free landscape stock photos via Pexels API.
     """
+    global PEXELS_API_KEY
+    if not PEXELS_API_KEY:
+        PEXELS_API_KEY = get_pexels_api_key()
 
     if not PEXELS_API_KEY:
         return []
@@ -387,6 +395,10 @@ def search_pexels_video(query):
     Tries multiple keyword variations to maximize matching relevant stock footage.
     Returns download url and metadata if a relevant HD video is found.
     """
+    global PEXELS_API_KEY
+    if not PEXELS_API_KEY:
+        PEXELS_API_KEY = get_pexels_api_key()
+
     if not PEXELS_API_KEY:
         return None
 
