@@ -70,16 +70,25 @@ def run_app():
         with st.expander("📋 View Copyable Error Traceback", expanded=False):
             st.code(tb_str, language="python")
 
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("🔄 Reset Session & Reload Studio", use_container_width=True):
-                st.session_state.clear()
-                st.rerun()
-        with col2:
-            if st.button("🩹 Inspect Self-Healing Logs", use_container_width=True):
-                from supervisor import get_healing_logs
-                logs = get_healing_logs()
-                st.json(logs if logs else {"status": "No supervisor incidents recorded"})
+        try:
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("🔄 Reset Session & Reload Studio", key="err_reset_btn", use_container_width=True):
+                    st.session_state.clear()
+                    st.rerun()
+            with col2:
+                if st.button("🩹 Inspect Self-Healing Logs", key="err_logs_btn", use_container_width=True):
+                    from supervisor import get_healing_logs
+                    logs = get_healing_logs()
+                    st.json(logs if logs else {"status": "No supervisor incidents recorded"})
+        except Exception:
+            st.markdown(
+                '<div style="text-align: center; margin-top: 1rem;">'
+                '<a href="." target="_self" style="display:inline-block; padding:10px 20px; background:#38BDF8; color:#0F172A; font-weight:700; border-radius:8px; text-decoration:none;">'
+                '🔄 Reload Application Session'
+                '</a></div>',
+                unsafe_allow_html=True,
+            )
 
 if __name__ == "__main__" or "streamlit" in sys.modules:
     run_app()

@@ -840,11 +840,13 @@ def generate_multi_media_video(
                 self.callback = callback
                 self.st_prog = None
                 init_text = f"Attempt {attempt}/{max_attempts}: Starting AutoTube AI{' (Self-healing ' + failing_comp + ')' if attempt > 1 else ''}..."
-                try:
-                    self.st_prog = st.progress(0, text=init_text)
-                except Exception:
-                    self.st_prog = None
-                if self.callback:
+                # Only attach st.progress if running in the main Streamlit thread (no worker callback)
+                if self.callback is None:
+                    try:
+                        self.st_prog = st.progress(0, text=init_text)
+                    except Exception:
+                        self.st_prog = None
+                else:
                     try:
                         self.callback(0, init_text)
                     except Exception:
@@ -856,7 +858,7 @@ def generate_multi_media_video(
                         self.callback(val, text)
                     except Exception:
                         pass
-                if self.st_prog is not None:
+                elif self.st_prog is not None:
                     try:
                         self.st_prog.progress(val, text=text)
                     except Exception:

@@ -245,7 +245,7 @@ def start_background_pipeline(topic, aspect_ratio="1:1", voice=None, content_typ
                 result=None,
             )
 
-            from dashboard import generate_multi_media_video
+            from pipeline import generate_multi_media_video
 
             def _progress_cb(percent, text):
                 _update_job(progress=percent, step=text)
@@ -356,7 +356,7 @@ INSTRUCTIONS:
                 error=None,
             )
 
-            from dashboard import (
+            from pipeline import (
                 create_voice_for_script,
                 create_pipeline_video,
                 create_final_video,
@@ -892,17 +892,16 @@ def render_copilot_main_studio():
                 unsafe_allow_html=True,
             )
             try:
-                with open(final_video, "rb") as vf:
-                    st.video(vf.read(), format="video/mp4")
-                with open(final_video, "rb") as vf:
-                    st.download_button(
-                        "⬇️ Download MP4 Video",
-                        data=vf,
-                        file_name="autotube_video.mp4",
-                        mime="video/mp4",
-                        key="copilot_download_vid",
-                        use_container_width=True,
-                    )
+                video_bytes = final_video.read_bytes()
+                st.video(video_bytes, format="video/mp4")
+                st.download_button(
+                    "⬇️ Download MP4 Video",
+                    data=video_bytes,
+                    file_name="autotube_video.mp4",
+                    mime="video/mp4",
+                    key="copilot_download_vid",
+                    use_container_width=True,
+                )
             except Exception as vid_e:
                 st.caption(f"Video preview notice: {vid_e}")
             st.markdown("</div>", unsafe_allow_html=True)

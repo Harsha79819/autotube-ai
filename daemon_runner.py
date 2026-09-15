@@ -63,6 +63,40 @@ def is_pid_alive(pid: int) -> bool:
         import errno
         return e.errno == errno.EPERM
 
+def is_port_in_use(port: int) -> bool:
+    """Checks if a TCP port is currently bound."""
+    import socket
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(0.5)
+            return s.connect_ex(('127.0.0.1', port)) == 0
+    except Exception:
+        return False
+
+def free_port_if_in_use(port: int):
+    """Terminates any process occupying the given port to prevent 'port already in use' crash loops."""
+    if not is_port_in_use(port):
+        return
+    try:
+        res = subprocess.run(["lsof", "-ti", f":{port}"], capture_output=True, text=True)
+        pids = [int(p.strip()) for p in res.stdout.strip().split() if p.strip().isdigit()]
+        for p in pids:
+            if p != os.getpid():
+                try:
+                    os.kill(p, signal.SIGTERM)
+                except Exception:
+                    pass
+        time.sleep(0.5)
+        for p in pids:
+            if p != os.getpid():
+                try:
+                    os.kill(p, signal.SIGKILL)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+
 def read_daemon_state() -> dict:
     """Reads PID metadata from logs/daemon.json."""
     if not PID_FILE.exists():
@@ -105,6 +139,10 @@ class ProcessSupervisor:
             pass
 
     def start_streamlit(self) -> subprocess.Popen:
+        if is_port_in_use(self.port):
+            self.log_daemon(f"Port {self.port} is already in use; clearing stale listener...")
+            free_port_if_in_use(self.port)
+            time.sleep(1.0)
         rotate_log_if_large(SERVER_LOG)
         server_out = open(SERVER_LOG, "a", encoding="utf-8")
         cmd = [
@@ -169,6 +207,8 @@ class ProcessSupervisor:
                     except Exception:
                         pass
 
+        free_port_if_in_use(self.port)
+
         if PID_FILE.exists():
             try:
                 PID_FILE.unlink()
@@ -199,6 +239,7 @@ class ProcessSupervisor:
         tunnel_crashes = 0
         last_st_restart = time.time()
         last_tunnel_restart = time.time()
+        MAX_CONSECUTIVE_CRASHES = 5
 
         try:
             while self.running:
@@ -214,25 +255,34 @@ class ProcessSupervisor:
                 if self.streamlit_proc and self.streamlit_proc.poll() is not None:
                     code = self.streamlit_proc.poll()
                     st_crashes += 1
-                    backoff = min(15, 2 ** min(st_crashes, 4))
-                    self.log_daemon(f"⚠️ Streamlit exited unexpectedly (code {code})! Crash #{st_crashes}. Auto-restarting in {backoff}s...")
-                    time.sleep(backoff)
-                    self.streamlit_proc = self.start_streamlit()
-                    last_st_restart = time.time()
-                    state["streamlit_pid"] = self.streamlit_proc.pid
-                    write_daemon_state(state)
+                    if st_crashes > MAX_CONSECUTIVE_CRASHES:
+                        self.log_daemon(f"🛑 Streamlit crashed {st_crashes} consecutive times. Halting restart loop to prevent resource exhaustion. Check logs/server.log!")
+                        self.streamlit_proc = None
+                    else:
+                        backoff = min(15, 2 ** min(st_crashes, 4))
+                        self.log_daemon(f"⚠️ Streamlit exited unexpectedly (code {code})! Crash #{st_crashes}. Auto-restarting in {backoff}s...")
+                        time.sleep(backoff)
+                        self.streamlit_proc = self.start_streamlit()
+                        last_st_restart = time.time()
+                        state["streamlit_pid"] = self.streamlit_proc.pid
+                        write_daemon_state(state)
 
                 # 2. Check Tunnel Health
                 if self.tunnel_proc and self.tunnel_proc.poll() is not None:
                     code = self.tunnel_proc.poll()
                     tunnel_crashes += 1
-                    backoff = min(15, 2 ** min(tunnel_crashes, 4))
-                    self.log_daemon(f"⚠️ Tunnel exited unexpectedly (code {code})! Crash #{tunnel_crashes}. Auto-restarting in {backoff}s...")
-                    time.sleep(backoff)
-                    self.tunnel_proc = self.start_tunnel()
-                    last_tunnel_restart = time.time()
-                    state["tunnel_pid"] = self.tunnel_proc.pid
-                    write_daemon_state(state)
+                    if tunnel_crashes > MAX_CONSECUTIVE_CRASHES:
+                        self.log_daemon(f"🛑 Tunnel crashed {tunnel_crashes} consecutive times. Halting restart loop. Check logs/tunnel.log!")
+                        self.tunnel_proc = None
+                    else:
+                        backoff = min(15, 2 ** min(tunnel_crashes, 4))
+                        self.log_daemon(f"⚠️ Tunnel exited unexpectedly (code {code})! Crash #{tunnel_crashes}. Auto-restarting in {backoff}s...")
+                        time.sleep(backoff)
+                        self.tunnel_proc = self.start_tunnel()
+                        last_tunnel_restart = time.time()
+                        state["tunnel_pid"] = self.tunnel_proc.pid
+                        write_daemon_state(state)
+
 
         except KeyboardInterrupt:
             self.stop_all()
@@ -287,8 +337,15 @@ def cmd_start(port: int = 8501, mode: str = "auto"):
     )
     daemon_out.close()
 
+    write_daemon_state({
+        "daemon_pid": proc.pid,
+        "started_at": datetime.now(timezone.utc).isoformat(),
+        "port": port,
+    })
+
     print(f"Supervisor spawned with PID: {proc.pid}")
     print("Waiting for services and tunnel to initialize...")
+
 
     # Wait for tunnel URL to be written
     url = ""
@@ -393,10 +450,20 @@ def cmd_stop():
         except Exception:
             pass
 
+    port = state.get("port", 8501)
+    free_port_if_in_use(port)
+
+    try:
+        subprocess.run(["pkill", "-f", "streamlit run.*app.py"], capture_output=True)
+        subprocess.run(["pkill", "-f", "tunnel_runner.py"], capture_output=True)
+    except Exception:
+        pass
+
     if stopped_any or daemon_pid:
         print("✅ All AutoTube background processes have been cleanly terminated.\n")
     else:
         print("ℹ️  No active AutoTube processes were running.\n")
+
 
 def main():
     parser = argparse.ArgumentParser(description="AutoTube Background Process Supervisor")

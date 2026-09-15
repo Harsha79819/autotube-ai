@@ -178,6 +178,8 @@ class NgrokTunnelManager(BaseTunnelManager):
         if clean_domain:
             cmd.extend(["--domain", clean_domain])
         cmd.append(str(self.port))
+        cmd.extend(["--log", "stdout"])
+
 
         print("\n" + "=" * 70)
         print("🌐 STARTING NGROK PERMANENT STATIC TUNNEL")
@@ -420,6 +422,12 @@ def main():
         finally:
             if app_process:
                 app_process.terminate()
+    else:
+        print("❌ Tunnel failed to start. Exiting.")
+        if app_process:
+            app_process.terminate()
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
+

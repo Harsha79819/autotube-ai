@@ -164,18 +164,18 @@ def require_pin_authentication() -> bool:
 
     col_l, col_m, col_r = st.columns([1, 2, 1])
     with col_m:
-        with st.form("pin_login_form", clear_on_submit=False):
-            pin_entered = st.text_input(
-                "Security PIN",
-                type="password",
-                placeholder="••••",
-                max_chars=12,
-                help="Configure your custom PIN in .env via APP_PIN=...",
-                label_visibility="collapsed",
-            )
-            submit_btn = st.form_submit_button("Unlock Dashboard 🚀", use_container_width=True)
+        pin_entered = st.text_input(
+            "Security PIN",
+            type="password",
+            placeholder="••••",
+            max_chars=12,
+            help="Configure your custom PIN in .env via APP_PIN=...",
+            label_visibility="collapsed",
+            key="pin_guard_input_field",
+        )
+        submit_btn = st.button("Unlock Dashboard 🚀", key="pin_guard_submit_btn", use_container_width=True)
 
-        if submit_btn:
+        if submit_btn or (pin_entered and len(pin_entered) >= 4 and pin_entered == configured_pin):
             if str(pin_entered).strip() == configured_pin:
                 st.session_state["authenticated"] = True
                 st.session_state["pin_attempts"] = 0
@@ -183,7 +183,7 @@ def require_pin_authentication() -> bool:
                 st.success("✅ Access granted! Loading AutoTube Studio...")
                 time.sleep(0.3)
                 st.rerun()
-            else:
+            elif submit_btn:
                 st.session_state["pin_attempts"] += 1
                 attempts_left = 5 - st.session_state["pin_attempts"]
                 if st.session_state["pin_attempts"] >= 5:
