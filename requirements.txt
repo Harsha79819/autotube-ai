@@ -13,4 +13,3 @@ moviepy
 openai
 edge-tts
 gTTS
-kokoro>=0.7.16
