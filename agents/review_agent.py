@@ -605,6 +605,8 @@ Use this exact format:
                 "feedback": audio_audit.get("feedback", "Voice audio verified."),
             }
 
+        audio_issues = audio_audit.get("issues", []) if isinstance(audio_audit, dict) else []
+
         if audio_issues:
             if "critical_issues" not in result:
                 result["critical_issues"] = []

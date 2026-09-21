@@ -17,6 +17,14 @@ import subprocess
 from supervisor import autonomous_recover
 
 
+# ============================================================
+# STUDIO-GRADE AUDIO PACING, SILENCE REMOVAL & DUCKED MUSIC
+# ============================================================
+
+from audio_mixer import clean_and_pace_voice, mix_with_background_music, select_mood_music
+
+
+
 
 # ============================================================
 # ENGLISH CREATOR VOICE CONFIG
@@ -33,8 +41,23 @@ KOKORO_LANGUAGE = "a"
 def make_tts_text(text):
     """
     Convert numbers, dates, currencies and abbreviations
-    into natural English speech.
+    into natural speech. Preserves Telugu and Indian scripts naturally
+    with specialized tech phonetic normalization.
     """
+    if not text:
+        return ""
+
+    if re.search(r"[\u0C00-\u0C7F]", text):
+        from telugu_phonetic_normalizer import normalize_telugu_tech_script
+        text = normalize_telugu_tech_script(text)
+        cleaned = re.sub(r"[*_#`~]", "", text)
+        cleaned = re.sub(r"[ \t]+", " ", cleaned).strip()
+        return cleaned
+
+    if re.search(r"[\u0900-\u097F]", text):
+        cleaned = re.sub(r"[*_#`~]", "", text)
+        cleaned = re.sub(r"[ \t]+", " ", cleaned).strip()
+        return cleaned
 
     from num2words import num2words
 
@@ -284,25 +307,85 @@ def get_xtts_model():
     return _XTTS_MODEL
 
 
+def synthesize_voice(
+    script_text: str,
+    reference_sample: str,
+    output_wav: str = "output/voice_raw.wav",
+    language: str = "te",
+    temperature: float = 0.75,
+    length_penalty: float = 1.0,
+    repetition_penalty: float = 5.0,
+    top_k: int = 50,
+    top_p: float = 0.85,
+    speed: float = 1.0,
+):
+    """
+    Direct synthesis helper with automatic phonetic normalization and tuned XTTS-v2 inference.
+    """
+    from telugu_phonetic_normalizer import normalize_telugu_tech_script
+    safe_text = normalize_telugu_tech_script(script_text) if re.search(r"[\u0C00-\u0C7F]", script_text) else script_text
+    return generate_cloned_voice_xtts(
+        text=safe_text,
+        speaker_wav=reference_sample,
+        output_wav=output_wav,
+        language=language,
+        temperature=temperature,
+        length_penalty=length_penalty,
+        repetition_penalty=repetition_penalty,
+        top_k=top_k,
+        top_p=top_p,
+        speed=speed,
+    )
+
+
 def generate_cloned_voice_xtts(
     text: str,
     speaker_wav: str,
     output_wav: str,
     language: str = "en",
+    temperature: float = 0.75,
+    length_penalty: float = 1.0,
+    repetition_penalty: float = 5.0,
+    top_k: int = 50,
+    top_p: float = 0.85,
+    speed: float = 1.0,
 ):
     """
-    Clone user's voice using Coqui XTTS-v2 with a high-fidelity reference audio sample.
+    Clone user's voice using Coqui XTTS-v2 with high-fidelity reference audio sample
+    and explicit tuned inference parameters (speed=1.0, natural temperature/pacing).
     """
     global _XTTS_MODEL
+    from telugu_phonetic_normalizer import normalize_telugu_tech_script
+    safe_text = normalize_telugu_tech_script(text) if re.search(r"[\u0C00-\u0C7F]", text) else text
+
+    if language.lower() in ("te", "telugu"):
+        print("ℹ️ Note: XTTS-v2 natively supports ['en', 'hi', ...]. Routing Telugu ('te') through cross-lingual FreeVC24 engine...")
+        import asyncio
+        asyncio.run(
+            generate_cross_lingual_cloned_voice(
+                text=safe_text,
+                speaker_wav=speaker_wav,
+                output_wav=output_wav,
+                base_voice="te-IN-MohanNeural",
+            )
+        )
+        return output_wav
+
     try:
         tts = get_xtts_model()
-        print(f"Synthesizing cloned voice with speaker sample: {speaker_wav}")
+        print(f"Synthesizing cloned voice with speaker sample: {speaker_wav} (speed={speed}, temp={temperature})")
         tts.tts_to_file(
-            text=text,
+            text=safe_text,
             speaker_wav=speaker_wav,
             language=language,
             file_path=output_wav,
             split_sentences=True,
+            speed=speed,
+            temperature=temperature,
+            length_penalty=length_penalty,
+            repetition_penalty=repetition_penalty,
+            top_k=top_k,
+            top_p=top_p,
         )
     except Exception as e:
         print(f"XTTS synthesis error: {e}. Retrying on CPU...")
@@ -310,12 +393,97 @@ def generate_cloned_voice_xtts(
         from TTS.api import TTS
         _XTTS_MODEL = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to("cpu")
         _XTTS_MODEL.tts_to_file(
-            text=text,
+            text=safe_text,
             speaker_wav=speaker_wav,
             language=language,
             file_path=output_wav,
             split_sentences=True,
+            speed=speed,
+            temperature=temperature,
+            length_penalty=length_penalty,
+            repetition_penalty=repetition_penalty,
+            top_k=top_k,
+            top_p=top_p,
         )
+
+
+_FREEVC_MODEL = None
+
+
+def get_freevc_model():
+    """
+    Cache FreeVC24 model globally for zero-shot cross-lingual voice conversion.
+    """
+    global _FREEVC_MODEL
+    if _FREEVC_MODEL is None:
+        os.environ["COQUI_TOS_AGREED"] = "1"
+        from TTS.api import TTS
+        tts = TTS()
+        tts.load_vc_model_by_name("voice_conversion_models/multilingual/vctk/freevc24")
+        _FREEVC_MODEL = tts
+    return _FREEVC_MODEL
+
+
+async def generate_cross_lingual_cloned_voice(
+    text: str,
+    speaker_wav: str,
+    output_wav: str,
+    base_voice: str = "te-IN-MohanNeural",
+):
+    """
+    Zero-shot cross-lingual voice cloning for Telugu and non-Latin/Devanagari scripts:
+    1. Synthesize pristine, fluent native speech using Edge-TTS neural voice.
+    2. Convert vocal identity/timbre to match the English reference speaker sample using FreeVC24.
+    """
+    temp_native = "output/temp_native_speech.mp3"
+    temp_native_wav = "output/temp_native_speech_pcm.wav"
+    os.makedirs("output", exist_ok=True)
+
+    # Step 1: Synthesize native Telugu audio directly with phonetic tech normalization
+    from telugu_phonetic_normalizer import normalize_telugu_tech_script
+    safe_text = normalize_telugu_tech_script(text) if re.search(r"[\u0C00-\u0C7F]", text) else text
+    await generate_edge_tts_speech(
+        speech_text=safe_text,
+        voice_code=base_voice,
+        output_mp3=temp_native,
+    )
+
+    # Step 2: Convert to 24000Hz mono PCM wav for FreeVC
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-i",
+            temp_native,
+            "-ar",
+            "24000",
+            "-ac",
+            "1",
+            "-c:a",
+            "pcm_s16le",
+            temp_native_wav,
+        ],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+    # Step 3: Zero-shot voice conversion with FreeVC24
+    vc_engine = get_freevc_model()
+    vc_engine.voice_conversion_to_file(
+        source_wav=temp_native_wav,
+        target_wav=speaker_wav,
+        file_path=output_wav,
+    )
+
+    # Clean up intermediate files
+    for p in (temp_native, temp_native_wav):
+        try:
+            if os.path.exists(p):
+                os.remove(p)
+        except Exception:
+            pass
+
 
 
 _KOKORO_PIPELINE = None
@@ -429,12 +597,42 @@ def generate_kokoro_speech(
     )
 
 
+async def generate_edge_tts_speech(
+    speech_text,
+    voice_code="te-IN-MohanNeural",
+    output_mp3="output/voice.mp3",
+    rate="+8%",
+    pitch="+2Hz",
+):
+    """Generate high-quality multilingual neural voice using Microsoft Edge-TTS with tuned pacing."""
+    try:
+        from edge_tts_generator import generate_telugu_speech
+        await generate_telugu_speech(
+            text=speech_text,
+            output_path=output_mp3,
+            voice=voice_code or "te-IN-MohanNeural",
+            rate=rate or "+8%",
+            pitch=pitch or "+2Hz",
+        )
+    except Exception:
+        import edge_tts
+        communicate = edge_tts.Communicate(
+            text=speech_text,
+            voice=voice_code,
+            rate=rate or "+8%",
+            pitch=pitch or "+2Hz",
+        )
+        await communicate.save(output_mp3)
+
+
 @autonomous_recover("voice_agent")
 async def create_voice(
     voice=None,
     rate="-5%",
     pitch="+0Hz",
     voice_sample=None,
+    topic_category="tech_review",
+    include_music=True,
 ):
     """
     Create narration using either:
@@ -571,17 +769,6 @@ async def create_voice(
         print("Script is empty!")
         return None
 
-    telugu_chars = re.findall(
-        r"[\u0C00-\u0C7F]",
-        text,
-    )
-
-    if telugu_chars:
-        raise ValueError(
-            "Telugu characters detected in script. "
-            "English-only voice generation stopped."
-        )
-
     speech_text = make_tts_text(text)
 
     with open(
@@ -615,20 +802,36 @@ async def create_voice(
                 speaker_sample_path = candidate
                 break
 
+    is_telugu_text = bool(re.search(r"[\u0C00-\u0C7F]", speech_text))
+    is_hindi_text = bool(re.search(r"[\u0900-\u097F]", speech_text))
+    voice_lower = str(voice or "").lower()
+
+    is_edge_voice = bool(
+        "te-in" in voice_lower
+        or "hi-in" in voice_lower
+        or "mohan" in voice_lower
+        or "shruti" in voice_lower
+        or "madhur" in voice_lower
+        or "swara" in voice_lower
+        or "edge-tts" in voice_lower
+        or (is_telugu_text and not is_clone)
+        or (is_hindi_text and not is_clone)
+    )
+
     used_mode = None
-    if is_clone and speaker_sample_path:
+    if is_clone and speaker_sample_path and is_telugu_text:
         print()
         print("=" * 60)
-        print("COQUI XTTS-V2 LOCAL VOICE CLONING GENERATION")
+        print("FREEVC24 CROSS-LINGUAL TELUGU VOICE CLONING")
         print("=" * 60)
         print("Speaker Sample:", speaker_sample_path)
         print("TTS text preview:")
         print(speech_text[:400])
         print()
 
-        # Extract pristine 12-second reference WAV snippet at 24000Hz for XTTS
-        # with silence trimming, rumble filter, hiss reduction, and loudness normalization
-        clean_sample_wav = "voice_samples/xtts_clean_ref.wav"
+        # Extract clean reference WAV snippet for FreeVC
+        clean_sample_wav = "voice_samples/freevc_clean_ref.wav"
+        freevc_speaker = speaker_sample_path
         try:
             subprocess.run(
                 [
@@ -646,15 +849,110 @@ async def create_voice(
                     "24000",
                     "-ac",
                     "1",
+                    "-c:a",
+                    "pcm_s16le",
                     clean_sample_wav,
                 ],
                 check=True,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
-            xtts_speaker = clean_sample_wav
-        except Exception:
+            if os.path.exists(clean_sample_wav) and os.path.getsize(clean_sample_wav) > 10000:
+                freevc_speaker = clean_sample_wav
+        except Exception as prep_err:
+            print(f"Reference audio prep note: {prep_err}")
+            freevc_speaker = speaker_sample_path
+
+        base_telugu_voice = "te-IN-ShrutiNeural" if "shruti" in voice_lower else "te-IN-MohanNeural"
+        try:
+            await generate_cross_lingual_cloned_voice(
+                text=speech_text,
+                speaker_wav=freevc_speaker,
+                output_wav=output_wav,
+                base_voice=base_telugu_voice,
+            )
+
+            # Apply studio loudness normalization
+            norm_wav = "output/voice_norm.wav"
+            try:
+                subprocess.run(
+                    [
+                        "ffmpeg",
+                        "-y",
+                        "-i",
+                        output_wav,
+                        "-af",
+                        "loudnorm=I=-16:TP=-1.5:LRA=11",
+                        "-ar",
+                        "24000",
+                        "-ac",
+                        "1",
+                        norm_wav,
+                    ],
+                    check=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                if os.path.exists(norm_wav) and os.path.getsize(norm_wav) > 1000:
+                    os.replace(norm_wav, output_wav)
+            except Exception as norm_err:
+                print(f"Post-normalization note: {norm_err}")
+
+            used_mode = f"Cross-Lingual Cloned Voice (FreeVC24: {os.path.basename(speaker_sample_path)} -> Telugu)"
+        except Exception as vc_err:
+            print(f"⚠️ FreeVC24 cross-lingual cloning failed: {vc_err}. Falling back to Edge-TTS...")
+            await generate_edge_tts_speech(
+                speech_text=speech_text,
+                voice_code=base_telugu_voice,
+                output_mp3=output_wav,
+            )
+            used_mode = f"Edge-TTS Fallback ({base_telugu_voice})"
+    elif is_clone and speaker_sample_path and not is_telugu_text:
+        print()
+        print("=" * 60)
+        print("COQUI XTTS-V2 LOCAL VOICE CLONING GENERATION")
+        print("=" * 60)
+        print("Speaker Sample:", speaker_sample_path)
+        print("TTS text preview:")
+        print(speech_text[:400])
+        print()
+
+        # Extract pristine 12-second reference WAV snippet at 24000Hz 16-bit PCM for XTTS
+        # with silence trimming, rumble filter, hiss reduction, and loudness normalization
+        clean_sample_wav = "voice_samples/xtts_clean_ref.wav"
+        xtts_speaker = speaker_sample_path
+        try:
+            subprocess.run(
+                [
+                    "ffmpeg",
+                    "-y",
+                    "-i",
+                    str(speaker_sample_path),
+                    "-af",
+                    "silenceremove=start_periods=1:start_duration=0.08:start_threshold=-40dB,highpass=f=80,lowpass=f=12000,loudnorm=I=-16:TP=-1.5:LRA=11",
+                    "-ss",
+                    "0",
+                    "-t",
+                    "12",
+                    "-ar",
+                    "24000",
+                    "-ac",
+                    "1",
+                    "-c:a",
+                    "pcm_s16le",
+                    clean_sample_wav,
+                ],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            if os.path.exists(clean_sample_wav) and os.path.getsize(clean_sample_wav) > 10000:
+                xtts_speaker = clean_sample_wav
+        except Exception as prep_err:
+            print(f"XTTS reference audio prep note: {prep_err}")
             xtts_speaker = speaker_sample_path
+
+        print(f"XTTS Reference Speaker Audio: {xtts_speaker} (Size: {os.path.getsize(xtts_speaker)} bytes)")
 
         try:
             generate_cloned_voice_xtts(
@@ -723,6 +1021,72 @@ async def create_voice(
                 output_wav=output_wav,
             )
             used_mode = "Kokoro Fallback (am_adam)"
+    elif is_edge_voice:
+        if "shruti" in voice_lower:
+            edge_voice_id = "te-IN-ShrutiNeural"
+        elif "swara" in voice_lower:
+            edge_voice_id = "hi-IN-SwaraNeural"
+        elif "madhur" in voice_lower:
+            edge_voice_id = "hi-IN-MadhurNeural"
+        elif is_hindi_text and not is_telugu_text:
+            edge_voice_id = "hi-IN-MadhurNeural"
+        elif "te-in-shrutineural" in voice_lower:
+            edge_voice_id = "te-IN-ShrutiNeural"
+        elif voice in ("te-IN-MohanNeural", "te-IN-ShrutiNeural", "hi-IN-MadhurNeural", "hi-IN-SwaraNeural"):
+            edge_voice_id = voice
+        else:
+            edge_voice_id = "te-IN-MohanNeural"
+
+        print()
+        print("=" * 60)
+        print("MICROSOFT EDGE-TTS MULTILINGUAL GENERATION")
+        print("=" * 60)
+        print("Voice:", edge_voice_id)
+        print("TTS text preview:")
+        print(speech_text[:400])
+        print()
+
+        try:
+            if "te-" in str(edge_voice_id).lower() or re.search(r"[\u0C00-\u0C7F]", speech_text):
+                try:
+                    from telugu_phonetic_normalizer import normalize_telugu_tech_script
+                    speech_text = normalize_telugu_tech_script(speech_text)
+                except Exception as norm_err:
+                    print(f"Voice agent Telugu normalization note: {norm_err}")
+
+            await generate_edge_tts_speech(
+                speech_text=speech_text,
+                voice_code=edge_voice_id,
+                output_mp3=output_mp3,
+                rate=rate if (rate and rate not in ("-5%", "+0%")) else "+8%",
+                pitch=pitch if (pitch and pitch != "+0Hz") else "+2Hz",
+            )
+            # Create output_wav from output_mp3 for downstream processing
+            subprocess.run(
+                [
+                    "ffmpeg",
+                    "-y",
+                    "-i",
+                    output_mp3,
+                    "-ar",
+                    "24000",
+                    "-ac",
+                    "1",
+                    output_wav,
+                ],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            used_mode = f"Edge-TTS ({edge_voice_id})"
+        except Exception as edge_err:
+            print(f"⚠️ Edge-TTS error: {edge_err}. Attempting Kokoro fallback...")
+            generate_kokoro_speech(
+                speech_text=speech_text,
+                voice_code="am_adam",
+                output_wav=output_wav,
+            )
+            used_mode = "Kokoro Fallback (am_adam)"
     else:
         kokoro_voice = (
             voice
@@ -760,23 +1124,51 @@ async def create_voice(
         )
         used_mode = f"Kokoro ({kokoro_voice})"
 
-    # Convert generated wav to output/voice.mp3
-    subprocess.run(
-        [
-            "ffmpeg",
-            "-y",
-            "-i",
-            output_wav,
-            "-codec:a",
-            "libmp3lame",
-            "-q:a",
-            "2",
-            output_mp3,
-        ],
-        check=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+    # Studio-grade Pacing, Silence Removal & Ducked Background Music
+    raw_audio = output_wav if (os.path.exists(output_wav) and os.path.getsize(output_wav) > 1000) else output_mp3
+    voice_paced = "output/voice_paced.wav"
+
+    try:
+        print("🎙️ Cleaning and pacing voice narration (1.07x pacing, -40dB silence trim)...")
+        clean_and_pace_voice(raw_audio, voice_paced, target_speed=1.07, min_silence_ms=350)
+
+        if include_music:
+            music_track = select_mood_music(topic_category)
+            print(f"🎵 Ducking and mixing background music: {os.path.basename(music_track)} (threshold=0.08, -20dB)...")
+            mix_with_background_music(
+                voice_path=voice_paced,
+                music_path=music_track,
+                output_path=output_mp3,
+                music_base_volume=0.35,
+                threshold=0.08,
+            )
+            print("✅ Studio Audio Pipeline Complete: Paced voice + ducked background music saved to output/voice.mp3")
+        else:
+            subprocess.run(
+                ["ffmpeg", "-y", "-i", voice_paced, "-codec:a", "libmp3lame", "-q:a", "2", output_mp3],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+    except Exception as mix_err:
+        print(f"⚠️ Audio mixing notice: {mix_err}. Converting raw voice to voice.mp3...")
+        if not os.path.exists(output_mp3) or (os.path.exists(output_wav) and os.path.getmtime(output_wav) > os.path.getmtime(output_mp3)):
+            subprocess.run(
+                [
+                    "ffmpeg",
+                    "-y",
+                    "-i",
+                    output_wav,
+                    "-codec:a",
+                    "libmp3lame",
+                    "-q:a",
+                    "2",
+                    output_mp3,
+                ],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
 
     print()
     print("Voice created successfully!")

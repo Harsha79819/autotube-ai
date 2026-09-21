@@ -798,6 +798,17 @@ def upload_video(
     )
 
     # --------------------------------------------------------
+    # RETURNING-VIEWER CTA / END-SCREEN LINKING (ROADMAP ITEM 10)
+    # --------------------------------------------------------
+    link_end_screen_or_related_video(
+        youtube,
+        video_id,
+        current_title=title,
+        current_tags=tags,
+        current_description=description,
+    )
+
+    # --------------------------------------------------------
     # CHECK YOUTUBE PROCESSING
     # --------------------------------------------------------
 
@@ -812,3 +823,126 @@ def upload_video(
     )
 
     return video_id
+
+
+# ============================================================
+# PROGRAMMATIC END-SCREEN / RETURNING-VIEWER LINKING
+# ============================================================
+
+def link_end_screen_or_related_video(
+    youtube,
+    video_id,
+    current_title="",
+    current_tags=None,
+    current_description="",
+):
+    """
+    Item 10: Returning-Viewer CTA / End-Screen Linking.
+    Programmatically links the channel's most recent or related past video
+    to improve returning viewer retention (CTR / AVD).
+
+    1. Discovers the channel's most recent / related past video via YouTube Data API
+       (or local upload registry fallback).
+    2. Updates the uploaded video's description with 'Watch Next / Related Video' CTA.
+    3. Programmatically attempts to place a pinned top-level comment linking to the past video.
+    4. Handles Shorts limitations (where interactive 20-second end-screen elements are
+       restricted by YouTube) with clean, non-blocking fallbacks.
+    """
+    print()
+    print("=" * 60)
+    print("RETURNING-VIEWER CTA / END-SCREEN LINKING")
+    print("=" * 60)
+
+    related_video_id = None
+    related_video_title = None
+
+    # Step 1: Query YouTube API for channel's recent uploads
+    try:
+        if youtube is not None:
+            res = youtube.search().list(
+                part="snippet",
+                forMine=True,
+                type="video",
+                order="date",
+                maxResults=10,
+            ).execute()
+
+            for item in res.get("items", []):
+                cand_id = item.get("id", {}).get("videoId")
+                if cand_id and cand_id != video_id:
+                    related_video_id = cand_id
+                    related_video_title = item.get("snippet", {}).get("title", "")
+                    print(f"🎯 Found recent channel video via API: {related_video_id} ('{related_video_title}')")
+                    break
+    except Exception as api_err:
+        print(f"ℹ️ YouTube API search check: {api_err}")
+
+    # Step 2: Fallback to uploaded_videos registry if API didn't return a past video
+    if not related_video_id:
+        uploaded_records = load_uploaded_videos()
+        for prev_t, prev_id in reversed(list(uploaded_records.items())):
+            if prev_id != video_id:
+                related_video_id = prev_id
+                related_video_title = prev_t
+                print(f"📁 Found recent channel video via local registry: {related_video_id} ('{related_video_title}')")
+                break
+
+    if not related_video_id:
+        print("ℹ️ No previous uploaded videos found to link as returning-viewer CTA.")
+        return {"status": "none"}
+
+    watch_url = f"https://youtu.be/{related_video_id}"
+    print(f"🔗 Linking Returning-Viewer CTA: {watch_url}")
+
+    # Step 3: Update video description with Returning-Viewer / End-Screen Watch Next link
+    if youtube is not None:
+        try:
+            vid_resp = youtube.videos().list(part="snippet", id=video_id).execute()
+            items = vid_resp.get("items", [])
+            if items:
+                snippet = items[0]["snippet"]
+                desc = snippet.get("description", "")
+                cta_line = f"\n\n👉 Watch Next / Related: {watch_url}\n🔔 Don't forget to Like & Subscribe for more Telugu Tech updates!\n"
+                if watch_url not in desc:
+                    snippet["description"] = desc.strip() + cta_line
+                    youtube.videos().update(
+                        part="snippet",
+                        body={
+                            "id": video_id,
+                            "snippet": snippet,
+                        },
+                    ).execute()
+                    print("✅ Updated video description with Watch Next link.")
+        except Exception as desc_err:
+            print(f"ℹ️ Video description update notice: {desc_err}")
+
+        # Step 4: Add engaging pinned comment with related video link
+        try:
+            comment_text = (
+                f"🔥 Loved this video? Watch our next recommended video here: {watch_url}\n"
+                f"👍 Like, Share & Subscribe for daily Telugu Tech updates!"
+            )
+            youtube.commentThreads().insert(
+                part="snippet",
+                body={
+                    "snippet": {
+                        "videoId": video_id,
+                        "topLevelComment": {
+                            "snippet": {
+                                "textOriginal": comment_text
+                            }
+                        }
+                    }
+                }
+            ).execute()
+            print("✅ Added returning-viewer CTA top-level comment.")
+        except Exception as cmt_err:
+            print(f"ℹ️ Returning-viewer comment notice (Shorts or API permissions restricted): {cmt_err}")
+
+    return {
+        "status": "success",
+        "related_video_id": related_video_id,
+        "related_video_title": related_video_title,
+        "watch_url": watch_url,
+    }
+

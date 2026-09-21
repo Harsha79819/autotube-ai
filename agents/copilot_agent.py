@@ -80,7 +80,13 @@ def _update_job(**kwargs):
 # ============================================================
 
 def call_gemini(prompt, system_instruction=None):
-    """Call Gemini with multi-model fallback."""
+    """Call LLM with free multi-provider fallback (Gemini -> Groq -> OpenRouter)."""
+    try:
+        from providers import try_providers, get_llm_providers
+        return try_providers("Copilot", get_llm_providers(), prompt, system_instruction=system_instruction)
+    except Exception as multi_err:
+        print(f"Copilot multi-provider note: {multi_err}")
+
     global _client
     if not _client and API_KEY:
         try:
@@ -118,26 +124,13 @@ def call_gemini(prompt, system_instruction=None):
 # ============================================================
 
 VOICE_OPTIONS = {
-    "adam": "👨 Adam (Male Creator) - Fast & Crisp",
-    "bella": "👩 Bella (Warm Female) - Storytelling",
-    "michael": "🎙️ Michael (Deep Male) - Professional",
-    "heart": "🌸 Heart (Gentle Female) - Calming",
+    "own_voice": "🎙️ Use My Own Voice Recording (Upload Audio)",
 }
 
 
-def map_voice_preference(voice_text, style_text=""):
-    """Map natural language voice or style preference to standard AutoTube voice ID."""
-    combined = (str(voice_text) + " " + str(style_text)).lower()
-
-    if any(k in combined for k in ["bella", "female", "woman", "warm", "storytelling"]):
-        return VOICE_OPTIONS["bella"]
-    if any(k in combined for k in ["michael", "deep", "documentary", "authoritative", "professional"]):
-        return VOICE_OPTIONS["michael"]
-    if any(k in combined for k in ["heart", "gentle", "calm", "soothing", "soft"]):
-        return VOICE_OPTIONS["heart"]
-
-    # Default to energetic creator voice
-    return VOICE_OPTIONS["adam"]
+def map_voice_preference(voice_text="", style_text=""):
+    """Always map to 100% genuine user voice recording (no AI voices)."""
+    return VOICE_OPTIONS["own_voice"]
 
 
 # ============================================================
@@ -159,7 +152,7 @@ Extract these parameters and return ONLY valid JSON (no markdown formatting, no 
   "aspect_ratio": "<'9:16' for vertical/shorts/reels/tiktok, '16:9' for horizontal/landscape/youtube, or '1:1' for square/default>",
   "style": "<e.g. energetic, creator, news, storytelling, educational>",
   "target_duration": <duration in seconds as integer, default 60>,
-  "voice_preference": "<adam|bella|michael|heart>",
+  "voice_preference": "own_voice",
   "content_type": "<'News' or 'General Topic'>"
 }}
 """
@@ -221,7 +214,7 @@ Extract these parameters and return ONLY valid JSON (no markdown formatting, no 
 # 2. BACKGROUND PIPELINE EXECUTION
 # ============================================================
 
-def start_background_pipeline(topic, aspect_ratio="1:1", voice=None, content_type="News", style="English creator style"):
+def start_background_pipeline(topic, aspect_ratio="1:1", voice=None, content_type="News", style="English creator style", youtube_upload=None, youtube_privacy=None):
     """
     Launch full autonomous video generation in a background thread so the Streamlit UI never freezes.
     """
@@ -229,7 +222,7 @@ def start_background_pipeline(topic, aspect_ratio="1:1", voice=None, content_typ
         return False, "A video generation job is already in progress. Please wait for it to complete."
 
     job_id = f"job_{int(time.time())}"
-    voice = voice or VOICE_OPTIONS["adam"]
+    voice = voice or VOICE_OPTIONS["own_voice"]
 
     def _worker():
         try:
@@ -250,18 +243,57 @@ def start_background_pipeline(topic, aspect_ratio="1:1", voice=None, content_typ
             def _progress_cb(percent, text):
                 _update_job(progress=percent, step=text)
 
+            # If own voice or clone, resolve voice sample
+            voice_sample_path = None
+            if any(k in str(voice).lower() for k in ["own", "clone", "recording"]):
+                import os
+                for cand in [
+                    "voice_samples/active_voice.wav",
+                    "voice_samples/active_voice.mp3",
+                    "voice_samples/active_voice.m4a",
+                    "voice_samples/user_voice.wav",
+                    "voice_samples/user_voice.mp3",
+                    "voice_samples/user_voice.m4a",
+                ]:
+                    if os.path.exists(cand) and os.path.getsize(cand) > 0:
+                        voice_sample_path = cand
+                        break
+
+            # Resolve youtube upload & privacy if not explicitly passed
+            w_yt_upload = youtube_upload
+            w_yt_privacy = youtube_privacy
+            if w_yt_upload is None:
+                try:
+                    import streamlit as _st
+                    w_yt_upload = _st.session_state.get("declared_yt_upload", False)
+                except Exception:
+                    w_yt_upload = False
+            if w_yt_privacy is None:
+                try:
+                    import streamlit as _st
+                    w_yt_privacy = _st.session_state.get("declared_yt_privacy", "private")
+                except Exception:
+                    w_yt_privacy = "private"
+
             result = generate_multi_media_video(
                 topic=topic,
                 content_type=content_type,
                 language_style=style,
                 voice=voice,
+                voice_sample=voice_sample_path,
                 aspect_ratio=aspect_ratio,
                 progress_callback=_progress_cb,
+                youtube_upload=w_yt_upload,
+                youtube_privacy=w_yt_privacy,
             )
+
+            completion_step = "Video generation completed successfully! 🎉"
+            if result and isinstance(result, dict) and result.get("youtube_video_id"):
+                completion_step = f"Published to YouTube ({w_yt_privacy.upper()})! Video ID: {result['youtube_video_id']} 🎉"
 
             _update_job(
                 status="completed",
-                step="Video generation completed successfully! 🎉",
+                step=completion_step,
                 progress=100,
                 result=result,
             )
@@ -341,7 +373,7 @@ INSTRUCTIONS:
     preview_hook = revised_script.split(".")[0] + "."
 
     job_id = f"rerender_{int(time.time())}"
-    effective_voice = voice or VOICE_OPTIONS["adam"]
+    effective_voice = voice or VOICE_OPTIONS["own_voice"]
 
     def _rerender_worker():
         try:
@@ -526,7 +558,7 @@ def inspect_last_failure():
                     f"- **Culprit Component:** `{failing}`\n"
                     f"- **Feedback:** {feedback}\n"
                     f"- **Critical Issues:**\n{crit_text}\n\n"
-                    f"💡 The self-healing pipeline attempted automatic correction. Say *'Re-render with Bella'* or *'Make hook punchier'* to adjust."
+                    f"💡 The self-healing pipeline attempted automatic correction. Say *'Re-render with new visuals'* or *'Make hook punchier'* to adjust."
                 )
             else:
                 return (
@@ -711,7 +743,7 @@ def process_copilot_message(user_message, history=None):
     return (
         f"👋 I'm your **AutoTube AI Copilot**!\n\n"
         f"Here are a few things I can do for you right now:\n"
-        f"- 🎬 **Create a video:** *'Create a 60s vertical video about latest AI breakthroughs with Bella'* \n"
+        f"- 🎬 **Create a video:** *'Create a 60s vertical video about latest AI breakthroughs'* \n"
         f"- 📊 **Check progress:** *'What is the current status?'*\n"
         f"- 🔍 **Troubleshoot:** *'Why did the last run fail?'*\n"
         f"- ✍️ **Tweak & Re-render:** *'Rewrite the script hook to be punchier and re-render'*\n"
@@ -740,7 +772,7 @@ def render_copilot_main_studio():
                     "👋 **Welcome to AutoTube AI Copilot Studio!**\n\n"
                     "I'm your autonomous creative director. You can talk to me in English or Telugu.\n"
                     "Tell me what video you want to produce, or tap one of the suggested prompts below!\n\n"
-                    "💡 *Try saying:* **'Create a 60s vertical video about latest NVIDIA chips with an energetic voice'**"
+                    "💡 *Try saying:* **'Create a 60s vertical video about latest NVIDIA chips'**"
                 ),
             }
         ]
@@ -765,8 +797,8 @@ def render_copilot_main_studio():
                 </div>
                 <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                     <span style="background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.35); color: #4ADE80; font-size: 11.5px; font-weight: 600; padding: 5px 12px; border-radius: 999px;">● Agent Connected</span>
-                    <span style="background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.3); color: #38BDF8; font-size: 11.5px; font-weight: 600; padding: 5px 12px; border-radius: 999px;">⚡ Kokoro 24kHz TTS</span>
-                    <span style="background: rgba(168, 85, 247, 0.12); border: 1px solid rgba(168, 85, 247, 0.3); color: #C084FC; font-size: 11.5px; font-weight: 600; padding: 5px 12px; border-radius: 999px;">🧠 Gemini Flash 2.5</span>
+                    <span style="background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.3); color: #38BDF8; font-size: 11.5px; font-weight: 600; padding: 5px 12px; border-radius: 999px;">🎙️ 100% Own Voice Narration</span>
+                    <span style="background: rgba(168, 85, 247, 0.12); border: 1px solid rgba(168, 85, 247, 0.3); color: #C084FC; font-size: 11.5px; font-weight: 600; padding: 5px 12px; border-radius: 999px;">🧠 Gemini Flash</span>
                 </div>
             </div>
         </div>
@@ -781,13 +813,13 @@ def render_copilot_main_studio():
 
     with p_col1:
         if st.button("⚡ NVIDIA AI Chips (9:16)", key="p_chip_nvidia", use_container_width=True, help="Create a 60s vertical video about latest NVIDIA chips"):
-            preset_prompt = "Create a 60s vertical video about latest NVIDIA chips with an energetic voice"
+            preset_prompt = "Create a 60s vertical video about latest NVIDIA chips"
     with p_col2:
         if st.button("🚀 Space Discovery (16:9)", key="p_chip_space", use_container_width=True, help="Create a horizontal video about James Webb Telescope discoveries"):
-            preset_prompt = "Create a horizontal video about recent James Webb telescope discoveries with Bella"
+            preset_prompt = "Create a horizontal video about recent James Webb telescope discoveries"
     with p_col3:
         if st.button("📰 Breaking News (9:16)", key="p_chip_breaking", use_container_width=True, help="Generate a 60s vertical breaking news video"):
-            preset_prompt = "Generate a 60s vertical breaking news video with fast crisp narration"
+            preset_prompt = "Generate a 60s vertical breaking news video"
     with p_col4:
         if st.button("🔥 Scan Live Trends", key="p_chip_trends", use_container_width=True, help="Scan live trending news topics"):
             preset_prompt = "ACTION_TREND_SCAN"

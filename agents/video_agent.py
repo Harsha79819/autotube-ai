@@ -5,10 +5,114 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import random
 import whisper
 from PIL import Image, ImageFilter, ImageEnhance
 from moviepy import AudioFileClip, ImageClip, VideoFileClip, concatenate_videoclips, vfx
 from supervisor import autonomous_recover
+
+
+# ============================================================
+# STUDIO-GRADE KEN BURNS MOTION & TRANSITIONS
+# ============================================================
+
+FPS = 30
+
+try:
+    from ken_burns import (
+        TRANSITIONS,
+        DIRECTIONS,
+        get_clip_duration,
+        _zoompan_expr,
+        build_ken_burns_clip,
+        prepare_scene_clip,
+        assemble_with_transitions,
+    )
+except ImportError:
+    import sys
+    sys.path.append(str(Path(__file__).resolve().parent.parent))
+    from ken_burns import (
+        TRANSITIONS,
+        DIRECTIONS,
+        get_clip_duration,
+        _zoompan_expr,
+        build_ken_burns_clip,
+        prepare_scene_clip,
+        assemble_with_transitions,
+    )
+
+
+def append_outro(main_video_path, outro_clip_path="assets/outro/like_share_subscribe.mp4", output_path=None):
+    """Concatenate a pre-made 'Like/Share/Subscribe' outro clip
+    to the end of every generated video, matching aspect ratio and audio flawlessly."""
+    if output_path is None:
+        output_path = main_video_path
+
+    if not os.path.exists(outro_clip_path):
+        print(f"⚠️ Outro clip not found at {outro_clip_path}, keeping main video.")
+        return str(main_video_path)
+
+    # 1. Probe main video dimensions & audio
+    try:
+        p_cmd = ["ffprobe", "-v", "error", "-select_streams", "v:0",
+                 "-show_entries", "stream=width,height", "-of", "csv=s=x:p=0", str(main_video_path)]
+        wh = subprocess.run(p_cmd, capture_output=True, text=True).stdout.strip().split("x")
+        w, h = (int(wh[0]), int(wh[1])) if len(wh) == 2 else (1080, 1920)
+    except Exception:
+        w, h = 1080, 1920
+
+    # 2. Probe outro clip dimensions
+    try:
+        p_cmd2 = ["ffprobe", "-v", "error", "-select_streams", "v:0",
+                  "-show_entries", "stream=width,height", "-of", "csv=s=x:p=0", str(outro_clip_path)]
+        wh2 = subprocess.run(p_cmd2, capture_output=True, text=True).stdout.strip().split("x")
+        w2, h2 = (int(wh2[0]), int(wh2[1])) if len(wh2) == 2 else (1080, 1920)
+    except Exception:
+        w2, h2 = 1080, 1920
+
+    temp_out = str(output_path) + ".outro_tmp.mp4"
+    concat_list = "output/concat_list.txt"
+    os.makedirs(os.path.dirname(concat_list), exist_ok=True)
+
+    # Fast direct copy only when dimensions match identically
+    if (w, h) == (w2, h2):
+        with open(concat_list, "w") as f:
+            f.write(f"file '{os.path.abspath(main_video_path)}'\n")
+            f.write(f"file '{os.path.abspath(outro_clip_path)}'\n")
+
+        cmd = ["ffmpeg", "-y", "-f", "concat", "-safe", "0",
+               "-i", concat_list, "-c", "copy", temp_out]
+        r = subprocess.run(cmd, capture_output=True, text=True)
+        if r.returncode == 0 and os.path.exists(temp_out) and os.path.getsize(temp_out) > 0:
+            if os.path.exists(output_path):
+                os.remove(output_path)
+            os.rename(temp_out, output_path)
+            return str(output_path)
+
+    # Fallback to matched filter_complex concatenation with scale/pad & audio resample
+    fc = (
+        f"[1:v]scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30,format=yuv420p[v1];"
+        f"[0:v]setsar=1,fps=30,format=yuv420p[v0];"
+        f"[0:a]aformat=sample_rates=48000:channel_layouts=stereo[a0];"
+        f"[1:a]aformat=sample_rates=48000:channel_layouts=stereo[a1];"
+        f"[v0][a0][v1][a1]concat=n=2:v=1:a=1[v][a]"
+    )
+    cmd_fc = ["ffmpeg", "-y", "-i", str(main_video_path), "-i", str(outro_clip_path),
+              "-filter_complex", fc, "-map", "[v]", "-map", "[a]",
+              "-c:v", "libx264", "-c:a", "aac", "-b:a", "192k", "-preset", "ultrafast", temp_out]
+    r_fc = subprocess.run(cmd_fc, capture_output=True, text=True)
+    if r_fc.returncode == 0 and os.path.exists(temp_out) and os.path.getsize(temp_out) > 0:
+        if os.path.exists(output_path):
+            os.remove(output_path)
+        os.rename(temp_out, output_path)
+        return str(output_path)
+    else:
+        if os.path.exists(temp_out):
+            os.remove(temp_out)
+        return str(main_video_path)
+
+
+
 
 
 # ============================================================
@@ -478,9 +582,9 @@ def normalize_text(text):
         " ",
     )
 
-    # Remove punctuation.
+    # Remove punctuation, preserving alphanumeric, Telugu, and Devanagari characters
     text = re.sub(
-        r"[^a-z0-9\s]",
+        r"[^\w\s\u0C00-\u0C7F\u0900-\u097F]",
         " ",
         text,
     )
@@ -654,11 +758,24 @@ def transcribe_audio():
 
     model = get_whisper_model()
 
+    whisper_lang = "en"
+    if SCRIPT_FILE.exists():
+        try:
+            with open(SCRIPT_FILE, "r", encoding="utf-8") as f:
+                script_content = f.read()
+            if re.search(r"[\u0C00-\u0C7F]", script_content):
+                whisper_lang = "te"
+            elif re.search(r"[\u0900-\u097F]", script_content):
+                whisper_lang = "hi"
+        except Exception:
+            pass
+
     print()
-    print("Transcribing voice.mp3...")
+    print(f"Transcribing voice.mp3 (language={whisper_lang})...")
 
     result = model.transcribe(
         str(VOICE_FILE),
+        language=whisper_lang,
         fp16=False,
         word_timestamps=True,
         verbose=False,
@@ -819,10 +936,7 @@ def find_section_timestamps(
         )
 
         if not words:
-            raise RuntimeError(
-                f"Section {section['section']} "
-                "contains no usable narration words."
-            )
+            words = [f"section_{section.get('section', 1)}"]
 
         section_word_lists.append(
             words
@@ -1232,11 +1346,11 @@ def create_video(aspect_ratio="1:1"):
     # Resolution preset
     # --------------------------------------------------------
     if aspect_ratio == "9:16":
-        target_w, target_h = 720, 1280
+        target_w, target_h = 1080, 1920
     elif aspect_ratio == "16:9":
-        target_w, target_h = 1280, 720
+        target_w, target_h = 1920, 1080
     else:
-        target_w, target_h = 720, 720
+        target_w, target_h = 1080, 1080
 
     # --------------------------------------------------------
     # Required files
@@ -1362,184 +1476,126 @@ def create_video(aspect_ratio="1:1"):
     )
 
     # --------------------------------------------------------
-    # Build visual clips.
+    # --------------------------------------------------------
+    # Build visual clips with Ken Burns motion & dynamic pacing
     # --------------------------------------------------------
 
-    clips = []
+    scene_clips_dir = OUTPUT_DIR / "scene_clips"
+    if scene_clips_dir.exists():
+        shutil.rmtree(scene_clips_dir, ignore_errors=True)
+    scene_clips_dir.mkdir(parents=True, exist_ok=True)
 
     print()
     print("=" * 60)
-    print("SECTION → IMAGE → WHISPER TIMELINE")
+    print("BUILDING KEN BURNS & TRANSITION SCENE CLIPS")
     print("=" * 60)
 
+    motion_directions = ["zoom_in", "pan_left", "zoom_out", "pan_right"]
+    dir_idx = 0
+    scene_clips = []
+    scene_durations = []
+
+    # Flatten timed_sections into max 3.5s shots so no shot ever holds static or runs > 3.5s
+    scene_jobs = []
     for item in timed_sections:
+        sec_num = item["section"]
+        vis_num = item["visual"]
+        start = item["start"]
+        end = item["end"]
+        duration = max(0.5, end - start)
+        img_idx = vis_num - 1
 
-        section_number = item[
-            "section"
-        ]
-
-        visual_number = item[
-            "visual"
-        ]
-
-        start = item[
-            "start"
-        ]
-
-        end = item[
-            "end"
-        ]
-
-        duration = (
-            end
-            - start
-        )
-
-        image_index = (
-            visual_number
-            - 1
-        )
-
-        if (
-            image_index < 0
-            or image_index >= len(images)
-        ):
-
+        if img_idx < 0 or img_idx >= len(images):
             audio.close()
-
             raise RuntimeError(
-                f"Visual {visual_number} "
-                "does not have a corresponding image."
+                f"Visual {vis_num} does not have a corresponding image."
             )
 
-        image_path = images[
-            image_index
-        ]
+        img_path = images[img_idx]
 
-        print()
-        print(
-            f"[{start:06.2f}s - "
-            f"{end:06.2f}s]"
-        )
-
-        print(
-            f"SECTION : "
-            f"{section_number}"
-        )
-
-        print(
-            f"VISUAL  : "
-            f"{visual_number}"
-        )
-
-        print(
-            f"IMAGE   : "
-            f"{image_path.name}"
-        )
-
-        print(
-            f"DURATION: "
-            f"{duration:.2f}s"
-        )
-
-        print(
-            f"NARRATION: "
-            f"{item.get('narration', '')}"
-        )
-
-        # ----------------------------------------------------
-        # Create image clip with Smart Canvas.
-        # ----------------------------------------------------
-
-        ext = image_path.suffix.lower()
-        if ext in (".mp4", ".mov", ".webm", ".mkv"):
-            print(
-                f"🎬 USING VIDEO CLIP: {image_path.name} "
-                f"(target duration: {duration:.2f}s)"
-            )
-            try:
-                v_clip = VideoFileClip(str(image_path)).without_audio()
-                v_clip = v_clip.resized(width=target_w)
-                if v_clip.duration < duration:
-                    v_clip = v_clip.with_effects([vfx.Loop(duration=duration)])
-                else:
-                    v_clip = v_clip.subclipped(0, duration)
-                clip = v_clip
-            except Exception as vid_err:
-                print(
-                    f"⚠️ Video clip processing fallback to image: {vid_err}"
-                )
-                img_fallback = image_path.with_suffix(".jpg")
-                if img_fallback.exists():
-                    canvas_img = render_smart_canvas_image(img_fallback, target_w, target_h)
-                    clip = (
-                        ImageClip(str(canvas_img))
-                        .resized((target_w, target_h))
-                        .with_duration(duration)
-                    )
-                else:
-                    raise vid_err
+        # If duration > 3.5s, split into sub-shots
+        if duration > 3.5:
+            num_sub = max(2, int(round(duration / 2.5)))
+            sub_len = duration / num_sub
+            for s_i in range(num_sub):
+                scene_jobs.append({
+                    "section": sec_num,
+                    "visual": vis_num,
+                    "image_path": img_path,
+                    "duration": sub_len,
+                    "narration": item.get("narration", ""),
+                    "sub_idx": s_i + 1
+                })
         else:
-            print(
-                f"🖼️ SMART CANVAS IMAGE: {image_path.name} "
-                f"({target_w}x{target_h}, target duration: {duration:.2f}s)"
-            )
-            canvas_img = render_smart_canvas_image(
-                image_path,
-                target_width=target_w,
-                target_height=target_h,
-            )
-            clip = (
-                ImageClip(
-                    str(canvas_img)
-                )
-                .resized(
-                    (target_w, target_h)
-                )
-                .with_duration(
-                    duration
-                )
-            )
+            scene_jobs.append({
+                "section": sec_num,
+                "visual": vis_num,
+                "image_path": img_path,
+                "duration": duration,
+                "narration": item.get("narration", ""),
+                "sub_idx": 1
+            })
 
-        clips.append(
-            clip
+    transition_dur = 0.35
+
+    for idx, job in enumerate(scene_jobs):
+        is_last = (idx == len(scene_jobs) - 1)
+        job_dur = job["duration"]
+        # Render extra overlap frames for smooth xfade transition if not the last clip
+        render_dur = job_dur + transition_dur if not is_last else job_dur
+
+        direction = motion_directions[dir_idx % len(motion_directions)]
+        dir_idx += 1
+
+        clip_filename = f"scene_{idx:03d}_sec{job['section']}_vis{job['visual']}_{direction}.mp4"
+        clip_path = scene_clips_dir / clip_filename
+
+        print(
+            f"[{idx+1}/{len(scene_jobs)}] Section {job['section']} | Visual {job['visual']} | "
+            f"{job['image_path'].name} -> {direction} | {job_dur:.2f}s (render: {render_dur:.2f}s)"
         )
 
-    # --------------------------------------------------------
-    # Safety check.
-    # --------------------------------------------------------
+        prepare_scene_clip(
+            media_path=job["image_path"],
+            output_path=clip_path,
+            duration_seconds=render_dur,
+            direction=direction,
+            width=target_w,
+            height=target_h,
+            fps=FPS
+        )
 
-    if not clips:
+        scene_clips.append(str(clip_path))
+        scene_durations.append(job_dur)
 
+    if not scene_clips:
         audio.close()
-
-        raise RuntimeError(
-            "No video clips were created."
-        )
+        raise RuntimeError("No video clips were created.")
 
     # --------------------------------------------------------
-    # Concatenate.
+    # Assemble with Transitions
     # --------------------------------------------------------
-
     print()
     print("=" * 60)
-    print("CREATING VIDEO")
+    print("ASSEMBLING SCENES WITH DYNAMIC XFADE TRANSITIONS")
     print("=" * 60)
 
-    video = concatenate_videoclips(
-        clips,
-        method="compose",
+    raw_assembled = OUTPUT_DIR / "assembled_raw.mp4"
+    assemble_with_transitions(
+        scene_clips=scene_clips,
+        output_path=str(raw_assembled),
+        transition_duration=transition_dur,
+        scene_durations=scene_durations,
     )
 
     # --------------------------------------------------------
     # BGM Engine with Automated Audio Ducking
     # --------------------------------------------------------
-
     bgm_mood = detect_bgm_mood(script=script)
     bgm_track = BGM_DIR / f"{bgm_mood}.wav"
     mixed_audio_file = OUTPUT_DIR / "mixed_audio.wav"
 
-    final_audio_clip = audio
+    final_audio_path = VOICE_FILE
     if bgm_track.exists():
         mixed_res = mix_audio_with_ducking(
             voice_path=str(VOICE_FILE),
@@ -1547,60 +1603,49 @@ def create_video(aspect_ratio="1:1"):
             output_audio_path=str(mixed_audio_file),
         )
         if mixed_res and os.path.exists(mixed_res):
-            try:
-                final_audio_clip = AudioFileClip(str(mixed_res))
-            except Exception as mix_clip_err:
-                print(f"⚠️ Mixed audio loading fallback to raw voice: {mix_clip_err}")
-                final_audio_clip = audio
+            final_audio_path = Path(mixed_res)
 
     # --------------------------------------------------------
-    # Attach audio.
+    # Multiplex Audio & Video
     # --------------------------------------------------------
+    print()
+    print("=" * 60)
+    print("MULTIPLEXING AUDIO & VIDEO")
+    print("=" * 60)
 
-    video = video.with_audio(
-        final_audio_clip
-    )
-
-    # --------------------------------------------------------
-    # Render.
-    # --------------------------------------------------------
-
-    video.write_videofile(
+    mux_cmd = [
+        "ffmpeg", "-y",
+        "-i", str(raw_assembled),
+        "-i", str(final_audio_path),
+        "-c:v", "copy",
+        "-c:a", "aac",
+        "-b:a", "192k",
+        "-shortest",
         str(VIDEO_FILE),
-        fps=FPS,
-        codec="libx264",
-        audio_codec="aac",
-        preset="ultrafast",
-        threads=min(8, os.cpu_count() or 4),
-    )
+    ]
+    r_mux = subprocess.run(mux_cmd, capture_output=True, text=True)
+    if r_mux.returncode != 0 or not VIDEO_FILE.exists() or VIDEO_FILE.stat().st_size == 0:
+        raise RuntimeError(f"Audio/video multiplexing failed: {r_mux.stderr or 'No output file'}")
 
     # --------------------------------------------------------
-    # Cleanup.
+    # Outro Call-To-Action note:
+    # Managed in agents/final_video_agent.py per user's include_outro setting.
     # --------------------------------------------------------
 
-    video.close()
+    # --------------------------------------------------------
+    # Cleanup temporary scene clips
+    # --------------------------------------------------------
+    try:
+        shutil.rmtree(scene_clips_dir, ignore_errors=True)
+        if raw_assembled.exists():
+            raw_assembled.unlink(missing_ok=True)
+    except Exception:
+        pass
 
     try:
         audio.close()
     except Exception:
         pass
-
-    try:
-        if final_audio_clip != audio:
-            final_audio_clip.close()
-    except Exception:
-        pass
-
-
-    audio.close()
-
-    for clip in clips:
-
-        try:
-            clip.close()
-
-        except Exception:
-            pass
 
     # --------------------------------------------------------
     # Done.
@@ -1623,7 +1668,7 @@ def create_video(aspect_ratio="1:1"):
 
     print(
         f"Visuals used: "
-        f"{len(clips)}"
+        f"{len(scene_clips)}"
     )
 
     print(

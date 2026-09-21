@@ -1,5 +1,7 @@
 import html
 import os
+os.environ["HF_HUB_OFFLINE"] = "1"
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
 import random
 import re
 import threading
@@ -51,7 +53,147 @@ MAX_PEXELS_RESULTS = 10
 MAX_WIKIMEDIA_RESULTS = 12
 MAX_BING_RESULTS = 30
 
-WIKIMEDIA_DELAY = 0.3
+WIKIMEDIA_DELAY = 0.05
+
+
+def get_image_filename(image_input):
+    """
+    Safely extract filename from UploadedFile, Path, or str.
+    Completely eliminates "'str' object has no attribute 'name'".
+    """
+    if hasattr(image_input, "name"):
+        return image_input.name
+    elif isinstance(image_input, str):
+        return os.path.basename(image_input)
+    elif isinstance(image_input, Path):
+        return image_input.name
+    raise TypeError(f"Unexpected image input type: {type(image_input)}")
+
+
+# ============================================================
+# SIGLIP 2 VISUAL RELEVANCE & FLUX PROMPT REWRITING
+# ============================================================
+
+_SIGLIP_MODEL = None
+_SIGLIP_PROCESSOR = None
+
+def get_siglip_pipeline():
+    global _SIGLIP_MODEL, _SIGLIP_PROCESSOR
+    if _SIGLIP_MODEL is None or _SIGLIP_PROCESSOR is None:
+        try:
+            import torch
+            from transformers import AutoModel, AutoTokenizer, SiglipImageProcessor, SiglipProcessor
+
+            model_id = "google/siglip2-so400m-patch14-384"
+            try:
+                tok = AutoTokenizer.from_pretrained(model_id)
+                img_proc = SiglipImageProcessor.from_pretrained(model_id)
+                _SIGLIP_PROCESSOR = SiglipProcessor(image_processor=img_proc, tokenizer=tok)
+                _SIGLIP_MODEL = AutoModel.from_pretrained(model_id, dtype=torch.float32)
+                _SIGLIP_MODEL.eval()
+            except Exception as e:
+                print(f"[SigLIP2] Fallback to base model: {e}")
+                tok = AutoTokenizer.from_pretrained("google/siglip2-base-patch16-224")
+                img_proc = SiglipImageProcessor.from_pretrained("google/siglip2-base-patch16-224")
+                _SIGLIP_PROCESSOR = SiglipProcessor(image_processor=img_proc, tokenizer=tok)
+                _SIGLIP_MODEL = AutoModel.from_pretrained("google/siglip2-base-patch16-224", dtype=torch.float32)
+                _SIGLIP_MODEL.eval()
+        except Exception as import_err:
+            print(f"[SigLIP2] Notice: SigLIP model not loaded ({import_err}). Using heuristic relevance.")
+            return None, None
+
+    return _SIGLIP_MODEL, _SIGLIP_PROCESSOR
+
+RELEVANCE_THRESHOLD = 0.05  # Calibrated SigLIP 2 threshold: rejects completely off-topic visuals (prob < 0.005) while accepting matching stock (prob > 0.05)
+
+def score_visual_relevance(image_path: str, query_text: str) -> float:
+    """
+    SigLIP 2 visual relevance scorer (google/siglip2-so400m-patch14-384).
+    Calculates zero-shot relevance probability (0.0 to 1.0) against an off-topic anchor.
+    Accepts if > RELEVANCE_THRESHOLD (0.05).
+    """
+    try:
+        model, processor = get_siglip_pipeline()
+        if model is None or processor is None:
+            return 0.50
+        import torch
+        image = Image.open(image_path).convert("RGB")
+        unrelated_anchor = "unrelated off-topic random photo"
+        inputs = processor(
+            text=[query_text[:120], unrelated_anchor],
+            images=image,
+            padding="max_length",
+            return_tensors="pt"
+        )
+        with torch.no_grad():
+            outputs = model(**inputs)
+            # Softmax against negative anchor yields normalized probability in [0, 1]
+            prob = torch.softmax(outputs.logits_per_image, dim=-1)[0, 0].item()
+        return float(prob)
+    except Exception as e:
+        print(f"score_visual_relevance notice: {e}")
+        return 0.50
+
+
+def rewrite_query_for_flux(query_text: str, is_explainer: bool = False) -> str:
+    """Turn a search query into a concrete FLUX prompt.
+    If is_explainer=True, bias heavily toward diagrams, infographic style, and animated concept illustration."""
+    if is_explainer:
+        explainer_bias = "diagram, infographic style, animated concept illustration, clean minimalist educational schematic, high visual clarity, isometric vector design"
+        try:
+            from google import genai
+            api_key = os.getenv("GEMINI_API_KEY")
+            if api_key:
+                client = genai.Client(api_key=api_key)
+                prompt = (
+                    f"Rewrite this video scene query into a clean, modern technical diagram, infographic style, animated concept illustration description in 1 sentence. "
+                    f"Focus on educational schematics, isometric concept visuals, high clarity, and infographic breakdown.\n"
+                    f"Scene query: {query_text}\n"
+                    f"Rewritten prompt:"
+                )
+                for m_name in ["gemini-2.5-flash-lite", "gemini-3.6-flash", "gemini-flash-lite-latest"]:
+                    try:
+                        response = client.models.generate_content(
+                            model=m_name,
+                            contents=prompt,
+                        )
+                        rewritten = response.text.strip().replace('"', '')
+                        if len(rewritten.split()) >= 4:
+                            return f"{rewritten}, {explainer_bias}"
+                    except Exception:
+                        continue
+        except Exception as err:
+            print(f"Gemini explainer prompt rewrite notice: {err}")
+        return f"{query_text}, {explainer_bias}"
+
+    if len(query_text.split()) >= 6:
+        return query_text
+    try:
+        from google import genai
+        api_key = os.getenv("GEMINI_API_KEY")
+        if api_key:
+            client = genai.Client(api_key=api_key)
+            prompt = (
+                f"Rewrite this video search query into a concrete, filmable, photorealistic image description in 1 sentence. "
+                f"Do not include brand logos, cartoon hands, or abstract graphics. "
+                f"Focus strictly on physical objects, lighting, and camera angle.\n"
+                f"Query to rewrite: {query_text}\n"
+                f"Rewritten prompt:"
+            )
+            for m_name in ["gemini-2.5-flash-lite", "gemini-3.6-flash", "gemini-flash-lite-latest"]:
+                try:
+                    response = client.models.generate_content(
+                        model=m_name,
+                        contents=prompt,
+                    )
+                    rewritten = response.text.strip().replace('"', '')
+                    if len(rewritten.split()) >= 4:
+                        return rewritten
+                except Exception:
+                    continue
+    except Exception as err:
+        print(f"Gemini prompt rewrite notice: {err}")
+    return f"cinematic photography of {query_text}, ultra detailed, studio lighting, 8k"
 
 
 # ============================================================
@@ -216,68 +358,183 @@ def detect_story(topic):
 
 
 # ============================================================
+# NAMED PRODUCT / BRAND DETECTION
+# ============================================================
+
+def detect_named_product(text):
+    """
+    Detect if text mentions a specific commercial hardware/device/vehicle product
+    (e.g., iPhone 18, Samsung Galaxy S25, Tesla Model 2, RTX 5090, PS6).
+    Returns:
+        (is_product: bool, product_name: str, generic_fallback_prompt: str)
+    """
+    if not text:
+        return False, "", ""
+
+    lower_text = str(text).lower()
+
+    PRODUCT_RULES = [
+        # Apple iPhone
+        (
+            r"\b(iphone\s*(?:1[0-9]|[2-9][0-9]|[a-z]+)?(?:\s*(?:pro\s*max|pro|plus|mini|ultra|air|se))?)\b",
+            "modern flagship smartphone sleek camera close-up on dark table",
+        ),
+        # Apple iPad / Mac / Watch / Vision
+        (
+            r"\b(ipad\s*(?:pro|air|mini)?(?:\s*m[1-4])?)\b",
+            "modern sleek tablet computer touchscreen display on desk",
+        ),
+        (
+            r"\b(macbook\s*(?:pro|air)?(?:\s*m[1-4](?:\s*pro|\s*max)?)?)\b",
+            "sleek aluminum laptop computer open keyboard screen on office desk",
+        ),
+        (
+            r"\b(apple\s*watch\s*(?:series\s*\d+|ultra\s*\d*|se)?)\b",
+            "modern smart watch fitness tracker wrist closeup",
+        ),
+        (
+            r"\b(vision\s*pro(?:\s*2)?)\b",
+            "futuristic virtual reality spatial computing headset visor",
+        ),
+        # Samsung Galaxy
+        (
+            r"\b(samsung\s*galaxy\s*(?:s\d+|z\s*fold\d*|z\s*flip\d*|note\d*)(?:\s*ultra|\s*plus|\s*fe)?)\b",
+            "high-end modern android smartphone curved screen display",
+        ),
+        (
+            r"\b(galaxy\s*(?:s\d+|z\s*fold\d*|z\s*flip\d*)(?:\s*ultra|\s*plus)?)\b",
+            "high-end modern android smartphone curved screen display",
+        ),
+        # Google Pixel
+        (
+            r"\b(google\s*pixel\s*\d+(?:\s*pro|\s*a|\s*fold)?)\b",
+            "modern sleek android smartphone camera bar close-up",
+        ),
+        (
+            r"\b(pixel\s*\d+(?:\s*pro|\s*a|\s*fold)?)\b",
+            "modern sleek android smartphone camera bar close-up",
+        ),
+        # Gaming Consoles
+        (
+            r"\b(playstation\s*[4-6](?:\s*(?:pro|slim))?|ps[4-6](?:\s*(?:pro|slim))?)\b",
+            "modern gaming console controller glowing neon lights living room",
+        ),
+        (
+            r"\b(xbox\s*(?:series\s*[xs]|one\s*[xs]?))\b",
+            "sleek black gaming console gamepad modern entertainment setup",
+        ),
+        (
+            r"\b(nintendo\s*switch(?:\s*oled|\s*2)?)\b",
+            "portable handheld gaming console colorful joycon controllers",
+        ),
+        # GPUs & Processors
+        (
+            r"\b(rtx\s*\d{4}(?:\s*ti|\s*super)?|geforce\s*rtx\s*\d{4})\b",
+            "high performance computer graphics card gpu cooling fans circuit board",
+        ),
+        (
+            r"\b(snapdragon\s*\d+\s*(?:gen\s*\d+)?|intel\s*core\s*(?:ultra\s*)?\d+|ryzen\s*\d{4}[x]?)\b",
+            "semiconductor microchip silicon wafer glowing circuit processor closeup",
+        ),
+        # Tesla & EVs
+        (
+            r"\b(tesla\s*(?:cybertruck|model\s*[3ysx]|roadster))\b",
+            "futuristic aerodynamic luxury electric vehicle driving highway",
+        ),
+        (
+            r"\b(cybertruck)\b",
+            "angular stainless steel electric pickup truck exterior view",
+        ),
+        # OnePlus, Xiaomi, Vivo, Oppo, iQOO, Nothing
+        (
+            r"\b((?:oneplus|xiaomi|redmi|realme|vivo|oppo|iqoo|nothing\s*phone)\s*(?:[a-z]\s*)?\d+[a-z]*(?:\s*(?:pro\s*plus|pro\s*max|pro|ultra|plus|lite|neo))?)\b",
+            "modern flagship smartphone sleek camera close-up",
+        ),
+    ]
+
+    for pattern, generic_cat in PRODUCT_RULES:
+        m = re.search(pattern, lower_text)
+        if m:
+            matched_name = m.group(1).title()
+            return True, matched_name, generic_cat
+
+    return False, "", ""
+
+
+# ============================================================
 # SEARCH QUERIES
 # ============================================================
 
 def build_queries(visual_description, narration=None):
     """
     Build highly relevant, concrete search queries derived from the visual concept
-    and its assigned narration section.
+    (including multi-query alternatives separated by '|') and its assigned narration section.
     CRITICAL RULE: Never inject generic placeholders like 'technology news' or
     unrelated country names unless explicitly part of the subject.
     """
-    clean_desc = re.sub(
-        r"^(?:visual|scene|shot|image|photo|picture|graphic)\s*\d*\s*[:\-]\s*",
-        "",
-        visual_description.strip(),
-        flags=re.IGNORECASE,
-    ).strip()
-    clean_desc = re.sub(
-        r"^(photo|image|picture|illustration|graphic|close[- ]?up|shot|scene|view)\s+(of|showing|depicting|illustrating)?\s*",
-        "",
-        clean_desc,
-        flags=re.IGNORECASE,
-    ).strip()
-
-    raw_words = [re.sub(r"[^\w\s-]", "", w).strip() for w in clean_desc.split()]
-    desc_words = [
-        w for w in raw_words
-        if w and w.lower() not in {
-            "the", "a", "an", "and", "or", "to", "of", "in", "on", "for",
-            "at", "with", "from", "by", "visual", "concept", "representing",
-            "scene", "shot", "image", "photo", "picture",
-        } and len(w) > 1
-    ]
+    raw_segments = [seg.strip() for seg in str(visual_description).split("|") if seg.strip()]
+    if not raw_segments:
+        raw_segments = [str(visual_description)]
 
     queries = []
 
-    # Primary query: concise core visual concept (up to 7 words)
-    primary = " ".join(desc_words[:7])
-    if primary:
-        queries.append(primary)
+    # If visual description contains non-Latin characters (e.g. Telugu), map to English queries
+    if re.search(r"[\u0c00-\u0c7f]", str(visual_description)):
+        try:
+            from semantic_broll_mapper import generate_search_queries
+            mapped_qs = generate_search_queries(str(visual_description), topic_category="tech")
+            if mapped_qs:
+                queries.extend(mapped_qs)
+        except Exception:
+            pass
 
-    # Secondary query: specific entity keywords from narration if available
+    for seg in raw_segments:
+        clean_desc = re.sub(
+            r"^(?:visual|scene|shot|image|photo|picture|graphic)\s*\d*\s*[:\-]\s*",
+            "",
+            seg.strip(),
+            flags=re.IGNORECASE,
+        ).strip()
+        clean_desc = re.sub(
+            r"^(photo|image|picture|illustration|graphic|close[- ]?up|shot|scene|view)\s+(of|showing|depicting|illustrating)?\s*",
+            "",
+            clean_desc,
+            flags=re.IGNORECASE,
+        ).strip()
+
+        raw_words = [re.sub(r"[^\w\s-]", "", w).strip() for w in clean_desc.split()]
+        desc_words = [
+            w for w in raw_words
+            if w and w.lower() not in {
+                "the", "a", "an", "and", "or", "to", "of", "in", "on", "for",
+                "at", "with", "from", "by", "visual", "concept", "representing",
+                "scene", "shot", "image", "photo", "picture",
+            } and len(w) > 1
+        ]
+
+        if len(desc_words) >= 2:
+            punchy = " ".join(desc_words[:3])
+            if punchy not in queries:
+                queries.append(punchy)
+
+        primary = " ".join(desc_words[:5])
+        if primary and primary not in queries:
+            queries.append(primary)
+
+    # Entity keywords from narration if available
     if narration:
         clean_narration = clean_text(narration)
-        # Extract potential named entities / capitalized words from narration
         entities = [
             w for w in re.findall(r"\b[A-Z][a-zA-Z0-9-]+\b", clean_narration)
-            if w.lower() not in {"this", "that", "these", "those", "when", "while", "here", "there"}
+            if w.lower() not in {"this", "that", "these", "those", "when", "while", "here", "there", "section"}
         ]
         if entities:
-            entity_query = " ".join(entities[:4])
+            entity_query = " ".join(entities[:3])
             if entity_query and entity_query not in queries:
                 queries.append(entity_query)
 
-    # Tertiary query: key nouns / subjects
-    if len(desc_words) > 3:
-        short_desc = " ".join(desc_words[:4])
-        if short_desc not in queries:
-            queries.append(short_desc)
-
-    # Fallback to visual description if queries empty
     if not queries:
-        queries.append(clean_desc[:60])
+        queries.append(visual_description[:60].replace("|", " ").strip())
 
     final = []
     for q in queries:
@@ -298,9 +555,9 @@ def build_queries(visual_description, narration=None):
     retry=retry_if_exception(_is_retryable_requests_error),
     reraise=False,
 )
-def search_pexels(query):
+def search_pexels(query, orientation=None):
     """
-    Search high-resolution royalty-free landscape stock photos via Pexels API.
+    Search high-resolution royalty-free stock photos via Pexels API with dynamic orientation.
     """
     global PEXELS_API_KEY
     if not PEXELS_API_KEY:
@@ -319,8 +576,9 @@ def search_pexels(query):
     params = {
         "query": query,
         "per_page": MAX_PEXELS_RESULTS,
-        "orientation": "landscape",
     }
+    if orientation in ("landscape", "portrait", "square"):
+        params["orientation"] = orientation
 
     try:
 
@@ -361,14 +619,18 @@ def search_pexels(query):
         if not image_url:
             continue
 
+        photo_id = photo.get("id")
         alt = photo.get("alt", "").strip()
-
         title = clean_text(alt) if alt else query
+        tags = [w.lower() for w in re.findall(r"\b\w+\b", alt)]
 
         results.append(
             {
+                "id": f"pexels_{photo_id}" if photo_id else None,
                 "image_url": image_url,
                 "title": title,
+                "alt": alt,
+                "tags": tags,
                 "source": "Pexels",
                 "width": photo.get("width", 1920),
                 "height": photo.get("height", 1080),
@@ -389,7 +651,7 @@ def search_pexels(query):
     retry=retry_if_exception(_is_retryable_requests_error),
     reraise=False,
 )
-def search_pexels_video(query):
+def search_pexels_video(query, orientation=None):
     """
     Search high-quality royalty-free video footage via Pexels API.
     Tries multiple keyword variations to maximize matching relevant stock footage.
@@ -426,9 +688,10 @@ def search_pexels_video(query):
             continue
         params = {
             "query": term,
-            "per_page": 4,
-            "orientation": "landscape",
+            "per_page": 6,
         }
+        if orientation in ("landscape", "portrait", "square"):
+            params["orientation"] = orientation
         try:
             resp = get_session().get(
                 url,
@@ -443,23 +706,22 @@ def search_pexels_video(query):
             if not videos:
                 continue
 
-            for vid in videos:
-                files = vid.get("video_files", [])
-                hd_files = [
-                    f for f in files
-                    if f.get("quality") == "hd" and (f.get("width") or 0) >= 1280
-                ]
-                if not hd_files:
-                    hd_files = [f for f in files if (f.get("width") or 0) >= 640]
-                if hd_files:
-                    best_file = hd_files[0]
-                    slug = re.sub(r"[^a-zA-Z0-9]+", "_", term.lower()).strip("_")[:30]
-                    return {
-                        "download_url": best_file.get("link"),
-                        "title": slug,
-                        "duration": vid.get("duration", 10),
-                        "source": "Pexels Video",
-                    }
+            from agents.visual_verifier import rank_video_candidates
+            best_clip = rank_video_candidates(videos, query=term, orientation=orientation)
+            if best_clip:
+                vid_id = f"pexels_video_{best_clip.get('id', '')}"
+                vid_tags = best_clip.get("title", "").split()
+                try:
+                    from semantic_broll_mapper import is_result_allowed, is_asset_fresh
+                    if not is_result_allowed(vid_tags, topic_category="tech"):
+                        print(f"❌ Filtered out off-topic video: {best_clip.get('title', '')[:40]}")
+                        continue
+                    if not is_asset_fresh(vid_id):
+                        print(f"🔄 Skipped recently used video (30-day history): {vid_id}")
+                        continue
+                except Exception:
+                    pass
+                return best_clip
         except Exception as err:
             continue
 
@@ -469,6 +731,8 @@ def search_pexels_video(query):
 def extract_video_frame(video_path, image_dest):
     """Extract a representative keyframe from an MP4 video clip to use as image fallback & thumbnail."""
     try:
+        dest = Path(image_dest)
+        dest.parent.mkdir(parents=True, exist_ok=True)
         cmd = [
             "ffmpeg",
             "-y",
@@ -480,7 +744,7 @@ def extract_video_frame(video_path, image_dest):
             "1",
             "-q:v",
             "2",
-            str(image_dest),
+            str(dest),
         ]
         subprocess.run(
             cmd,
@@ -489,7 +753,7 @@ def extract_video_frame(video_path, image_dest):
             check=False,
             timeout=10,
         )
-        return image_dest.exists() and image_dest.stat().st_size > 0
+        return dest.exists() and dest.stat().st_size > 0
     except Exception:
         return False
 
@@ -1003,11 +1267,17 @@ def clean_assets():
 # COLLECT CANDIDATES
 # ============================================================
 
-def collect_candidates(queries):
+def collect_candidates(queries, orientation=None, topic_category="tech"):
 
     candidates = []
 
     seen_urls = set()
+
+    try:
+        from semantic_broll_mapper import is_result_allowed, is_asset_fresh
+    except ImportError:
+        is_result_allowed = lambda tags, cat: True
+        is_asset_fresh = lambda aid: True
 
     for index, query in enumerate(
         queries,
@@ -1026,7 +1296,8 @@ def collect_candidates(queries):
         # ----------------------------------------------------
 
         pexels = search_pexels(
-            query
+            query,
+            orientation=orientation,
         )
 
         for candidate in pexels:
@@ -1041,6 +1312,17 @@ def collect_candidates(queries):
             if url in seen_urls:
                 continue
 
+            # Negative keyword check & asset freshness
+            cand_tags = candidate.get("tags") or candidate.get("title", "").split()
+            if not is_result_allowed(cand_tags, topic_category):
+                print(f"❌ Filtered out off-topic candidate ({topic_category} negative match): {candidate.get('title', '')[:40]}")
+                continue
+
+            cid = candidate.get("id")
+            if cid and not is_asset_fresh(cid):
+                print(f"🔄 Skipped recently used asset (30-day history): {cid}")
+                continue
+
             if not is_relevant(
                 candidate,
                 query,
@@ -1050,6 +1332,21 @@ def collect_candidates(queries):
             seen_urls.add(url)
 
             candidates.append(candidate)
+
+        # ----------------------------------------------------
+        # DuckDuckGo (Free Web Photography - No Key Required)
+        # ----------------------------------------------------
+        try:
+            from providers.image import search_duckduckgo_images
+            ddg_items = search_duckduckgo_images(query, max_results=8)
+            for candidate in ddg_items:
+                url = candidate.get("image_url")
+                if not url or url in seen_urls:
+                    continue
+                seen_urls.add(url)
+                candidates.append(candidate)
+        except Exception as ddg_err:
+            pass
 
         # ----------------------------------------------------
         # Wikimedia
@@ -1085,7 +1382,22 @@ def collect_candidates(queries):
         time.sleep(WIKIMEDIA_DELAY)
 
         # ----------------------------------------------------
-        # Bing
+        # Pixabay (Optional Free API Key)
+        # ----------------------------------------------------
+        try:
+            from providers.image import search_pixabay
+            pix_items = search_pixabay(query, orientation=orientation or "landscape", max_results=6)
+            for candidate in pix_items:
+                url = candidate.get("image_url")
+                if not url or url in seen_urls:
+                    continue
+                seen_urls.add(url)
+                candidates.append(candidate)
+        except Exception:
+            pass
+
+        # ----------------------------------------------------
+        # Bing Fallback
         # ----------------------------------------------------
 
         bing = search_bing(query)
@@ -1300,7 +1612,7 @@ def download_images(
                 src = fallback_pool[(i - 1) % len(fallback_pool)]
                 import shutil
                 shutil.copyfile(src, dest)
-                print(f"  ✓ Applied fallback image {src.name} -> {i}.jpg")
+                print(f"  ✓ Applied fallback image {get_image_filename(src)} -> {i}.jpg")
                 downloaded += 1
             else:
                 img = Image.new("RGB", (1280, 720), color=(25, 30, 45))
@@ -1390,6 +1702,12 @@ def download_images_from_visual_plan(
     visual_plan_path,
     flyer_path=None,
     feedback=None,
+    aspect_ratio="16:9",
+    generation_mode="stock",
+    user_assets=None,
+    user_assets_map=None,
+    *args,
+    **kwargs,
 ):
 
     visual_plan_file = Path(
@@ -1401,6 +1719,13 @@ def download_images_from_visual_plan(
             f"Visual plan not found: "
             f"{visual_plan_file}"
         )
+
+    # Derive orientation matching the requested aspect ratio
+    orientation = "landscape"
+    if aspect_ratio == "9:16":
+        orientation = "portrait"
+    elif aspect_ratio == "1:1":
+        orientation = "square"
 
     visuals = []
 
@@ -1453,6 +1778,25 @@ def download_images_from_visual_plan(
 
     target_count = len(visuals)
 
+    # Mode 2: If user provided their own media, map them and bypass stock search
+    is_user_mode = (
+        generation_mode in ("user_media", "My Own Images/Videos", "📁 My Own Images/Videos")
+        or (user_assets and len(user_assets) > 0 and generation_mode not in ("stock", "🎬 AI Stock Search"))
+    )
+    if is_user_mode:
+        print("📁 [Multi-Mode] User Media Mode active. Mapping scenes directly to user footage...")
+        clean_assets()
+        try:
+            from agents.multimode_agent import map_script_to_user_assets, apply_user_assets_to_visuals
+            mapped = user_assets_map or map_script_to_user_assets(visuals, user_assets)
+            applied = apply_user_assets_to_visuals(mapped, ASSETS_DIR)
+            print(f"✅ Applied {len(applied)} user media assets directly to visual timeline.")
+            from agents.video_agent import ensure_visual_assets_exist
+            ensure_visual_assets_exist()
+            return [(i, ASSETS_DIR / f"{i}.mp4" if (ASSETS_DIR / f"{i}.mp4").exists() else ASSETS_DIR / f"{i}.jpg") for i in range(1, target_count + 1)]
+        except Exception as u_err:
+            print(f"User media mapping warning: {u_err}. Falling back to standard visual sourcing.")
+
     # Load section narrations if available for targeted context
     section_map_file = OUTPUT_DIR / "section_map.txt"
     section_narrations = {}
@@ -1480,6 +1824,7 @@ def download_images_from_visual_plan(
     clean_assets()
 
     used_hashes = set()
+    claimed_urls = set()
     hash_lock = threading.Lock()
 
     def process_single_visual(visual_tuple):
@@ -1499,6 +1844,27 @@ def download_images_from_visual_plan(
             narration=assigned_narration,
         )
 
+        # Mode 3: Explainer Style Query Transformation
+        if generation_mode in ("explainer", "Explainer Style", "📊 Explainer Style"):
+            try:
+                from agents.multimode_agent import transform_queries_for_explainer
+                queries = transform_queries_for_explainer(queries)
+            except Exception:
+                pass
+
+        # Semantic B-roll mapper: convert brands/abstractions to filmable English stock search queries
+        try:
+            from semantic_broll_mapper import generate_search_queries
+            semantic_qs = generate_search_queries(
+                chunk=f"{visual_query}. {assigned_narration}"[:250],
+                topic_category="tech",
+            )
+            for sq in semantic_qs:
+                if sq not in queries:
+                    queries.insert(1, sq)
+        except Exception:
+            pass
+
         # Targeted Self-Healing: adjust keywords based on review feedback
         if feedback:
             extra_words = [
@@ -1508,41 +1874,183 @@ def download_images_from_visual_plan(
             if extra_words:
                 queries.insert(0, f"{visual_query} {' '.join(extra_words[:2])}")
 
-        # 1. Search for real video clip on Pexels first
+        # Check if this visual is discussing a specific named commercial product (e.g. iPhone 18)
+        is_prod, prod_name, generic_cat = detect_named_product(f"{visual_query} {assigned_narration}")
+
+        if is_prod:
+            print(f"📱 Detected commercial product for Visual {visual_number}: '{prod_name}'. Sourcing scene-targeted web photography...")
+            try:
+                from providers.image import search_web_product_images
+                # Pass both product name and specific scene query to get scene-specific imagery
+                prod_candidates = search_web_product_images(prod_name, scene_query=visual_query, max_results=14)
+                if len(prod_candidates) < 3:
+                    clean_q = re.sub(r"^(?:\d+[\.\:\-]\s*|(?:visual|scene|shot)\s*\d*[\.\:\-]?\s*)", "", str(visual_query), flags=re.IGNORECASE).strip()
+                    for b_cand in search_bing(f"{prod_name} {clean_q}")[:6]:
+                        b_url = b_cand.get("image_url")
+                        if b_url and b_url not in [c.get("image_url") for c in prod_candidates]:
+                            b_cand["source"] = "Web Product Photography (Editorial Fair-Use)"
+                            b_cand["is_editorial"] = True
+                            b_cand["product_name"] = prod_name
+                            prod_candidates.append(b_cand)
+
+                for candidate in prod_candidates:
+                    cand_url = candidate.get("image_url")
+                    if not cand_url:
+                        continue
+
+                    # Atomic check to prevent two scenes from claiming the same image URL
+                    with hash_lock:
+                        if cand_url in claimed_urls:
+                            continue
+                        claimed_urls.add(cand_url)
+
+                    success = download_image(candidate, destination)
+                    if not success:
+                        with hash_lock:
+                            claimed_urls.discard(cand_url)
+                        continue
+
+                    # Validation: verify with PIL
+                    try:
+                        with Image.open(destination) as img:
+                            w, h = img.size
+                            if w < 400 or h < 300:
+                                destination.unlink(missing_ok=True)
+                                with hash_lock:
+                                    claimed_urls.discard(cand_url)
+                                continue
+                    except Exception:
+                        destination.unlink(missing_ok=True)
+                        with hash_lock:
+                            claimed_urls.discard(cand_url)
+                        continue
+
+                    # SigLIP 2 relevance check: ensure product image matches scene context (rejects off-topic portraits/selfies)
+                    rel_score = score_visual_relevance(str(destination), f"{prod_name} {visual_query}")
+                    if rel_score < RELEVANCE_THRESHOLD:
+                        print(f"⚠️ Product photo candidate rejected (SigLIP 2 score {rel_score:.4f} < {RELEVANCE_THRESHOLD}): '{cand_url[:60]}'")
+                        destination.unlink(missing_ok=True)
+                        with hash_lock:
+                            claimed_urls.discard(cand_url)
+                        continue
+
+                    file_hash = image_hash(destination)
+                    with hash_lock:
+                        if file_hash and file_hash in used_hashes:
+                            destination.unlink(missing_ok=True)
+                            claimed_urls.discard(cand_url)
+                            continue
+                        if file_hash:
+                            used_hashes.add(file_hash)
+
+                    print(f"✅ Visual {visual_number} saved unique product photography for '{prod_name}' (Scene: '{visual_query[:40]}', SigLIP 2 score: {rel_score:.4f})")
+                    break
+            except Exception as p_err:
+                print(f"Product web search notice for Visual {visual_number}: {p_err}")
+
+            if destination.exists():
+                return visual_number, destination
+
+        # 1. Search for real video clip on Pexels first (for dynamic B-roll)
         has_video = False
+        primary_q = visual_query.split("|")[0].strip()
+
         if PEXELS_API_KEY and visual_number <= target_count:
             for q in queries[:3]:
                 try:
-                    video_info = search_pexels_video(q)
-                    if video_info and video_info.get("download_url"):
+                    video_info = search_pexels_video(q, orientation=orientation)
+                    v_url = video_info.get("download_url") if video_info else None
+                    if video_info and v_url:
+                        with hash_lock:
+                            if v_url in claimed_urls:
+                                continue
+                            claimed_urls.add(v_url)
+
                         print(f"🎥 Found Pexels video footage for Visual {visual_number} ('{q}'): {video_info.get('title')}")
                         if download_video_clip(video_info, video_dest):
-                            has_video = True
-                            print(f"✅ Video clip saved: assets/{visual_number}.mp4")
-                            # Extract preview keyframe as .jpg for thumbnail and image fallback
                             extract_video_frame(video_dest, destination)
-                            break
+                            v_score = score_visual_relevance(destination, primary_q)
+                            print(f"🎥 Pexels video frame SigLIP 2 score for Visual {visual_number}: {v_score:.4f} (Threshold: {RELEVANCE_THRESHOLD})")
+                            if v_score >= RELEVANCE_THRESHOLD:
+                                has_video = True
+                                print(f"✅ Video clip verified and accepted: assets/{visual_number}.mp4")
+                                try:
+                                    from semantic_broll_mapper import mark_asset_used
+                                    mark_asset_used(f"pexels_video_{video_info.get('id', '')}")
+                                except Exception:
+                                    pass
+                                break
+                            else:
+                                print(f"❌ Video clip rejected (low SigLIP 2 score {v_score:.4f} < {RELEVANCE_THRESHOLD}): {video_info.get('title')}")
+                                video_dest.unlink(missing_ok=True)
+                                destination.unlink(missing_ok=True)
+                                with hash_lock:
+                                    claimed_urls.discard(v_url)
                 except Exception as v_err:
                     print(f"Video search note for Visual {visual_number}: {v_err}")
 
-        # 2. Always ensure a fallback image exists
+        # 2. Search and verify stock image candidates with SigLIP 2 relevance
         if not destination.exists():
-            candidates = collect_candidates(queries)
+            candidates = collect_candidates(queries, orientation=orientation)
             for candidate in candidates:
+                cand_url = candidate.get("image_url")
+                if not cand_url:
+                    continue
+
+                with hash_lock:
+                    if cand_url in claimed_urls:
+                        continue
+                    claimed_urls.add(cand_url)
+
                 success = download_image(candidate, destination)
                 if not success:
+                    with hash_lock:
+                        claimed_urls.discard(cand_url)
+                    continue
+
+                score = score_visual_relevance(destination, primary_q)
+                if score < RELEVANCE_THRESHOLD:
+                    print(f"⚠️ Stock candidate rejected (SigLIP 2 score {score:.4f} < {RELEVANCE_THRESHOLD}): {candidate.get('title', '')[:30]}")
+                    destination.unlink(missing_ok=True)
+                    with hash_lock:
+                        claimed_urls.discard(cand_url)
                     continue
 
                 file_hash = image_hash(destination)
                 with hash_lock:
                     if file_hash and file_hash in used_hashes:
                         destination.unlink(missing_ok=True)
+                        claimed_urls.discard(cand_url)
                         continue
                     if file_hash:
                         used_hashes.add(file_hash)
 
-                print(f"OK - Visual {visual_number} saved as {visual_number}.jpg")
+                print(f"OK - Visual {visual_number} verified (SigLIP 2 score {score:.4f} >= {RELEVANCE_THRESHOLD}) saved as {visual_number}.jpg")
+                try:
+                    from semantic_broll_mapper import mark_asset_used
+                    if candidate.get("id"):
+                        mark_asset_used(candidate["id"])
+                except Exception:
+                    pass
                 break
+
+        # 3. Pollinations.ai FLUX AI Generative Fallback (Tailored directly to the specific scene)
+        if not destination.exists():
+            try:
+                from providers.image import generate_pollinations_image
+                is_expl = generation_mode in ("explainer", "Explainer Style", "📊 Explainer Style")
+                flux_prompt = rewrite_query_for_flux(f"{primary_q} {assigned_narration[:80]}", is_explainer=is_expl)
+                print(f"✨ Sourcing Pollinations FLUX AI visual for Scene {visual_number}: '{flux_prompt[:70]}...'")
+                if generate_pollinations_image(flux_prompt, destination, aspect_ratio=aspect_ratio):
+                    file_hash = image_hash(destination)
+                    with hash_lock:
+                        if file_hash and file_hash not in used_hashes:
+                            used_hashes.add(file_hash)
+                            print(f"✅ Generated Pollinations FLUX image accepted for Visual {visual_number}: assets/{visual_number}.jpg")
+                        elif file_hash in used_hashes:
+                            destination.unlink(missing_ok=True)
+            except Exception as ai_err:
+                print(f"Pollinations AI fallback notice for Visual {visual_number}: {ai_err}")
 
         if has_video and video_dest.exists():
             return visual_number, video_dest
@@ -1551,9 +2059,9 @@ def download_images_from_visual_plan(
 
         return visual_number, None
 
-    # Requirement 2.1: Restrict concurrent outgoing requests to max 3 workers
-    workers = min(3, target_count)
-    print(f"Downloading {target_count} visuals in parallel with {workers} worker threads (concurrency limited to max 3)...")
+    # Parallel download workers (optimized for high throughput)
+    workers = min(5, target_count)
+    print(f"Downloading {target_count} visuals in parallel with {workers} worker threads...")
     results_map = {}
 
     with ThreadPoolExecutor(max_workers=workers) as executor:
@@ -1570,7 +2078,7 @@ def download_images_from_visual_plan(
             except Exception as e:
                 print(f"Visual {num} download warning: {e}")
 
-    # Requirement 2.3: Offline Fallback Media Pool
+    # Fallback Handling: Dynamic FLUX first before static offline fallback pool
     fallback_pool_images = sorted(FALLBACK_DIR.glob("*.jpg")) if FALLBACK_DIR.exists() else []
     fallback_pool_videos = sorted(FALLBACK_DIR.glob("*.mp4")) if FALLBACK_DIR.exists() else []
 
@@ -1578,12 +2086,27 @@ def download_images_from_visual_plan(
         dest = ASSETS_DIR / f"{num}.jpg"
         video_dest = ASSETS_DIR / f"{num}.mp4"
         if num not in results_map or not dest.exists():
-            print(f"Warning: Applying offline fallback pool for Visual {num}.")
-            import shutil
             applied = False
+            # 1. Attempt dynamic FLUX generation for the specific scene concept
+            try:
+                from providers.image import generate_pollinations_image
+                prompt_q = visuals[num - 1] if num - 1 < len(visuals) else "cinematic visual scene"
+                is_expl = generation_mode in ("explainer", "Explainer Style", "📊 Explainer Style")
+                clean_p = rewrite_query_for_flux(prompt_q, is_explainer=is_expl)
+                print(f"🎨 Generating dynamic FLUX visual for Scene {num}: '{clean_p[:60]}...'")
+                if generate_pollinations_image(clean_p, dest, aspect_ratio=aspect_ratio):
+                    file_hash = image_hash(dest)
+                    with hash_lock:
+                        if file_hash:
+                            used_hashes.add(file_hash)
+                    results_map[num] = dest
+                    applied = True
+                    print(f"  ✓ Dynamically generated tailored FLUX image for Visual {num}")
+            except Exception as dyn_err:
+                print(f"  Dynamic FLUX generation note: {dyn_err}")
 
-            # Check offline fallback media pool first
-            if fallback_pool_videos or fallback_pool_images:
+            # 2. Offline fallback media pool only if internet/FLUX is unreachable
+            if not applied and (fallback_pool_videos or fallback_pool_images):
                 pool_idx = (num - 1)
                 if fallback_pool_videos:
                     src_vid = fallback_pool_videos[pool_idx % len(fallback_pool_videos)]
@@ -1591,13 +2114,13 @@ def download_images_from_visual_plan(
                     extract_video_frame(video_dest, dest)
                     results_map[num] = video_dest
                     applied = True
-                    print(f"  ✓ Applied fallback video {src_vid.name} -> {num}.mp4 and extracted frame")
+                    print(f"  ✓ Applied fallback video {get_image_filename(src_vid)} -> {num}.mp4")
                 elif fallback_pool_images:
                     src_img = fallback_pool_images[pool_idx % len(fallback_pool_images)]
                     shutil.copyfile(src_img, dest)
                     results_map[num] = dest
                     applied = True
-                    print(f"  ✓ Applied fallback image {src_img.name} -> {num}.jpg")
+                    print(f"  ✓ Applied fallback image {get_image_filename(src_img)} -> {num}.jpg")
 
             if not applied:
                 if results_map:
@@ -1617,6 +2140,7 @@ def download_images_from_visual_plan(
 
     final_images = [results_map[num] for num in range(1, target_count + 1)]
 
+
     # ========================================================
     # FINAL VALIDATION
     # ========================================================
@@ -1632,7 +2156,7 @@ def download_images_from_visual_plan(
                     src_fallback = fallback_pool_images[(number - 1) % len(fallback_pool_images)]
                     import shutil
                     shutil.copyfile(src_fallback, path)
-                    print(f"[Self-Healing] Sourced missing {number}.jpg from fallback {src_fallback.name}")
+                    print(f"[Self-Healing] Sourced missing {number}.jpg from fallback {get_image_filename(src_fallback)}")
                 else:
                     img = Image.new("RGB", (1280, 720), color=(25, 30, 45))
                     img.save(path, "JPEG", quality=90)

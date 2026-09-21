@@ -16,19 +16,23 @@ st.set_page_config(
 
 
 # ============================================================
-# GLASS UI CSS
+# GLASS UI CSS (CENTRALIZED GLASSMORPHYSIM THEME)
 # ============================================================
 
-st.markdown(
-    """
+def get_glassmorphism_css() -> str:
+    """Returns the unified Glassmorphism design system CSS."""
+    return """
 <style>
+/* AutoTube AI - Centralized Glassmorphism Design System */
 
 .stApp {
     background:
-        radial-gradient(circle at 15% 10%, rgba(88, 70, 180, 0.18), transparent 30%),
-        radial-gradient(circle at 85% 15%, rgba(0, 180, 255, 0.12), transparent 28%),
-        #0B0F17;
-    color: #F5F7FA;
+        radial-gradient(circle at 15% 15%, rgba(99, 102, 241, 0.22), transparent 32%),
+        radial-gradient(circle at 85% 20%, rgba(6, 182, 212, 0.18), transparent 30%),
+        radial-gradient(circle at 50% 80%, rgba(168, 85, 247, 0.16), transparent 36%),
+        #080C14;
+    color: #F8FAFC;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 .block-container {
@@ -42,51 +46,54 @@ header[data-testid="stHeader"] {
 }
 
 section[data-testid="stSidebar"] {
-    display: none;
+    background: rgba(10, 15, 26, 0.94);
+    border-right: 1px solid rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
 }
 
 /* Glass cards */
-
 .glass-card {
-    background: rgba(255,255,255,0.055);
-    border: 1px solid rgba(255,255,255,0.10);
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.18);
     border-radius: 18px;
     padding: 24px;
-    backdrop-filter: blur(18px);
-    -webkit-backdrop-filter: blur(18px);
-    box-shadow:
-        0 20px 60px rgba(0,0,0,0.30),
-        inset 0 1px 0 rgba(255,255,255,0.06);
-    margin-bottom: 18px;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    margin-bottom: 20px;
+    color: #F8FAFC;
 }
 
 /* Header */
-
 .brand {
     font-size: 30px;
     font-weight: 800;
     letter-spacing: -1px;
+    color: #F8FAFC;
 }
 
 .brand span {
-    background: linear-gradient(90deg,#8B5CF6,#22D3EE);
+    background: linear-gradient(90deg, #A78BFA, #38BDF8);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
 }
 
 .status {
     display: inline-block;
-    padding: 7px 12px;
-    margin-left: 7px;
+    padding: 7px 14px;
+    margin-left: 8px;
     border-radius: 999px;
-    background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.10);
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.18);
     font-size: 12px;
-    color: #CBD5E1;
+    font-weight: 600;
+    color: #E2E8F0;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
 }
 
 /* Hero */
-
 .hero-title {
     font-size: 46px;
     line-height: 1.05;
@@ -96,29 +103,24 @@ section[data-testid="stSidebar"] {
 }
 
 .hero-gradient {
-    background: linear-gradient(
-        90deg,
-        #FFFFFF 0%,
-        #A78BFA 45%,
-        #22D3EE 100%
-    );
+    background: linear-gradient(90deg, #FFFFFF 0%, #A78BFA 45%, #38BDF8 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
 }
 
 .hero-subtitle {
-    color: #94A3B8;
+    color: #CBD5E1;
     font-size: 17px;
     margin-top: 12px;
     margin-bottom: 30px;
 }
 
 /* Section titles */
-
 .section-title {
     font-size: 20px;
     font-weight: 750;
     margin-bottom: 5px;
+    color: #F8FAFC;
 }
 
 .section-subtitle {
@@ -127,46 +129,53 @@ section[data-testid="stSidebar"] {
     margin-bottom: 18px;
 }
 
-/* Streamlit inputs */
-
+/* Streamlit Inputs */
+.glass-input,
 div[data-baseweb="input"] > div,
 div[data-baseweb="select"] > div,
 textarea {
-    background: rgba(255,255,255,0.045) !important;
-    border: 1px solid rgba(255,255,255,0.10) !important;
-    border-radius: 12px !important;
-    color: white !important;
+    background: rgba(255, 255, 255, 0.06) !important;
+    border: 1px solid rgba(255, 255, 255, 0.18) !important;
+    border-radius: 14px !important;
+    color: #F8FAFC !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    transition: all 0.2s ease !important;
+}
+
+div[data-baseweb="input"] > div:focus-within,
+textarea:focus {
+    border-color: rgba(56, 189, 248, 0.6) !important;
+    box-shadow: 0 0 16px rgba(56, 189, 248, 0.2) !important;
 }
 
 label {
-    color: #CBD5E1 !important;
+    color: #E2E8F0 !important;
+    font-weight: 600 !important;
 }
 
 /* Buttons */
-
-.stButton > button {
+.glass-button, .stButton > button {
     width: 100%;
-    border-radius: 13px;
-    border: 1px solid rgba(139,92,246,0.55);
-    background: linear-gradient(
-        135deg,
-        rgba(139,92,246,0.90),
-        rgba(34,211,238,0.78)
-    );
-    color: white;
-    font-weight: 750;
-    min-height: 48px;
-    box-shadow: 0 10px 30px rgba(91,70,180,0.25);
-    transition: all 0.2s ease;
+    border-radius: 16px !important;
+    border: 1px solid rgba(255, 255, 255, 0.22) !important;
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.88), rgba(34, 211, 238, 0.78)) !important;
+    color: #FFFFFF !important;
+    font-weight: 750 !important;
+    min-height: 48px !important;
+    backdrop-filter: blur(14px) !important;
+    -webkit-backdrop-filter: blur(14px) !important;
+    box-shadow: 0 8px 24px rgba(91, 70, 180, 0.3) !important;
+    transition: all 0.25s ease !important;
 }
 
 .stButton > button:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 15px 40px rgba(34,211,238,0.22);
+    transform: translateY(-2px) !important;
+    box-shadow: 0 12px 32px rgba(34, 211, 238, 0.35) !important;
+    border-color: rgba(255, 255, 255, 0.35) !important;
 }
 
 /* Pipeline */
-
 .pipeline {
     display: flex;
     align-items: center;
@@ -180,9 +189,12 @@ label {
     min-width: 105px;
     text-align: center;
     padding: 13px 10px;
-    border-radius: 14px;
-    background: rgba(255,255,255,0.045);
-    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
 }
 
 .pipeline-icon {
@@ -191,56 +203,108 @@ label {
 
 .pipeline-name {
     font-size: 11px;
-    color: #CBD5E1;
+    color: #E2E8F0;
     margin-top: 5px;
+    font-weight: 600;
 }
 
 .pipeline-arrow {
-    color: #64748B;
+    color: #94A3B8;
     font-size: 18px;
 }
 
 /* Chips */
-
 .chip {
     display: inline-block;
-    padding: 7px 11px;
+    padding: 7px 13px;
     margin-right: 6px;
     border-radius: 999px;
-    background: rgba(255,255,255,0.055);
-    border: 1px solid rgba(255,255,255,0.08);
-    color: #CBD5E1;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    color: #F1F5F9;
     font-size: 12px;
+    font-weight: 600;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
 }
 
-/* Success */
-
+/* Success Box */
 .success-box {
-    padding: 16px;
+    padding: 18px;
+    border-radius: 16px;
+    background: rgba(16, 185, 129, 0.10);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    color: #A7F3D0;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+}
+
+/* PIN Lock Container */
+.pin-lock-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.08) !important;
+    backdrop-filter: blur(16px) !important;
+    -webkit-backdrop-filter: blur(16px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.18) !important;
+    border-radius: 20px !important;
+    padding: 2.5rem 1.8rem;
+    max-width: 440px;
+    margin: 3rem auto 2rem auto;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
+    text-align: center;
+    color: #F8FAFC;
+}
+
+/* Score Card */
+.glass-score-card {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.16);
     border-radius: 14px;
-    background: rgba(34,197,94,0.08);
-    border: 1px solid rgba(34,197,94,0.25);
-    color: #BBF7D0;
+    padding: 14px;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
 }
 
-/* Responsive */
-
-@media (max-width: 900px) {
-
+/* Touch-Optimized Mobile Viewport Adjustments */
+@media (max-width: 768px) {
+    .block-container {
+        padding-top: 1.5rem !important;
+        padding-bottom: 3rem !important;
+        padding-left: 0.8rem !important;
+        padding-right: 0.8rem !important;
+        max-width: 100% !important;
+    }
     .hero-title {
-        font-size: 34px;
+        font-size: 32px !important;
     }
-
     .pipeline {
-        justify-content: flex-start;
+        justify-content: flex-start !important;
     }
-
+    /* Modest blur on mobile devices for smooth 60fps rendering */
+    .glass-card, .pin-lock-container, .pipeline-step {
+        backdrop-filter: blur(12px) !important;
+        -webkit-backdrop-filter: blur(12px) !important;
+    }
+    .stButton > button {
+        min-height: 48px !important;
+        font-size: 1.05rem !important;
+    }
 }
-
 </style>
-""",
-    unsafe_allow_html=True,
-)
+"""
+
+
+def inject_glassmorphism_css():
+    """Injects the centralized Glassmorphism CSS theme into the active Streamlit app."""
+    import streamlit as st
+    st.markdown(get_glassmorphism_css(), unsafe_allow_html=True)
+
+
+inject_glassmorphism_css()
 
 
 # ============================================================

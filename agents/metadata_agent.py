@@ -261,11 +261,12 @@ TAGS:
 [tag1, tag2, tag3, tag4, tag5, tag6, tag7, tag8, tag9, tag10]
 
 Rules:
+- TITLE CTR RULE: Titles must make it immediately clear what the viewer will learn or see within 2 seconds. Favor concrete specifics (price, key spec, comparison, benchmark) over vague hype words.
 - Be factual.
 - Do not invent information.
 - Do not exaggerate.
 - Do not make unsupported claims.
-- Make the title interesting but accurate.
+- Make the title interesting, high-CTR, and accurate.
 - Keep the title under 100 characters.
 - Use important keywords naturally.
 - Tags must be directly relevant to the topic.

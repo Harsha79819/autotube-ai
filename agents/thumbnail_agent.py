@@ -480,6 +480,149 @@ def create_thumbnail(title, aspect_ratio="16:9"):
     return output
 
 
+# ============================================================
+# CTR A/B THUMBNAIL VARIANT GENERATION & RANKING
+# ============================================================
+
+def generate_thumbnail_prompts(topic_data: dict, gemini_call_fn=None) -> list[str]:
+    """Generate 3 distinct, high-CTR visual thumbnail concepts for AI image generation."""
+    topic_str = topic_data.get("topic") if isinstance(topic_data, dict) else str(topic_data)
+    default_prompts = [
+        f"{topic_str}, dramatic high-contrast studio lighting, bold close-up, vivid colors, photorealistic 8k, cinematic YouTube thumbnail style",
+        f"{topic_str}, shocking revelation split comparison, intense neon rim lighting, sharp focal subject, ultra-detailed 8k",
+        f"{topic_str}, sleek futuristic tech showcase, dramatic dark background, glowing highlights, clean commercial photography 8k",
+    ]
+
+    if gemini_call_fn is None:
+        try:
+            from agents.script_agent import get_client
+            client = get_client()
+            def _call_gem(prompt):
+                resp = client.models.generate_content(
+                    model="gemini-3.6-flash",
+                    contents=prompt,
+                )
+                return resp.text
+            gemini_call_fn = _call_gem
+        except Exception:
+            return default_prompts
+
+    prompt = f"""
+    You are an expert YouTube thumbnail designer specializing in high-CTR tech thumbnails.
+    Given this topic/script context: "{topic_str}"
+    
+    Generate EXACTLY 3 distinct visual image prompts designed for text-to-image AI (FLUX / Pollinations).
+    1. Concept 1: Bold, curiosity-inducing close-up (single dominant subject, high contrast).
+    2. Concept 2: Shocking spec / comparison / dramatic angle.
+    3. Concept 3: Futuristic tech showcase / sleek cinematic lighting.
+
+    RULES:
+    - Describe pure visual imagery ONLY. Do NOT include text on the image.
+    - Keep each prompt under 35 words.
+    - Return a valid JSON array of 3 strings only.
+    """
+    try:
+        import json
+        res = gemini_call_fn(prompt).strip().strip("`")
+        if res.lower().startswith("json"):
+            res = res[4:].strip()
+        parsed = json.loads(res)
+        if isinstance(parsed, list) and len(parsed) == 3:
+            return parsed
+    except Exception as e:
+        print(f"⚠️ Thumbnail prompt generation notice: {e}")
+
+    return default_prompts
+
+
+def rank_thumbnails_by_gemini(candidates, topic_data, gemini_call_fn=None):
+    """Rank thumbnail candidate filepaths for CTR potential on Telugu tech YouTube channel."""
+    if not candidates:
+        return []
+    if len(candidates) == 1:
+        return candidates
+
+    topic_str = topic_data.get("topic") if isinstance(topic_data, dict) else str(topic_data)
+
+    if gemini_call_fn is None:
+        try:
+            from agents.script_agent import get_client
+            client = get_client()
+            def _call_gem(prompt):
+                resp = client.models.generate_content(
+                    model="gemini-3.6-flash",
+                    contents=prompt,
+                )
+                return resp.text
+            gemini_call_fn = _call_gem
+        except Exception:
+            return candidates
+
+    prompt = f"""
+    Rank these {len(candidates)} thumbnail concepts for click-through-rate (CTR) potential
+    on a Telugu tech YouTube Shorts/Reels channel.
+    Prioritize:
+    1. Instant curiosity / curiosity-gap
+    2. High contrast & visual punch on a small smartphone screen
+    3. Crystal-clear focal subject (no clutter)
+    
+    Topic: {topic_str}
+    
+    Candidates:
+    {[c if isinstance(c, str) else str(c) for c in candidates]}
+    
+    Return the ranked candidate 0-indexed indices as a JSON array of integers (best first, e.g. [1, 0, 2]).
+    """
+    try:
+        import json
+        res = gemini_call_fn(prompt).strip().strip("`")
+        if res.lower().startswith("json"):
+            res = res[4:].strip()
+        ranked_indices = json.loads(res)
+        if isinstance(ranked_indices, list):
+            valid_ranked = [candidates[i] for i in ranked_indices if isinstance(i, int) and 0 <= i < len(candidates)]
+            for c in candidates:
+                if c not in valid_ranked:
+                    valid_ranked.append(c)
+            return valid_ranked
+    except Exception as e:
+        print(f"⚠️ Thumbnail ranking notice: {e}")
+
+    return candidates
+
+
+def generate_thumbnail_variants(topic_data: dict, gemini_call_fn=None, flux_generate_fn=None) -> list[str]:
+    """Generate 3 thumbnail concepts, render them, and rank them for click-worthiness."""
+    prompts = generate_thumbnail_prompts(topic_data, gemini_call_fn)
+    print(f"🎨 Generated {len(prompts)} thumbnail concept prompts for A/B testing")
+
+    candidates = []
+    if flux_generate_fn:
+        for idx, p in enumerate(prompts):
+            out_candidate = OUTPUT_DIR / f"thumbnail_candidate_{idx+1}.jpg"
+            try:
+                res = flux_generate_fn(p, str(out_candidate))
+                if res and os.path.exists(res):
+                    candidates.append(str(res))
+            except Exception as err:
+                print(f"⚠️ Candidate {idx+1} generation warning: {err}")
+
+    if not candidates:
+        best_thumb = create_thumbnail(topic_data.get("title") if isinstance(topic_data, dict) else str(topic_data))
+        if best_thumb:
+            candidates.append(str(best_thumb))
+
+    ranked = rank_thumbnails_by_gemini(candidates, topic_data, gemini_call_fn)
+
+    # Copy top-ranked thumbnail to output/thumbnail.jpg
+    if ranked and os.path.exists(ranked[0]):
+        import shutil
+        shutil.copyfile(ranked[0], OUTPUT_DIR / "thumbnail.jpg")
+        print(f"🏆 Best-ranked thumbnail selected: {ranked[0]} -> output/thumbnail.jpg")
+
+    return ranked
+
+
 if __name__ == "__main__":
 
     create_thumbnail(

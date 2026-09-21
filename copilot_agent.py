@@ -221,7 +221,7 @@ Extract these parameters and return ONLY valid JSON (no markdown formatting, no 
 # 2. BACKGROUND PIPELINE EXECUTION
 # ============================================================
 
-def start_background_pipeline(topic, aspect_ratio="1:1", voice=None, content_type="News", style="English creator style"):
+def start_background_pipeline(topic, aspect_ratio="1:1", voice=None, content_type="News", style="English creator style", youtube_upload=None, youtube_privacy=None):
     """
     Launch full autonomous video generation in a background thread so the Streamlit UI never freezes.
     """
@@ -250,6 +250,22 @@ def start_background_pipeline(topic, aspect_ratio="1:1", voice=None, content_typ
             def _progress_cb(percent, text):
                 _update_job(progress=percent, step=text)
 
+            # Resolve youtube upload & privacy if not explicitly passed
+            w_yt_upload = youtube_upload
+            w_yt_privacy = youtube_privacy
+            if w_yt_upload is None:
+                try:
+                    import streamlit as _st
+                    w_yt_upload = _st.session_state.get("declared_yt_upload", False)
+                except Exception:
+                    w_yt_upload = False
+            if w_yt_privacy is None:
+                try:
+                    import streamlit as _st
+                    w_yt_privacy = _st.session_state.get("declared_yt_privacy", "private")
+                except Exception:
+                    w_yt_privacy = "private"
+
             result = generate_multi_media_video(
                 topic=topic,
                 content_type=content_type,
@@ -257,11 +273,17 @@ def start_background_pipeline(topic, aspect_ratio="1:1", voice=None, content_typ
                 voice=voice,
                 aspect_ratio=aspect_ratio,
                 progress_callback=_progress_cb,
+                youtube_upload=w_yt_upload,
+                youtube_privacy=w_yt_privacy,
             )
+
+            completion_step = "Video generation completed successfully! 🎉"
+            if result and isinstance(result, dict) and result.get("youtube_video_id"):
+                completion_step = f"Published to YouTube ({w_yt_privacy.upper()})! Video ID: {result['youtube_video_id']} 🎉"
 
             _update_job(
                 status="completed",
-                step="Video generation completed successfully! 🎉",
+                step=completion_step,
                 progress=100,
                 result=result,
             )

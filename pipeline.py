@@ -31,28 +31,103 @@ UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 # ============================================================
 
 VOICE_IDS = {
-    "🎙️ Use My Own Voice Recording (Upload Audio)": "own_recording",
-    "🤖 Clone My Voice with AI (Local XTTS-v2)": "clone",
+    "👨 Mohan (Telugu Male Anchor) - Edge-TTS": "te-IN-MohanNeural",
+    "👩 Shruti (Telugu Female Anchor) - Edge-TTS": "te-IN-ShrutiNeural",
     "👨 Adam (Male Creator) - Fast & Crisp": "am_adam",
     "👨 Michael (News Anchor) - Professional": "am_michael",
     "👩 Heart (Female Creator) - Smooth": "af_heart",
     "👩 Bella (Warm Female) - Storytelling": "af_bella",
+    "👨 Madhur (Hindi Male Anchor) - Edge-TTS": "hi-IN-MadhurNeural",
+    "👩 Swara (Hindi Female Anchor) - Edge-TTS": "hi-IN-SwaraNeural",
+    "🎙️ Use My Own Voice Recording (Upload Audio)": "own_recording",
+    "🤖 Clone My Voice with AI (Local XTTS-v2)": "clone",
+    # Direct alias matches
+    "te-in-mohanneural": "te-IN-MohanNeural",
+    "te-in-shrutineural": "te-IN-ShrutiNeural",
+    "hi-in-madhurneural": "hi-IN-MadhurNeural",
+    "hi-in-swaraneural": "hi-IN-SwaraNeural",
+    "te-IN-MohanNeural": "te-IN-MohanNeural",
+    "te-IN-ShrutiNeural": "te-IN-ShrutiNeural",
+    "hi-IN-MadhurNeural": "hi-IN-MadhurNeural",
+    "hi-IN-SwaraNeural": "hi-IN-SwaraNeural",
+    "mohan": "te-IN-MohanNeural",
+    "shruti": "te-IN-ShrutiNeural",
+    "clone": "clone",
+    "xtts": "clone",
+    "own_recording": "own_recording",
+    "own_voice": "own_recording",
+    "am_adam": "am_adam",
+    "am_michael": "am_michael",
+    "af_heart": "af_heart",
+    "af_bella": "af_bella",
     # Legacy fallbacks
     "Creator Voice": "am_adam",
     "English Female": "af_heart",
 }
 
 VOICE_TUNING = {
-    "🎙️ Use My Own Voice Recording (Upload Audio)": ("+0%", "+0Hz"),
-    "🤖 Clone My Voice with AI (Local XTTS-v2)": ("+0%", "+0Hz"),
+    "👨 Mohan (Telugu Male Anchor) - Edge-TTS": ("+0%", "+0Hz"),
+    "👩 Shruti (Telugu Female Anchor) - Edge-TTS": ("+0%", "+0Hz"),
     "👨 Adam (Male Creator) - Fast & Crisp": ("-5%", "+0Hz"),
     "👨 Michael (News Anchor) - Professional": ("-5%", "+0Hz"),
     "👩 Heart (Female Creator) - Smooth": ("-5%", "+0Hz"),
     "👩 Bella (Warm Female) - Storytelling": ("-5%", "+0Hz"),
+    "👨 Madhur (Hindi Male Anchor) - Edge-TTS": ("+0%", "+0Hz"),
+    "👩 Swara (Hindi Female Anchor) - Edge-TTS": ("+0%", "+0Hz"),
+    "🎙️ Use My Own Voice Recording (Upload Audio)": ("+0%", "+0Hz"),
+    "🤖 Clone My Voice with AI (Local XTTS-v2)": ("+0%", "+0Hz"),
+    "te-IN-MohanNeural": ("+0%", "+0Hz"),
+    "te-IN-ShrutiNeural": ("+0%", "+0Hz"),
+    "hi-IN-MadhurNeural": ("+0%", "+0Hz"),
+    "hi-IN-SwaraNeural": ("+0%", "+0Hz"),
+    "mohan": ("+0%", "+0Hz"),
+    "shruti": ("+0%", "+0Hz"),
+    "clone": ("+0%", "+0Hz"),
+    "xtts": ("+0%", "+0Hz"),
+    "own_recording": ("+0%", "+0Hz"),
+    "am_adam": ("-5%", "+0Hz"),
+    "am_michael": ("-5%", "+0Hz"),
+    "af_heart": ("-5%", "+0Hz"),
+    "af_bella": ("-5%", "+0Hz"),
     # Legacy fallbacks
     "Creator Voice": ("-5%", "+0Hz"),
     "English Female": ("-5%", "+0Hz"),
 }
+
+
+# ============================================================
+# STUDIO-GRADE MODEL WARM-LOADING (WHISPER & CLIP CACHING)
+# ============================================================
+
+def warmup_models(background=True):
+    """
+    Warm-load heavy AI models (Whisper, CLIP) into memory once at startup
+    to eliminate cold-start latency (saving 10-30s per video run).
+    """
+    def _warmup():
+        print("⚡ [Warm-Loading] Pre-caching Whisper & CLIP models...")
+        try:
+            from agents.video_agent import get_whisper_model
+            get_whisper_model()
+            print("✅ [Warm-Loading] Whisper speech recognition model cached.")
+        except Exception as e:
+            print(f"⚠️ Whisper warm-up notice: {e}")
+
+        try:
+            from agents.image_agent import get_clip_pipeline
+            get_clip_pipeline()
+            print("✅ [Warm-Loading] OpenCLIP visual relevance pipeline cached.")
+        except Exception as e:
+            print(f"⚠️ CLIP warm-up notice: {e}")
+
+    if background:
+        import threading
+        t = threading.Thread(target=_warmup, daemon=True, name="ModelWarmupThread")
+        t.start()
+        return t
+    else:
+        _warmup()
+        return None
 
 
 # ============================================================
@@ -105,21 +180,40 @@ def clean_previous_generation():
 
 
 # ============================================================
-# SAVE UPLOAD
+# SAVE UPLOAD (SAFE FOR UPLOADEDFILE & STRING/PATH OBJECTS)
 # ============================================================
 
+def get_image_filename(image_input):
+    """
+    Handle both Streamlit UploadedFile objects AND plain string/Path paths safely --
+    completely fixes "'str' object has no attribute 'name'".
+    """
+    if hasattr(image_input, "name"):
+        return str(image_input.name)
+    elif isinstance(image_input, (str, Path)):
+        return os.path.basename(str(image_input))
+    else:
+        return str(image_input)
+
+
 def save_uploaded_file(uploaded_file, index):
-    """Save a Streamlit uploaded file with a stable unique name."""
-
-    suffix = Path(uploaded_file.name).suffix.lower()
-
+    """Save a Streamlit uploaded file or copy existing path string safely."""
+    fname = get_image_filename(uploaded_file)
+    suffix = Path(fname).suffix.lower()
     if not suffix:
         suffix = ".bin"
 
     filename = f"uploaded_{index}{suffix}"
-
     destination = UPLOADS_DIR / filename
-    destination.write_bytes(uploaded_file.getbuffer())
+
+    if hasattr(uploaded_file, "getbuffer"):
+        destination.write_bytes(uploaded_file.getbuffer())
+    elif hasattr(uploaded_file, "read"):
+        destination.write_bytes(uploaded_file.read())
+    elif isinstance(uploaded_file, (str, Path)) and os.path.exists(str(uploaded_file)):
+        shutil.copy2(str(uploaded_file), str(destination))
+    else:
+        destination.touch()
 
     return destination
 
@@ -153,18 +247,35 @@ def create_voice_for_script(
 ):
     """Generate or apply voice narration for the video."""
 
-    voice_id = VOICE_IDS.get(voice, "am_adam")
+    voice_str = str(voice or "").strip().lower()
+    if "clone" in voice_str or "xtts" in voice_str:
+        voice_id = "clone"
+    elif "own" in voice_str and ("record" in voice_str or "voice" in voice_str):
+        voice_id = "own_recording"
+    else:
+        voice_id = VOICE_IDS.get(voice, VOICE_IDS.get(voice_str, "am_adam"))
 
     from agents.voice_agent import create_voice
 
-    rate, pitch = VOICE_TUNING.get(voice, ("-5%", "+0Hz"))
+    rate, pitch = VOICE_TUNING.get(voice, VOICE_TUNING.get(voice_id, ("-5%", "+0Hz")))
 
-    # Only pass audio sample if using direct own voice recording or cloning
+    # Resolve audio sample if using direct own voice recording or cloning
     effective_sample = (
         own_voice_audio
         if voice_id in ("own_recording", "clone")
         else None
     )
+    if voice_id in ("own_recording", "clone") and not effective_sample:
+        for cand in (
+            "voice_samples/active_voice.mp3",
+            "voice_samples/active_voice.wav",
+            "voice_samples/xtts_clean_ref.wav",
+            "voice_samples/user_voice.mp3",
+            "voice_samples/user_voice.wav",
+        ):
+            if os.path.exists(cand) and os.path.getsize(cand) > 0:
+                effective_sample = cand
+                break
 
     return asyncio.run(
         create_voice(
@@ -194,13 +305,14 @@ def generate_script_from_uploaded_media(
     image_file = None
 
     for file in media_files:
-        if file.suffix.lower() in {
+        fpath = Path(file)
+        if fpath.suffix.lower() in {
             ".jpg",
             ".jpeg",
             ".png",
             ".webp",
         }:
-            image_file = file
+            image_file = fpath
             break
 
     if image_file is None:
@@ -226,6 +338,11 @@ def download_visuals(
     visual_plan_file,
     flyer_path=None,
     feedback=None,
+    aspect_ratio="16:9",
+    generation_mode="stock",
+    user_assets=None,
+    *args,
+    **kwargs,
 ):
     """
     Download visuals according to the AI visual plan with self-healing fallback.
@@ -241,6 +358,11 @@ def download_visuals(
             visual_plan_file,
             flyer_path=flyer_path,
             feedback=feedback,
+            aspect_ratio=aspect_ratio,
+            generation_mode=generation_mode,
+            user_assets=user_assets,
+            *args,
+            **kwargs,
         )
     except Exception as err:
         print(f"Visual plan download note: {err}. Triggering self-healing fallback...")
@@ -273,8 +395,8 @@ def prepare_uploaded_media(
     flyer_saved = False
 
     for source in media_files:
-
-        suffix = source.suffix.lower()
+        source_path = Path(source)
+        suffix = source_path.suffix.lower()
 
         if suffix in {
             ".jpg",
@@ -360,13 +482,15 @@ def create_pipeline_video(aspect_ratio="1:1"):
 def create_final_video(
     captions=True,
     aspect_ratio="1:1",
+    include_outro=False,
+    outro_clip=None,
 ):
-    """Create final video with optional captions."""
+    """Create final video with optional captions and outro."""
 
     if captions:
         try:
             from agents.subtitle_agent import create_subtitles
-            create_subtitles()
+            create_subtitles(aspect_ratio=aspect_ratio)
         except Exception as sub_err:
             print(f"⚠️ Subtitle creation notice: {sub_err}")
 
@@ -377,6 +501,8 @@ def create_final_video(
     return finalize(
         add_captions=captions,
         aspect_ratio=aspect_ratio,
+        include_outro=include_outro,
+        outro_clip=outro_clip,
     )
 
 
@@ -461,29 +587,6 @@ def create_metadata(
 
     metadata_path = output_dir / "metadata.json"
 
-    metadata = {
-        "title": title,
-        "description": description,
-        "tags": tags,
-    }
-
-    with open(
-        metadata_path,
-        "w",
-        encoding="utf-8",
-    ) as f:
-
-        json.dump(
-            metadata,
-            f,
-            indent=2,
-            ensure_ascii=False,
-        )
-
-    print(
-        f"✅ Metadata saved: {metadata_path}"
-    )
-
     # --------------------------------------------------------
     # OPTIONAL YOUTUBE UPLOAD
     # --------------------------------------------------------
@@ -518,6 +621,33 @@ def create_metadata(
         except Exception as yt_err:
             youtube_error = str(yt_err)
             print(f"⚠️ YouTube upload failed: {yt_err}")
+
+    metadata = {
+        "title": title,
+        "description": description,
+        "tags": tags,
+        "privacy": privacy,
+        "youtube_upload": youtube_upload,
+        "youtube_video_id": video_id,
+        "youtube_error": youtube_error,
+    }
+
+    with open(
+        metadata_path,
+        "w",
+        encoding="utf-8",
+    ) as f:
+
+        json.dump(
+            metadata,
+            f,
+            indent=2,
+            ensure_ascii=False,
+        )
+
+    print(
+        f"✅ Metadata saved: {metadata_path}"
+    )
 
     return title, description, tags, video_id, youtube_error
 
@@ -685,7 +815,10 @@ def generate_multi_media_video(
     youtube_privacy="private",
     script_override=None,
     aspect_ratio="1:1",
+    include_outro=True,
+    instagram_upload=False,
     progress_callback=None,
+    generation_mode="stock",
 ):
     """
     Topic-first AutoTube AI pipeline with a maximum of 3 AI review
@@ -912,15 +1045,39 @@ def generate_multi_media_video(
                 script = script_override
 
             elif attempt == 1:
-
-                from agents.script_agent import generate_script
-
-                script = generate_script(
-                    topic,
-                    content_type=content_type,
-                    language_style=language_style,
-                    source_context=news_verification,
+                is_flyer_mode = (
+                    content_type == "Uploaded Flyer"
+                    or generation_mode in ("flyer", "Upload Flyer/Poster", "🖼️ Upload Flyer/Poster")
                 )
+                if is_flyer_mode and (saved_media or media_files):
+                    flyer_file = saved_media[0] if saved_media else media_files[0]
+                    try:
+                        from agents.multimode_agent import extract_flyer_content, generate_script_from_flyer
+                        flyer_info = extract_flyer_content(flyer_file)
+                        pkg = generate_script_from_flyer(flyer_info, language_style=language_style)
+                        script = pkg.get("script", "")
+                        title = pkg.get("title") or title
+                    except Exception as flyer_err:
+                        print(f"Multimode flyer notice: {flyer_err}. Falling back to generate_script_from_image...")
+                        from agents.script_agent import generate_script_from_image
+                        pkg = generate_script_from_image(str(flyer_file), language_style)
+                        script = pkg.get("script", "")
+                elif generation_mode in ("explainer", "Explainer Style", "📊 Explainer Style") or content_type == "Explainer":
+                    from agents.script_agent import generate_script
+                    script = generate_script(
+                        topic,
+                        content_type="Explainer",
+                        language_style=language_style,
+                        source_context=news_verification,
+                    )
+                else:
+                    from agents.script_agent import generate_script
+                    script = generate_script(
+                        topic,
+                        content_type=content_type,
+                        language_style=language_style,
+                        source_context=news_verification,
+                    )
 
             else:
 
@@ -995,74 +1152,97 @@ def generate_multi_media_video(
             )
 
         # ----------------------------------------------------
-        # WEB VISUALS
+        # PARALLEL PIPELINE: VISUALS + VOICE CONCURRENT EXECUTION
         # ----------------------------------------------------
 
-        if run_images:
-
-            visual_plan_file = (
-                OUTPUT_DIR / "visual_plan.txt"
-            )
-
+        if run_images and run_voice:
+            visual_plan_file = OUTPUT_DIR / "visual_plan.txt"
             if not visual_plan_file.exists():
-
-                raise RuntimeError(
-                    "AI visual plan was not created."
-                )
+                raise RuntimeError("AI visual plan was not created.")
 
             progress.progress(
                 35,
                 text=(
                     f"Attempt {attempt}: "
-                    f"Finding visuals from AI visual plan{' (adjusted for feedback)' if failing_component == 'image_agent' else ''}..."
+                    f"⚡ Parallel Execution: Sourcing visuals & synthesizing narration ({voice})..."
                 ),
             )
 
-            try:
+            import concurrent.futures
 
-                download_visuals(
-                    visual_plan_file,
-                    flyer_path=None,
-                    feedback=feedback if failing_component == "image_agent" else None,
+            flyer_path_arg = (
+                (saved_media[0] if saved_media else media_files[0])
+                if (content_type == "Uploaded Flyer" or generation_mode in ("flyer", "Upload Flyer/Poster", "🖼️ Upload Flyer/Poster")) and (saved_media or media_files)
+                else None
+            )
+
+            def _task_visuals():
+                print("⚡ [Parallel Stage] Starting Visual Sourcing...")
+                try:
+                    download_visuals(
+                        visual_plan_file,
+                        flyer_path=flyer_path_arg,
+                        feedback=feedback if failing_component == "image_agent" else None,
+                        aspect_ratio=aspect_ratio,
+                        generation_mode=generation_mode,
+                        user_assets=saved_media or media_files,
+                    )
+                    print("✅ [Parallel Stage] Visual Sourcing Complete.")
+                except Exception as error:
+                    print("Visual sourcing warning:", error)
+
+            def _task_voice():
+                print(f"⚡ [Parallel Stage] Starting Narration Synthesis ({voice})...")
+                create_voice_for_script(
+                    voice=voice,
+                    own_voice_audio=voice_sample,
                 )
+                print("✅ [Parallel Stage] Narration Synthesis Complete.")
 
-            except Exception as error:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+                f_vis = executor.submit(_task_visuals)
+                f_voc = executor.submit(_task_voice)
+                concurrent.futures.wait([f_vis, f_voc])
+                f_vis.result()
+                f_voc.result()
 
-                print(
-                    "Visual sourcing warning:",
-                    error,
-                )
+            progress.progress(55, text=f"Attempt {attempt}: Visuals & voice ready! Creating video...")
 
         else:
+            # Fallback path if one component was preserved by self-healing
+            if run_images:
+                visual_plan_file = OUTPUT_DIR / "visual_plan.txt"
+                if not visual_plan_file.exists():
+                    raise RuntimeError("AI visual plan was not created.")
+                progress.progress(
+                    35,
+                    text=f"Attempt {attempt}: Finding visuals from AI visual plan{' (adjusted for feedback)' if failing_component == 'image_agent' else ''}...",
+                )
+                try:
+                    download_visuals(
+                        visual_plan_file,
+                        flyer_path=flyer_path_arg,
+                        feedback=feedback if failing_component == "image_agent" else None,
+                        aspect_ratio=aspect_ratio,
+                        generation_mode=generation_mode,
+                        user_assets=saved_media or media_files,
+                    )
+                except Exception as error:
+                    print("Visual sourcing warning:", error)
+            else:
+                print(f"[Targeted Self-Healing] Preserving existing visual assets in assets/ (failing component: {failing_component})")
 
-            print(
-                f"[Targeted Self-Healing] Preserving existing visual assets in assets/ (failing component: {failing_component})"
-            )
-
-        # ----------------------------------------------------
-        # VOICE
-        # ----------------------------------------------------
-
-        if run_voice:
-
-            progress.progress(
-                50,
-                text=(
-                    f"Attempt {attempt}: "
-                    f"Preparing narration ({voice})..."
-                ),
-            )
-
-            create_voice_for_script(
-                voice=voice,
-                own_voice_audio=voice_sample,
-            )
-
-        else:
-
-            print(
-                f"[Targeted Self-Healing] Preserving existing voice audio (failing component: {failing_component})"
-            )
+            if run_voice:
+                progress.progress(
+                    50,
+                    text=f"Attempt {attempt}: Preparing narration ({voice})...",
+                )
+                create_voice_for_script(
+                    voice=voice,
+                    own_voice_audio=voice_sample,
+                )
+            else:
+                print(f"[Targeted Self-Healing] Preserving existing voice audio (failing component: {failing_component})")
 
         # ----------------------------------------------------
         # VIDEO
@@ -1084,7 +1264,9 @@ def generate_multi_media_video(
         if not asset_check.get("valid", True):
             print(f"🛡️ [Asset Safety] Validated visual assets: replaced {len(asset_check.get('replaced', []))} defective images with clean fallbacks")
 
-        create_pipeline_video(aspect_ratio=aspect_ratio)
+        create_pipeline_video(
+            aspect_ratio=aspect_ratio
+        )
 
         # ----------------------------------------------------
         # FINAL VIDEO + CAPTIONS
@@ -1094,13 +1276,14 @@ def generate_multi_media_video(
             78,
             text=(
                 f"Attempt {attempt}: "
-                "Rendering final video and captions..."
+                "Rendering final video, captions and outro..."
             ),
         )
 
         create_final_video(
             captions=captions,
             aspect_ratio=aspect_ratio,
+            include_outro=include_outro,
         )
 
         # ----------------------------------------------------
@@ -1334,6 +1517,11 @@ def generate_multi_media_video(
             text=f"⚠️ Score < 80 after {MAX_RETRIES} retries. Moved to failed_queue/ and exited cleanly."
         )
 
+        if (OUTPUT_DIR / "final_video.mp4").exists():
+            print("Final video exists on disk. Proceeding with metadata and pre-declared YouTube upload...")
+            stopped_after_review = True
+            break
+
         return {
             "status": "FAILED_MOVED_TO_QUEUE",
             "success": False,
@@ -1345,8 +1533,11 @@ def generate_multi_media_video(
             "review": review,
             "script": script,
             "title": title,
-            "video": str(OUTPUT_DIR / "final_video.mp4") if (OUTPUT_DIR / "final_video.mp4").exists() else None,
+            "video": None,
             "stop_reason": f"Topic scored {review_score} after {MAX_RETRIES} retries. Moved to failed_queue/.",
+            "youtube_video_id": None,
+            "youtube_error": None,
+            "instagram_status": {"eligible": False, "reason": "Moved to failed_queue", "result": None},
         }
 
         break
@@ -1468,6 +1659,48 @@ def generate_multi_media_video(
         )
         print("=" * 60)
 
+    # --------------------------------------------------------
+    # OPTIONAL INSTAGRAM REELS UPLOAD
+    # --------------------------------------------------------
+    instagram_status = {"eligible": False, "reason": "Instagram upload not enabled", "result": None}
+    if instagram_upload:
+        try:
+            from agents.instagram_agent import should_upload_to_instagram, upload_to_instagram_reels
+            final_vid = OUTPUT_DIR / "final_video.mp4"
+            dur = 0.0
+            if final_vid.exists():
+                import subprocess
+                p_dur = subprocess.run(
+                    ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", str(final_vid)],
+                    capture_output=True, text=True
+                )
+                try:
+                    dur = float(p_dur.stdout.strip())
+                except Exception:
+                    dur = 0.0
+
+            eligible, reason = should_upload_to_instagram(dur, instagram_upload, aspect_ratio)
+            instagram_status = {"eligible": eligible, "reason": reason, "duration": dur, "result": None}
+
+            if eligible:
+                print(f"📸 Instagram Reels: Video is eligible ({dur:.1f}s, {aspect_ratio}). Preparing upload...")
+                public_base = os.getenv("PUBLIC_VIDEO_BASE_URL", "https://smokeless-waking-remote.ngrok-free.dev")
+                public_url = f"{public_base}/output/final_video.mp4"
+                res = upload_to_instagram_reels(
+                    video_source=str(final_vid) if final_vid.exists() else public_url,
+                    caption=f"{title}\n\n{description[:300]}"
+                )
+                instagram_status["result"] = res
+                if res.get("success"):
+                    print("✅ Instagram Reels published successfully! Media ID:", res.get("media_id"))
+                else:
+                    print("⚠️ Instagram Reels notice:", res.get("error"))
+            else:
+                print(f"ℹ️ Instagram Reels: Not eligible -> {reason}")
+        except Exception as ig_err:
+            print("⚠️ Instagram Reels processing error:", ig_err)
+            instagram_status = {"eligible": False, "reason": str(ig_err), "result": None}
+
     progress.progress(
         100,
         text="✅ AutoTube AI generation completed!",
@@ -1491,5 +1724,6 @@ def generate_multi_media_video(
         "stop_reason": stop_reason,
         "youtube_video_id": video_id,
         "youtube_error": youtube_error,
+        "instagram_status": instagram_status,
     }
 

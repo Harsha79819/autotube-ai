@@ -269,8 +269,21 @@ def heal_ffmpeg_failure(input_video="output/video.mp4", output_video="output/fin
         else:
             in_path = OUTPUT_DIR / "video.mp4"
 
+    voice_path = OUTPUT_DIR / "voice.mp3"
+    voice_dur = 15.0
+    if voice_path.exists():
+        try:
+            p = subprocess.run(
+                ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", str(voice_path)],
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=5
+            )
+            v_val = float(p.stdout.strip())
+            if v_val > 0:
+                voice_dur = v_val
+        except Exception:
+            pass
+
     if not in_path.exists() or in_path.stat().st_size == 0:
-        # Emergency 5-second video creation from asset
         first_img = ASSETS_DIR / "1.jpg"
         heal_corrupt_or_missing_assets({"needed_count": 1})
         if first_img.exists():
@@ -278,30 +291,77 @@ def heal_ffmpeg_failure(input_video="output/video.mp4", output_video="output/fin
                 "ffmpeg", "-y",
                 "-loop", "1",
                 "-i", str(first_img),
-                "-t", "5",
-                "-c:v", "libx264",
-                "-pix_fmt", "yuv420p",
-                "-preset", "ultrafast",
-                str(in_path),
             ]
+            if voice_path.exists() and voice_path.stat().st_size > 0:
+                cmd_img.extend([
+                    "-i", str(voice_path),
+                    "-t", str(voice_dur),
+                    "-map", "0:v:0",
+                    "-map", "1:a:0",
+                    "-c:v", "libx264",
+                    "-pix_fmt", "yuv420p",
+                    "-preset", "ultrafast",
+                    "-c:a", "aac",
+                    "-b:a", "192k",
+                    "-shortest",
+                    str(in_path),
+                ])
+            else:
+                cmd_img.extend([
+                    "-t", str(voice_dur),
+                    "-c:v", "libx264",
+                    "-pix_fmt", "yuv420p",
+                    "-preset", "ultrafast",
+                    str(in_path),
+                ])
             try:
-                subprocess.run(cmd_img, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=20)
+                subprocess.run(cmd_img, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=40)
             except Exception:
                 pass
 
+    # Check if in_path has audio
+    has_audio = False
+    if in_path.exists():
+        try:
+            p_a = subprocess.run(
+                ["ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries", "stream=codec_type", "-of", "default=nw=1:nk=1", str(in_path)],
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=5
+            )
+            has_audio = bool(p_a.stdout.strip())
+        except Exception:
+            pass
+
     # Execute safe CPU baseline encoding
-    safe_cmd = [
-        "ffmpeg", "-y",
-        "-i", str(in_path),
-        "-c:v", "libx264",
-        "-preset", "ultrafast",
-        "-crf", "23",
-        "-pix_fmt", "yuv420p",
-        "-c:a", "aac",
-        "-b:a", "128k",
-        "-movflags", "+faststart",
-        str(out_path),
-    ]
+    if not has_audio and voice_path.exists() and voice_path.stat().st_size > 0:
+        safe_cmd = [
+            "ffmpeg", "-y",
+            "-i", str(in_path),
+            "-i", str(voice_path),
+            "-map", "0:v:0",
+            "-map", "1:a:0",
+            "-c:v", "libx264",
+            "-preset", "ultrafast",
+            "-crf", "23",
+            "-pix_fmt", "yuv420p",
+            "-c:a", "aac",
+            "-b:a", "128k",
+            "-shortest",
+            "-movflags", "+faststart",
+            str(out_path),
+        ]
+    else:
+        safe_cmd = [
+            "ffmpeg", "-y",
+            "-i", str(in_path),
+            "-c:v", "libx264",
+            "-preset", "ultrafast",
+            "-crf", "23",
+            "-pix_fmt", "yuv420p",
+            "-c:a", "aac",
+            "-b:a", "128k",
+            "-movflags", "+faststart",
+            str(out_path),
+        ]
 
     try:
         res = subprocess.run(safe_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=90)

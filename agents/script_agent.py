@@ -20,6 +20,18 @@ from supervisor import autonomous_recover
 # CONFIG
 # ============================================================
 
+SCRIPT_SYSTEM_PROMPT = """
+You are writing a fast-paced Telugu tech review script for YouTube Shorts/Reels.
+STRICT RULES:
+1. NEVER start with a greeting, "Welcome back", or intro pleasantry. First sentence must
+   be a bold claim, shocking spec/price fact, or curiosity-gap question -- hook within 3 seconds.
+2. Each beat must be speakable in 2.0-3.5 seconds (6-12 Telugu words).
+3. For each beat, output:
+   {"beat_text": "...", "visual_query": "...",
+    "graphic_cue": {"type": "spec_card|lower_third|sticker|none", "content": "..."}}
+4. Output valid JSON array only.
+"""
+
 try:
     from agents.env_loader import get_gemini_api_key
 except ImportError:
@@ -254,6 +266,10 @@ def _parse_and_save_package(text, default_title=None):
         if line and len(line) > 2:
             visual_plan.append(line)
 
+    print(f"Parsed AI Visual Plan ({len(visual_plan)} visual concepts):")
+    for idx, v_item in enumerate(visual_plan, start=1):
+        print(f"  Visual {idx}: {v_item}")
+
     # --------------------------------------------------------
     # SECTIONS
     # --------------------------------------------------------
@@ -405,16 +421,42 @@ def _parse_and_save_package(text, default_title=None):
                 f"{item['narration']}\n\n"
             )
 
+    # Save query debug log for diagnosis
+    try:
+        import json
+        from pathlib import Path
+        logs_dir = Path("logs")
+        logs_dir.mkdir(parents=True, exist_ok=True)
+        from agents.image_agent import build_queries
+        debug_list = []
+        for sec in sections:
+            sec_num = int(sec.get("section", 1))
+            v_idx = sec_num - 1
+            v_concept = visual_plan[v_idx] if 0 <= v_idx < len(visual_plan) else ""
+            queries = build_queries(v_concept, narration=sec.get("narration", ""))
+            debug_list.append({
+                "section": sec_num,
+                "narration": sec.get("narration", ""),
+                "visual_concept": v_concept,
+                "search_queries": queries,
+            })
+        with open("logs/query_debug.json", "w", encoding="utf-8") as df:
+            json.dump(debug_list, df, indent=2, ensure_ascii=False)
+        print(f"📝 Saved query debug log ({len(debug_list)} entries) to logs/query_debug.json")
+    except Exception as dbg_err:
+        print(f"Query debug logging notice: {dbg_err}")
+
     if not title and default_title:
         candidate_title = str(default_title).strip()
         if len(candidate_title) <= 120 and "\n" not in candidate_title:
             title = candidate_title
 
     if not title and visual_plan:
+        first_vis = visual_plan[0].split("|")[0].strip()
         candidate = re.sub(
             r"^(photo|image|picture|illustration|close-up)\s+of\s+",
             "",
-            visual_plan[0],
+            first_vis,
             flags=re.IGNORECASE,
         ).strip()
         if candidate and len(candidate) <= 60:
@@ -637,9 +679,37 @@ def generate_script(
         source_context
     )
 
+    lang_str = str(language_style).lower()
+    is_telugu = "telugu" in lang_str or "తెలుగు" in str(language_style)
+    is_hindi = "hindi" in lang_str or "हिंदी" in str(language_style)
+
+    if is_telugu:
+        role_desc = "You are a professional Telugu YouTube script writer and visual-content planning director."
+        language_rules = """LANGUAGE & SCRIPT RULES:
+
+- Write the TITLE and SCRIPT narration strictly in natural, fluent, engaging spoken Telugu (తెలుగు లిపి).
+- STRICT HOOK RULE: NEVER start with a greeting, "Welcome back", or intro pleasantry. First sentence must be a bold claim, shocking spec/price fact, or curiosity-gap question -- hook within 3 seconds.
+- PACING: Each beat must be speakable in 2.0-3.5 seconds (6-12 Telugu words).
+- Preserve proper names, product models, tech terms, dates, and amounts clearly.
+- CRITICAL VISUAL RULE: All VISUAL_PLAN descriptions and keywords MUST be written strictly in concise ENGLISH keywords (e.g., "1. Apple iPhone 16 Pro Max smartphone on table", "2. Tim Cook keynote presentation"), because our stock video search engine queries in English. Do NOT write visual descriptions in Telugu."""
+    elif is_hindi:
+        role_desc = "You are a professional Hindi YouTube script writer and visual-content planning director."
+        language_rules = """LANGUAGE & SCRIPT RULES:
+
+- Write the TITLE and SCRIPT narration strictly in natural, fluent spoken Hindi (देवनागरी लिपि).
+- CRITICAL VISUAL RULE: All VISUAL_PLAN descriptions and keywords MUST be written strictly in concise ENGLISH keywords. Do NOT write visual descriptions in Hindi."""
+    else:
+        role_desc = "You are a professional YouTube script writer and visual-content planning director."
+        language_rules = """LANGUAGE:
+
+- Write the TITLE and SCRIPT narration in natural spoken English.
+- Use natural spoken English suitable for video narration.
+- Preserve names, places, organizations, dates and amounts.
+- Do not invent facts, quotes or statistics.
+- All VISUAL_PLAN descriptions in concise English keywords."""
+
     prompt = f"""
-You are a professional English YouTube script writer
-and visual-content planning director.
+{role_desc}
 
 Create a complete YouTube content package about:
 
@@ -722,16 +792,7 @@ NEWS ACCURACY:
 - Preserve uncertainty when the source itself is uncertain.
 - Never present an unverified event as confirmed news.
 
-LANGUAGE:
-
-- English only.
-- Never use Telugu.
-- Never use Telugu script.
-- Never use Romanized Telugu.
-- Use natural spoken English.
-- Write for an English TTS voice.
-- Preserve names, places, organizations, dates and amounts.
-- Do not invent facts, quotes or statistics.
+{language_rules}
 
 SCRIPT:
 
@@ -752,24 +813,47 @@ SCRIPT:
 
 VISUAL PLAN & PACING:
 
-Generate a RICH and DYNAMIC visual plan with frequent scene transitions (a new visual every 5 to 10 seconds of speech).
+Generate a RICH, FAST-PACED, and DYNAMIC visual plan with frequent scene transitions (a new visual every 2.0 to 3.5 seconds of speech).
 Guidelines for visual count:
-- 30–60 second scripts (Shorts): 8–12 dynamic visuals
-- 60–120 second scripts: 12–18 dynamic visuals
-- 120–240+ second scripts: 18–28 dynamic visuals
+- 30–60 second scripts (Shorts): 10–18 dynamic visuals (each 2.0 to 3.5s)
+- 60–120 second scripts: 18–35 dynamic visuals (each 2.0 to 3.5s)
+- 120–240+ second scripts: 35–60 dynamic visuals (each 2.0 to 3.5s)
 
-Divide your narration into short, engaging sections (1 to 2 sentences per section, around 5 to 10 seconds of speech each).
-Every section must have its own dedicated, concrete visual concept in the VISUAL_PLAN!
-This ensures the video has frequent, cinematic visual cuts instead of holding on one image for too long.
+Divide your narration into short, punchy beats (each 2.0 to 3.5 seconds of speech, about 6 to 12 words).
+STRICT RULE: Never hold a single shot or section longer than 3.5 seconds! If a thought or sentence takes longer than 3.5 seconds to speak, you MUST split it into two distinct beats with different visuals.
+Every beat/section must have its own dedicated, concrete visual concept in the VISUAL_PLAN!
+This ensures the video has frequent, cinematic visual cuts and transitions instead of holding on any visual.
 
 Visual 1 must represent the main subject/opening hook.
 Supporting visuals 2 through N-1 must represent different supporting subjects directly discussed in their corresponding narration section.
 Visual N must be a strong concluding visual directly related to the final takeaway.
 
-CRITICAL VISUAL RELEVANCE:
-Every visual must describe the EXACT subject being discussed in that section.
-Do NOT use generic descriptions (e.g. do not write "AI technology", "India news", "business").
-Instead, describe concrete visual scenes (e.g. "Sam Altman presenting model at OpenAI headquarters", "Nvidia Blackwell AI chip with liquid cooling").
+CRITICAL VISUAL RELEVANCE & NAMED ENTITY ARCHETYPING:
+1. Concrete Visual Imagery:
+   Every visual must describe the EXACT concrete physical subject being discussed in that section.
+   Do NOT use generic or abstract descriptions (e.g. do NOT write "AI technology", "India news", "future vision", "business growth", "success").
+   Describe concrete, cinematic physical scenes with specific visual context.
+2. Named Entity & Niche Brand Handling:
+   Stock media libraries do NOT have private individuals, local niche figures, or rare brands.
+   When a specific person, celebrity, local event, or brand is mentioned, supply a stock-searchable visual archetype:
+   - Specific CEO/entrepreneur -> "tech company CEO keynote presentation stage" or "corporate executive smiling in modern office"
+   - Specific Indian actor/personality -> "charismatic Indian actor portrait dramatic studio lighting"
+   - Specific incident/place -> "rescue team boats on wide river" or "busy Indian city intersection traffic aerial view"
+   - Specific product/factory -> "high-tech semiconductor fabrication cleanroom robot"
+3. Multi-Query Alternatives:
+   For every visual concept, provide 2 to 3 alternative search queries separated by " | " (pipe) in order of preference:
+   Format: Primary Visual Scene | Alternative Stock Query | Fallback B-Roll Query
+   Examples:
+   - "Hyderabad HITEC city skyline aerial view | modern highway flyover traffic | Indian metropolis skyline sunset"
+   - "Sam Altman OpenAI keynote speech | tech conference CEO speaking stage | business executive speaking podium"
+   - "Farmers inspecting green crop fields | agricultural tractor farming land | rural Indian countryside landscape"
+   - "Semiconductor microchip silicon wafer | robotic factory assembly line | modern electronics circuit motherboard"
+4. Commercial Products & Hardware:
+   When discussing a specific branded consumer product (e.g. iPhone 18, Samsung Galaxy S25, PS6, RTX 5090):
+   Lead with the exact brand and model name, followed by tech news reveal terms and a safe generic category:
+   - "iPhone 18 official press render | iPhone 18 camera leak reveal | modern flagship smartphone sleek camera close-up"
+   - "Samsung Galaxy S25 Ultra design | Galaxy S25 hands on review | modern android smartphone curved screen"
+   - "PlayStation 6 gaming console reveal | next gen console controller teaser | gaming console controller glowing neon lights"
 
 SECTION MAPPING:
 
@@ -787,10 +871,10 @@ SCRIPT:
 <complete narration>
 
 VISUAL_PLAN:
-1. <specific visual concept>
-2. <specific visual concept>
+1. <Primary Query> | <Alternative Query> | <Fallback B-Roll>
+2. <Primary Query> | <Alternative Query> | <Fallback B-Roll>
 ...
-N. <specific visual concept>
+N. <Primary Query> | <Alternative Query> | <Fallback B-Roll>
 
 SECTIONS:
 
@@ -925,9 +1009,32 @@ def generate_script_from_image(
             mime_type=mime_type,
         )
 
-    prompt = """
-You are an expert visual-content analyst and professional
-English YouTube script writer.
+    lang_str = str(language_style).lower()
+    is_telugu = "telugu" in lang_str or "తెలుగు" in str(language_style)
+    is_hindi = "hindi" in lang_str or "हिंदी" in str(language_style)
+
+    if is_telugu:
+        flyer_role = "You are an expert visual-content analyst and professional Telugu YouTube script writer."
+        flyer_lang = """LANGUAGE:
+- Write the TITLE and SCRIPT narration strictly in natural, fluent, engaging spoken Telugu (తెలుగు లిపి).
+- Sound like an engaging Telugu creator explaining the flyer.
+- CRITICAL VISUAL RULE: All VISUAL_PLAN descriptions MUST be in concise ENGLISH keywords so our stock search engine can find visuals."""
+    elif is_hindi:
+        flyer_role = "You are an expert visual-content analyst and professional Hindi YouTube script writer."
+        flyer_lang = """LANGUAGE:
+- Write the TITLE and SCRIPT narration strictly in natural, fluent spoken Hindi (देवनागरी लिपि).
+- All VISUAL_PLAN descriptions in concise ENGLISH keywords."""
+    else:
+        flyer_role = "You are an expert visual-content analyst and professional English YouTube script writer."
+        flyer_lang = """LANGUAGE:
+- English only.
+- Use natural spoken English.
+- Write for an English TTS voice.
+- Preserve names, places, organizations, dates and important numbers.
+- Do not invent unsupported facts."""
+
+    prompt = f"""
+{flyer_role}
 
 Carefully inspect the uploaded flyer/image.
 
@@ -936,20 +1043,9 @@ The flyer is the primary source of truth.
 Identify only information visible or clearly supported
 by the flyer.
 
-Create a natural English YouTube narration based on
-the flyer.
+Create an engaging YouTube narration based on the flyer.
 
-LANGUAGE:
-
-- English only.
-- Never use Telugu.
-- Never use Telugu script.
-- Never use Romanized Telugu.
-- Use natural spoken English.
-- Write for an English TTS voice.
-- Preserve names, places, organizations, dates
-  and important numbers.
-- Do not invent unsupported facts.
+{flyer_lang}
 
 SCRIPT:
 
@@ -1002,6 +1098,11 @@ The final section must directly correspond to the original flyer as the concludi
 
 The narration must flow continuously from Section 1 through Section N.
 
+CRITICAL VISUAL SEARCH FORMAT:
+For visuals 1 through N-1, provide 2 to 3 concrete stock-searchable queries separated by " | " (Primary Scene | Alternative Query | Fallback B-Roll).
+If specific niche figures, local places, or brands are in the flyer, map them to stock-searchable visual archetypes.
+Visual N must be: "The original uploaded flyer."
+
 Return EXACTLY this structure:
 
 TITLE:
@@ -1011,8 +1112,8 @@ SCRIPT:
 <complete narration>
 
 VISUAL_PLAN:
-1. <specific visual concept>
-2. <specific visual concept>
+1. <Primary Query> | <Alternative Query> | <Fallback B-Roll>
+2. <Primary Query> | <Alternative Query> | <Fallback B-Roll>
 ...
 N. The original flyer.
 
@@ -1221,8 +1322,8 @@ def generate_package_from_user_script(
 
     words = user_script.split()
     word_count = len(words)
-    # Estimate ~12-15 words per visual section (scene change every 5-7 seconds)
-    suggested_count = max(6, min(26, max(6, round(word_count / 14))))
+    # Estimate ~7-10 words per visual section (scene change every 2.0-3.5 seconds)
+    suggested_count = max(6, min(35, max(6, round(word_count / 8))))
 
     print()
     print("=" * 60)
@@ -1238,10 +1339,12 @@ You must NOT modify, rewrite, paraphrase, shorten, or expand the creator's narra
 Every sentence and word from the script must appear in order across the sections.
 
 Your ONLY job is:
-1. Divide the provided narration into approximately {suggested_count} logical narrative sections (between 6 and 26 sections, with scene changes every 5 to 8 seconds).
-2. For each section, design a specific, highly relevant visual concept and search query that depicts the EXACT subject, company, person, product, or event being spoken about in that section.
+1. Divide the provided narration into approximately {suggested_count} logical narrative sections (fast-paced beats of 2.0 to 3.5 seconds / 6 to 12 words each, never holding a shot longer than 3.5s).
+2. For each section, design a specific, highly relevant visual concept and search queries that depict the EXACT physical subject, company, person, product, or event being spoken about in that section.
    - Do NOT use generic terms like "AI technology", "business", "news".
    - Describe concrete visual imagery matching the spoken words.
+   - If specific private people, local personalities, or niche brands are mentioned, provide stock-searchable visual archetypes (e.g. "tech executive keynote stage").
+   - Provide 2 to 3 alternative queries per section separated by " | " (Format: Primary Visual Scene | Alternative Stock Query | Fallback B-Roll).
 
 CREATOR'S EXACT SCRIPT:
 {user_script}
@@ -1255,10 +1358,10 @@ SCRIPT:
 {user_script}
 
 VISUAL_PLAN:
-1. <specific visual concept for section 1>
-2. <specific visual concept for section 2>
+1. <Primary Query> | <Alternative Query> | <Fallback B-Roll>
+2. <Primary Query> | <Alternative Query> | <Fallback B-Roll>
 ...
-N. <specific visual concept for section N>
+N. <Primary Query> | <Alternative Query> | <Fallback B-Roll>
 
 SECTIONS:
 

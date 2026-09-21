@@ -1,8 +1,60 @@
 import json
 import re
+from dataclasses import dataclass
 from pathlib import Path
 
 import whisper
+
+
+# ============================================================
+# STUDIO-GRADE WORD-HIGHLIGHT CAPTIONS
+# ============================================================
+
+@dataclass
+class WordTiming:
+    word: str
+    start: float
+    end: float
+
+HEADER = """[Script Info]
+Title: AutoTube AI Captions
+ScriptType: v4.00+
+WrapStyle: 0
+PlayResX: {width}
+PlayResY: {height}
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Noto Sans Telugu,{fontsize},&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,3,2,2,40,40,{margin_v},1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+"""
+
+ACTIVE, INACTIVE = "&H0000FFFF", "&H00FFFFFF"
+
+
+def _fmt_time(s):
+    h, m, sec = int(s // 3600), int((s % 3600) // 60), int(s % 60)
+    cs = int(round((s - int(s)) * 100))
+    return f"{h}:{m:02d}:{sec:02d}.{cs:02d}"
+
+
+def build_word_highlight_ass(whisper_words, output_path, video_width=1080, video_height=1920, fontsize=72, chunk_size=3):
+    words = [WordTiming(w["word"].strip(), w["start"], w["end"]) for w in whisper_words if w["word"].strip()]
+    chunks = [words[i:i+chunk_size] for i in range(0, len(words), chunk_size)]
+    header = HEADER.format(width=video_width, height=video_height, fontsize=fontsize,
+                            margin_v=int(video_height * 0.12))
+    events = []
+    for chunk in chunks:
+        for active_idx, active_word in enumerate(chunk):
+            text = " ".join(f"{{\\c{ACTIVE if i == active_idx else INACTIVE}}}{w.word}" for i, w in enumerate(chunk))
+            events.append(f"Dialogue: 0,{_fmt_time(active_word.start)},{_fmt_time(active_word.end)},Default,,0,0,0,,{text}")
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(header + "\n".join(events) + "\n")
+    return str(output_path)
+
 
 
 # ============================================================
@@ -28,7 +80,7 @@ def normalize_text(text):
     text = text.replace("–", "-")
     text = text.replace("—", "-")
 
-    text = re.sub(r"[^a-z0-9]+", " ", text)
+    text = re.sub(r"[^\w\s\u0C00-\u0C7F\u0900-\u097F]+", " ", text)
 
     return " ".join(text.split())
 
@@ -73,6 +125,32 @@ def format_timestamp(seconds):
         f"{hours:02}:{minutes:02}:{secs:02},"
         f"{milliseconds:03}"
     )
+
+
+def format_ass_timestamp(seconds):
+    seconds = max(0.0, float(seconds))
+
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = int(seconds % 60)
+
+    centiseconds = int(
+        round((seconds - int(seconds)) * 100)
+    )
+
+    if centiseconds >= 100:
+        secs += 1
+        centiseconds = 0
+
+    if secs >= 60:
+        minutes += 1
+        secs = 0
+
+    if minutes >= 60:
+        hours += 1
+        minutes = 0
+
+    return f"{hours}:{minutes:02d}:{secs:02d}.{centiseconds:02d}"
 
 
 # ============================================================
@@ -206,12 +284,24 @@ def transcribe_audio():
     from agents.video_agent import get_whisper_model
     model = get_whisper_model()
 
+    whisper_lang = "en"
+    script_file = Path("output/script.txt")
+    if script_file.exists():
+        try:
+            s_content = script_file.read_text(encoding="utf-8")
+            if re.search(r"[\u0C00-\u0C7F]", s_content):
+                whisper_lang = "te"
+            elif re.search(r"[\u0900-\u097F]", s_content):
+                whisper_lang = "hi"
+        except Exception:
+            pass
+
     print()
-    print("Transcribing voice.mp3...")
+    print(f"Transcribing voice.mp3 (language={whisper_lang})...")
 
     result = model.transcribe(
         str(VOICE_FILE),
-        language="en",
+        language=whisper_lang,
         fp16=False,
         word_timestamps=True,
         verbose=False,
@@ -778,11 +868,147 @@ def create_subtitle_chunks(
     return subtitles
 
 
+def write_ass_karaoke_subtitles(items, output_ass="output/subtitles.ass", aspect_ratio="1:1"):
+    """
+    Generate Advanced SubStation Alpha (.ass) word-by-word highlighted karaoke subtitles.
+    Supports either pre-chunked script items (all_subtitles) or raw whisper_words.
+    Ensures correct Telugu font selection (Kohinoor Telugu) and libass compatibility.
+    """
+    if not items:
+        return None
+
+    if aspect_ratio == "9:16":
+        res_x, res_y = 1080, 1920
+        font_size = 62
+        margin_v = 380
+    elif aspect_ratio == "16:9":
+        res_x, res_y = 1920, 1080
+        font_size = 54
+        margin_v = 85
+    else:  # 1:1
+        res_x, res_y = 1080, 1080
+        font_size = 56
+        margin_v = 75
+
+    script_file = Path("output/script.txt")
+    script_text = ""
+    if script_file.exists():
+        try:
+            script_text = script_file.read_text(encoding="utf-8")
+        except Exception:
+            pass
+
+    has_telugu = (
+        any(re.search(r"[\u0C00-\u0C7F]", str(item.get("text", ""))) for item in items)
+        or bool(re.search(r"[\u0C00-\u0C7F]", script_text))
+    )
+    has_hindi = (
+        any(re.search(r"[\u0900-\u097F]", str(item.get("text", ""))) for item in items)
+        or bool(re.search(r"[\u0900-\u097F]", script_text))
+    )
+    font_name = "Kohinoor Telugu" if has_telugu else ("Kohinoor Devanagari" if has_hindi else "Arial")
+
+    header = f"""[Script Info]
+ScriptType: v4.00+
+PlayResX: {res_x}
+PlayResY: {res_y}
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,{font_name},{font_size},&H0000FFFF,&H00FFFFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,3.5,1.5,2,40,40,{margin_v},1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+"""
+
+    dialogues = []
+    # Check if items are chunks (contain spaces or multiple words) or single words
+    first_text = items[0].get("text", "").strip()
+    is_chunk_list = " " in first_text or len(first_text.split()) > 1 or "index" in items[0]
+
+    if is_chunk_list:
+        for chunk in items:
+            c_text = chunk.get("text", "").strip()
+            if not c_text:
+                continue
+            c_start = float(chunk.get("start", 0.0))
+            c_end = float(chunk.get("end", c_start + 1.0))
+            words = c_text.split()
+            if not words:
+                continue
+            chunk_dur = max(0.2, c_end - c_start)
+            word_dur_cs = max(8, int(round((chunk_dur / len(words)) * 100)))
+            k_parts = [f"{{\\kf{word_dur_cs}}}{w} " for w in words]
+            k_text = "".join(k_parts).strip()
+            start_str = format_ass_timestamp(c_start)
+            end_str = format_ass_timestamp(c_end)
+            dialogues.append(f"Dialogue: 0,{start_str},{end_str},Default,,0,0,0,,{k_text}")
+    else:
+        events = []
+        current_chunk = []
+        for w in items:
+            if not current_chunk:
+                current_chunk.append(w)
+                continue
+
+            prev_w = current_chunk[-1]
+            gap = w["start"] - prev_w["end"]
+
+            # Break chunk if pause > 0.35s or reached 4 words or sentence boundary
+            if gap > 0.35 or len(current_chunk) >= 4 or prev_w["text"].rstrip().endswith((".", "!", "?")):
+                events.append(current_chunk)
+                current_chunk = [w]
+            else:
+                current_chunk.append(w)
+
+        if current_chunk:
+            events.append(current_chunk)
+
+        for chunk in events:
+            if not chunk:
+                continue
+            c_start = chunk[0]["start"]
+            c_end = chunk[-1]["end"]
+
+            karaoke_parts = []
+            for idx, word_obj in enumerate(chunk):
+                w_text = word_obj.get("text", "").strip()
+                w_start = word_obj.get("start", c_start)
+                w_end = word_obj.get("end", c_end)
+
+                dur_cs = max(1, int(round((w_end - w_start) * 100)))
+
+                if idx == 0 and w_start > c_start:
+                    pre_gap = int(round((w_start - c_start) * 100))
+                    if pre_gap > 0:
+                        karaoke_parts.append(f"{{\\kf{pre_gap}}}")
+                elif idx > 0:
+                    prev_end = chunk[idx - 1]["end"]
+                    inter_gap = int(round((w_start - prev_end) * 100))
+                    if inter_gap > 2:
+                        karaoke_parts.append(f"{{\\kf{inter_gap}}}")
+
+                karaoke_parts.append(f"{{\\kf{dur_cs}}}{w_text} ")
+
+            k_text = "".join(karaoke_parts).strip()
+            start_str = format_ass_timestamp(c_start)
+            end_str = format_ass_timestamp(c_end)
+            dialogues.append(f"Dialogue: 0,{start_str},{end_str},Default,,0,0,0,,{k_text}")
+
+    ass_content = header + "\n".join(dialogues) + "\n"
+    out_path = Path(output_ass)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(ass_content, encoding="utf-8")
+    print(f"Word-Level Karaoke ASS subtitles saved: {output_ass} ({len(dialogues)} timed lines)")
+    return str(out_path)
+
+
 # ============================================================
 # CREATE SUBTITLES
 # ============================================================
 
-def create_subtitles():
+def create_subtitles(aspect_ratio="1:1"):
 
     print("=" * 60)
     print("SUBTITLE GENERATION")
@@ -904,6 +1130,16 @@ def create_subtitles():
             f.write(
                 f"{subtitle['text']}\n\n"
             )
+
+    # Generate Word-Level Karaoke ASS Subtitles from aligned all_subtitles
+    try:
+        write_ass_karaoke_subtitles(
+            all_subtitles,
+            output_ass="output/subtitles.ass",
+            aspect_ratio=aspect_ratio,
+        )
+    except Exception as ass_err:
+        print(f"Karaoke ASS generation notice: {ass_err}")
 
     print()
     print("=" * 60)
