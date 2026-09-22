@@ -234,6 +234,15 @@ class ProcessSupervisor:
         signal.signal(signal.SIGTERM, lambda s, f: self.stop_all())
 
         self.log_daemon("Supervisor loop starting...")
+        
+        # On macOS, prevent idle system sleep while supervisor is active
+        if sys.platform == "darwin" and shutil.which("caffeinate"):
+            try:
+                subprocess.Popen(["caffeinate", "-i", "-s", "-w", str(os.getpid())])
+                self.log_daemon("macOS caffeinate active: preventing idle sleep while AutoTube is running.")
+            except Exception:
+                pass
+
         self.streamlit_proc = self.start_streamlit()
         time.sleep(2.0)
         self.tunnel_proc = self.start_tunnel()
