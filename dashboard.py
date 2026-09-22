@@ -11,6 +11,14 @@ from importlib import import_module
 
 st = import_module("streamlit")
 
+try:
+    from agents.env_loader import get_gemini_api_key, get_pexels_api_key, sync_secrets_to_env
+    sync_secrets_to_env()
+except Exception:
+    def get_gemini_api_key(): return os.getenv("GEMINI_API_KEY", "")
+    def get_pexels_api_key(): return os.getenv("PEXELS_API_KEY", "")
+    def sync_secrets_to_env(): pass
+
 
 # ============================================================
 # DIRECTORIES
@@ -2066,6 +2074,68 @@ except Exception:
 
 
 # ============================================================
+# API KEYS & CLOUD CONNECTIVITY GUARD
+# ============================================================
+active_gemini_key = get_gemini_api_key()
+active_pexels_key = get_pexels_api_key()
+
+if not active_gemini_key:
+    st.markdown(
+        """
+        <div style="background: rgba(245, 158, 11, 0.09); border: 1.5px solid rgba(245, 158, 11, 0.45); border-radius: 16px; padding: 1.25rem 1.4rem; margin: 1rem 0 1.5rem 0;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 0.35rem;">
+                <span style="font-size: 1.35rem;">🔑</span>
+                <span style="font-size: 1.1rem; font-weight: 700; color: #FBBF24;">Google Gemini API Key Required</span>
+            </div>
+            <p style="font-size: 0.92rem; color: #E2E8F0; margin: 0 0 0.8rem 0; line-height: 1.45;">
+                AutoTube AI uses Google Gemini to write scripts, review content, and plan scenes.
+                Please enter your Gemini API key below to enable video generation:
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    k_col1, k_col2 = st.columns([2.8, 1])
+    with k_col1:
+        gemini_input_val = st.text_input(
+            "Gemini API Key",
+            type="password",
+            placeholder="Paste your Gemini API key (AQ.Ab8... or AIza...)",
+            key="ui_gemini_input_top",
+            label_visibility="collapsed",
+        )
+    with k_col2:
+        if st.button("Connect Key 🚀", key="btn_connect_gemini_top", use_container_width=True):
+            if gemini_input_val and gemini_input_val.strip():
+                st.session_state["GEMINI_API_KEY"] = gemini_input_val.strip()
+                os.environ["GEMINI_API_KEY"] = gemini_input_val.strip()
+                st.success("✅ Gemini API Key connected!")
+                st.rerun()
+            else:
+                st.warning("Please enter a valid key.")
+else:
+    with st.expander("🔑 Cloud API Keys & Settings", expanded=False):
+        st.markdown(f"**Google Gemini:** `🟢 Connected`")
+        st.markdown(f"**Pexels Stock:** `{'🟢 Connected' if active_pexels_key else '⚪ Optional (automatic stock fallback active)'}`")
+        ecol1, ecol2 = st.columns(2)
+        with ecol1:
+            new_g = st.text_input("Change Gemini API Key", type="password", key="ui_gemini_update", placeholder="New Gemini key...")
+            if st.button("Update Gemini Key", key="btn_save_gemini"):
+                if new_g.strip():
+                    st.session_state["GEMINI_API_KEY"] = new_g.strip()
+                    os.environ["GEMINI_API_KEY"] = new_g.strip()
+                    st.success("Gemini Key updated!")
+                    st.rerun()
+        with ecol2:
+            new_p = st.text_input("Change Pexels API Key", type="password", key="ui_pexels_update", placeholder="New Pexels key...")
+            if st.button("Update Pexels Key", key="btn_save_pexels"):
+                if new_p.strip():
+                    st.session_state["PEXELS_API_KEY"] = new_p.strip()
+                    os.environ["PEXELS_API_KEY"] = new_p.strip()
+                    st.success("Pexels Key updated!")
+                    st.rerun()
+
+# ============================================================
 # STUDIO NAVIGATION TABS (AI COPILOT vs MANUAL STUDIO)
 # ============================================================
 
@@ -2881,6 +2951,11 @@ with tab_manual:
         elif is_user_media and not media_paths:
             st.warning(
                 "Please upload at least one image or video clip in the Media & Assets section for 'My Own Images/Videos' mode."
+            )
+
+        elif not get_gemini_api_key():
+            st.error(
+                "🔑 Google Gemini API Key is required! Please paste your key in the box at the top of the page."
             )
 
         else:

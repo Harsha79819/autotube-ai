@@ -24,6 +24,12 @@ def run_app():
     import streamlit as st
 
     try:
+        from agents.env_loader import sync_secrets_to_env
+        sync_secrets_to_env()
+    except Exception:
+        pass
+
+    try:
         # Run dashboard within guarded execution context
         runpy.run_path(str(ROOT / "dashboard.py"), run_name="__main__")
 

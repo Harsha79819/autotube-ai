@@ -9,6 +9,15 @@ from google import genai
 
 load_dotenv()
 
+try:
+    from agents.env_loader import get_gemini_api_key
+except ImportError:
+    try:
+        from env_loader import get_gemini_api_key
+    except ImportError:
+        def get_gemini_api_key():
+            return os.getenv("GEMINI_API_KEY", "")
+
 ACTIVE_MODELS = [
     "gemini-2.5-flash",
     "gemini-2.0-flash",
@@ -18,7 +27,7 @@ ACTIVE_MODELS = [
 ]
 
 def generate_text_cascade(prompt: str, api_key: str = None) -> str:
-    key = api_key or os.getenv("GEMINI_API_KEY", "")
+    key = api_key or get_gemini_api_key()
     if not key:
         raise RuntimeError("GEMINI_API_KEY is not configured.")
 
@@ -43,7 +52,7 @@ def generate_text_cascade(prompt: str, api_key: str = None) -> str:
 
 def generate_multimodal_cascade(prompt: str, image_bytes: bytes, mime_type: str = "image/jpeg", api_key: str = None) -> str:
     """Generate content from an image + text prompt using Gemini models in cascade."""
-    key = api_key or os.getenv("GEMINI_API_KEY", "")
+    key = api_key or get_gemini_api_key()
     if not key:
         raise RuntimeError("GEMINI_API_KEY is not configured.")
 

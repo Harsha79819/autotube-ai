@@ -18,7 +18,16 @@ OUTPUT_DIR = ROOT / "output"
 ASSETS_DIR = ROOT / "assets"
 FAILED_QUEUE_DIR = ROOT / "failed_queue"
 
-API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
+try:
+    from agents.env_loader import get_gemini_api_key
+except ImportError:
+    try:
+        from env_loader import get_gemini_api_key
+    except ImportError:
+        def get_gemini_api_key():
+            return os.getenv("GEMINI_API_KEY", "").strip()
+
+API_KEY = get_gemini_api_key()
 
 MODELS = [
     "gemini-2.5-flash",
@@ -43,14 +52,13 @@ if API_KEY:
 _JOB_LOCK = threading.Lock()
 _ACTIVE_JOB = {
     "id": None,
-    "status": "idle",       # "idle", "running", "completed", "failed"
-    "action": None,         # "generate", "rerender", "trend_scan"
     "topic": None,
-    "step": "Idle",
+    "status": "idle",
     "progress": 0,
-    "started_at": 0.0,
-    "error": None,
+    "step_name": "",
+    "thread": None,
     "result": None,
+    "error": None,
 }
 
 
@@ -78,10 +86,12 @@ def _update_job(**kwargs):
 
 def call_gemini(prompt, system_instruction=None):
     """Call Gemini with multi-model fallback."""
-    global _client
-    if not _client and API_KEY:
+    global _client, API_KEY
+    current_key = get_gemini_api_key()
+    if current_key and (not _client or current_key != API_KEY):
         try:
             from google import genai
+            API_KEY = current_key
             _client = genai.Client(api_key=API_KEY)
         except Exception:
             pass

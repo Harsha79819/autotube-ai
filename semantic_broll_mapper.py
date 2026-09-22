@@ -87,7 +87,11 @@ def generate_search_queries(chunk: str, topic_category: str = "tech", gemini_cal
                 from google import genai
                 from dotenv import load_dotenv
                 load_dotenv()
-                api_key = os.getenv("GEMINI_API_KEY")
+                try:
+                    from agents.env_loader import get_gemini_api_key
+                    api_key = get_gemini_api_key()
+                except Exception:
+                    api_key = os.getenv("GEMINI_API_KEY")
                 if api_key:
                     client = genai.Client(api_key=api_key)
                     def _default_call(p):
