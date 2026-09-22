@@ -604,25 +604,40 @@ async def generate_edge_tts_speech(
     rate="+8%",
     pitch="+2Hz",
 ):
-    """Generate high-quality multilingual neural voice using Microsoft Edge-TTS with tuned pacing."""
+    """Generate high-quality multilingual neural voice using Microsoft Edge-TTS with tuned pacing,
+    capturing exact word boundary timestamps directly from the stream."""
+    word_timings = []
     try:
-        from edge_tts_generator import generate_telugu_speech
-        await generate_telugu_speech(
+        from edge_tts_generator import generate_with_word_boundaries
+        _, word_timings = await generate_with_word_boundaries(
             text=speech_text,
             output_path=output_mp3,
             voice=voice_code or "te-IN-MohanNeural",
             rate=rate or "+8%",
             pitch=pitch or "+2Hz",
         )
-    except Exception:
-        import edge_tts
-        communicate = edge_tts.Communicate(
-            text=speech_text,
-            voice=voice_code,
-            rate=rate or "+8%",
-            pitch=pitch or "+2Hz",
-        )
-        await communicate.save(output_mp3)
+    except Exception as boundary_err:
+        print(f"Edge-TTS boundary capture note: {boundary_err}. Falling back to standard synthesis...")
+        try:
+            from edge_tts_generator import generate_telugu_speech
+            await generate_telugu_speech(
+                text=speech_text,
+                output_path=output_mp3,
+                voice=voice_code or "te-IN-MohanNeural",
+                rate=rate or "+8%",
+                pitch=pitch or "+2Hz",
+            )
+        except Exception:
+            import edge_tts
+            communicate = edge_tts.Communicate(
+                text=speech_text,
+                voice=voice_code,
+                rate=rate or "+8%",
+                pitch=pitch or "+2Hz",
+            )
+            await communicate.save(output_mp3)
+
+    return word_timings
 
 
 @autonomous_recover("voice_agent")
@@ -648,6 +663,7 @@ async def create_voice(
 
     output_wav = "output/voice_raw.wav"
     output_mp3 = "output/voice.mp3"
+    captured_words = []
 
     is_own_recording = bool(
         voice
@@ -1054,7 +1070,7 @@ async def create_voice(
                 except Exception as norm_err:
                     print(f"Voice agent Telugu normalization note: {norm_err}")
 
-            await generate_edge_tts_speech(
+            captured_words = await generate_edge_tts_speech(
                 speech_text=speech_text,
                 voice_code=edge_voice_id,
                 output_mp3=output_mp3,
@@ -1169,6 +1185,67 @@ async def create_voice(
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
+
+    # ----------------------------------------------------
+    # Synchronize Word-Level Timestamps to output/transcription.json
+    # ----------------------------------------------------
+    try:
+        import json
+        import time
+        from pathlib import Path
+        cache_file = Path("output/transcription.json")
+        cache_file.parent.mkdir(parents=True, exist_ok=True)
+
+        final_duration = 0.0
+        try:
+            probe = subprocess.run(
+                [
+                    "ffprobe",
+                    "-v",
+                    "error",
+                    "-show_entries",
+                    "format=duration",
+                    "-of",
+                    "default=noprint_wrappers=1:nokey=1",
+                    str(output_mp3),
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            final_duration = float(probe.stdout.strip())
+        except Exception:
+            pass
+
+        final_words = []
+        if captured_words and len(captured_words) > 0:
+            orig_duration = max(w["end"] for w in captured_words) if captured_words else 0.0
+            scale = (final_duration / orig_duration) if (orig_duration > 0 and final_duration > 0) else 1.0
+            for w in captured_words:
+                final_words.append({
+                    "text": w.get("text", w.get("word", "")),
+                    "normalized": w.get("normalized", w.get("text", "")),
+                    "start": round(w["start"] * scale, 3),
+                    "end": round(w["end"] * scale, 3),
+                })
+        else:
+            from agents.video_agent import fallback_script_word_timestamps
+            final_words = fallback_script_word_timestamps(output_mp3, Path("output/script.txt"))
+
+        with open(cache_file, "w", encoding="utf-8") as f:
+            json.dump({
+                "words": final_words,
+                "segments": [],
+                "text": speech_text,
+            }, f, ensure_ascii=False, indent=2)
+
+        # Touch cache file modification time so downstream agents recognize it as fresh
+        v_mtime = os.path.getmtime(output_mp3) if os.path.exists(output_mp3) else time.time()
+        os.utime(str(cache_file), (v_mtime + 2, v_mtime + 2))
+
+        print(f"⚡ Synchronized {len(final_words)} word timestamps to output/transcription.json (0s Whisper wait!)")
+    except Exception as cache_sync_err:
+        print(f"⚠️ Transcription cache sync note: {cache_sync_err}")
 
     print()
     print("Voice created successfully!")

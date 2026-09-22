@@ -279,63 +279,84 @@ def transcribe_audio():
         )
 
     print()
-    print(
-        f"Loading Whisper model: "
-        f"{WHISPER_MODEL}"
-    )
-
     from agents.video_agent import get_whisper_model, fallback_script_word_timestamps
-    model = get_whisper_model()
     whisper_words = []
 
-    if model is not None:
-        try:
-            whisper_lang = "en"
-            script_file = Path("output/script.txt")
-            if script_file.exists():
-                try:
-                    s_content = script_file.read_text(encoding="utf-8")
-                    if re.search(r"[\u0C00-\u0C7F]", s_content):
-                        whisper_lang = "te"
-                    elif re.search(r"[\u0900-\u097F]", s_content):
-                        whisper_lang = "hi"
-                except Exception:
-                    pass
+    # Check if running in cloud container or CPU-only environment where Whisper blocks for 15+ minutes
+    is_cloud = (
+        os.path.exists("/mount/src")
+        or any(os.environ.get(k) for k in (
+            "STREAMLIT_SH_ENVIRONMENT",
+            "STREAMLIT_SERVER_BASE_URL",
+            "SPACE_ID",
+            "RENDER",
+            "DYNO",
+            "AUTOTUBE_CLOUD_MODE",
+        ))
+    )
 
-            print()
-            print(f"Transcribing voice.mp3 (language={whisper_lang})...")
+    has_cuda = False
+    try:
+        import torch
+        has_cuda = torch.cuda.is_available()
+    except Exception:
+        pass
 
-            result = model.transcribe(
-                str(VOICE_FILE),
-                language=whisper_lang,
-                fp16=False,
-                word_timestamps=True,
-                verbose=False,
-            )
+    if is_cloud or (not has_cuda and os.environ.get("FAST_SUBTITLES", "1") == "1"):
+        print("⚡ Cloud / CPU mode active: Using instant script-based word timestamp alignment (0.01s) instead of slow CPU Whisper...")
+        whisper_words = fallback_script_word_timestamps(VOICE_FILE, Path("output/script.txt"))
+    else:
+        print()
+        print(f"Loading Whisper model: {WHISPER_MODEL}")
+        model = get_whisper_model()
+        if model is not None:
+            try:
+                whisper_lang = "en"
+                script_file = Path("output/script.txt")
+                if script_file.exists():
+                    try:
+                        s_content = script_file.read_text(encoding="utf-8")
+                        if re.search(r"[\u0C00-\u0C7F]", s_content):
+                            whisper_lang = "te"
+                        elif re.search(r"[\u0900-\u097F]", s_content):
+                            whisper_lang = "hi"
+                    except Exception:
+                        pass
 
-            for segment in result.get("segments", []):
-                for word in segment.get("words", []):
-                    text = word.get("word", "").strip()
-                    start = word.get("start")
-                    end = word.get("end")
-                    if not text or start is None or end is None:
-                        continue
+                print()
+                print(f"Transcribing voice.mp3 (language={whisper_lang})...")
 
-                    normalized = normalize_text(text)
-                    if not normalized:
-                        continue
+                result = model.transcribe(
+                    str(VOICE_FILE),
+                    language=whisper_lang,
+                    fp16=False,
+                    word_timestamps=True,
+                    verbose=False,
+                )
 
-                    whisper_words.append(
-                        {
-                            "text": text,
-                            "normalized": normalized,
-                            "start": float(start),
-                            "end": float(end),
-                        }
-                    )
-        except Exception as trans_err:
-            print(f"⚠️ Whisper transcription note in subtitle_agent: {trans_err}. Falling back...")
-            whisper_words = []
+                for segment in result.get("segments", []):
+                    for word in segment.get("words", []):
+                        text = word.get("word", "").strip()
+                        start = word.get("start")
+                        end = word.get("end")
+                        if not text or start is None or end is None:
+                            continue
+
+                        normalized = normalize_text(text)
+                        if not normalized:
+                            continue
+
+                        whisper_words.append(
+                            {
+                                "text": text,
+                                "normalized": normalized,
+                                "start": float(start),
+                                "end": float(end),
+                            }
+                        )
+            except Exception as trans_err:
+                print(f"⚠️ Whisper transcription note in subtitle_agent: {trans_err}. Falling back...")
+                whisper_words = []
 
     if not whisper_words:
         print("ℹ️ Generating resilient script-based word timings for subtitles...")
@@ -356,6 +377,13 @@ def transcribe_audio():
         f"Whisper recognized duration: "
         f"{recognized_duration:.2f}s"
     )
+
+    try:
+        if not cache_file.exists() and whisper_words:
+            with open(cache_file, "w", encoding="utf-8") as f:
+                json.dump({"words": whisper_words, "segments": [], "text": ""}, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
 
     return whisper_words
 

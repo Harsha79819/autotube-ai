@@ -74,13 +74,23 @@ async def generate_telugu_speech(
     return output_path
 
 
-async def generate_with_word_boundaries(text: str, output_path: str, voice: str = "te-IN-MohanNeural"):
-    """Same as above, but also captures word-level timing boundaries
-    directly from Edge-TTS itself -- this can REPLACE the separate Whisper
-    transcription step for caption sync, since Edge-TTS already reports
-    exact word start/end offsets as it synthesizes."""
+async def generate_with_word_boundaries(
+    text: str,
+    output_path: str,
+    voice: str = "te-IN-MohanNeural",
+    rate: str = "+8%",
+    pitch: str = "+2Hz",
+):
+    """Generates natural-sounding speech via Edge-TTS and captures word-level timing
+    boundaries directly from Microsoft's neural stream. This completely replaces the need
+    for heavy 15-minute CPU Whisper transcription on Cloud environments."""
     safe_text = prepare_script_for_tts(text)
-    communicate = edge_tts.Communicate(text=safe_text, voice=voice)
+    communicate = edge_tts.Communicate(
+        text=safe_text,
+        voice=voice,
+        rate=rate or "+8%",
+        pitch=pitch or "+2Hz",
+    )
 
     word_timings = []
     with open(output_path, "wb") as audio_file:
@@ -88,13 +98,24 @@ async def generate_with_word_boundaries(text: str, output_path: str, voice: str 
             if chunk["type"] == "audio":
                 audio_file.write(chunk["data"])
             elif chunk["type"] == "WordBoundary":
+                w_text = str(chunk.get("text", "")).strip()
+                if not w_text:
+                    continue
+                start_sec = round(float(chunk["offset"]) / 10_000_000.0, 3)
+                duration_sec = round(float(chunk["duration"]) / 10_000_000.0, 3)
+                end_sec = round(start_sec + duration_sec, 3)
+
+                norm = re.sub(r"[^\w\s]", "", w_text).strip()
                 word_timings.append({
-                    "word": chunk["text"],
-                    "start": chunk["offset"] / 10_000_000,   # ticks -> seconds
-                    "end": (chunk["offset"] + chunk["duration"]) / 10_000_000,
+                    "word": w_text,
+                    "text": w_text,
+                    "normalized": norm or w_text,
+                    "start": start_sec,
+                    "end": end_sec,
                 })
 
     return output_path, word_timings
+
 
 
 if __name__ == "__main__":

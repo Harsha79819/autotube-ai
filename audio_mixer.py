@@ -49,9 +49,25 @@ def select_mood_music(topic_category="tech_review") -> str:
         existing_tracks = list(MUSIC_DIR.glob("*.mp3"))
         if existing_tracks:
             return str(existing_tracks[0])
-        raise FileNotFoundError(
-            f"Music asset missing: {target_path} -- assets/music/ folder must contain royalty-free tracks."
-        )
+
+        # Auto-synthesize a soft ambient background track on the fly via FFmpeg
+        try:
+            synth_cmd = [
+                "ffmpeg", "-y", "-f", "lavfi",
+                "-i", "sine=frequency=130.81:duration=60,volume=0.25[b];"
+                      "sine=frequency=196.00:duration=60,volume=0.18[g];"
+                      "sine=frequency=261.63:duration=60,volume=0.18[c1];"
+                      "sine=frequency=329.63:duration=60,volume=0.12[e];"
+                      "[b][g][c1][e]amix=inputs=4:normalize=0,lowpass=f=850,aecho=0.8:0.88:60:0.4,volume=0.7",
+                "-c:a", "libmp3lame", "-b:a", "128k",
+                str(target_path)
+            ]
+            subprocess.run(synth_cmd, check=True, capture_output=True)
+            if target_path.exists():
+                return str(target_path)
+        except Exception as synth_err:
+            print(f"⚠️ Auto-synthesis note: {synth_err}")
+            return ""
 
     return str(target_path)
 

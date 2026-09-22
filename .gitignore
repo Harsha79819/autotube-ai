@@ -235,6 +235,14 @@ output/
 *.mkv
 *.avi
 
+# Whitelist static bundled assets
+!assets/music/
+!assets/music/*
+!assets/fallback/
+!assets/fallback/*
+!assets/outro/
+!assets/outro/*
+
 # Archives
 *.zip
 # AutoTube AI local secrets
@@ -266,6 +274,13 @@ failed_runs/
 .streamlit/credentials.toml
 
 # Generated/local assets
-assets/
+assets/*
+!assets/music/
+!assets/music/*
+!assets/fallback/
+!assets/fallback/*
+!assets/outro/
+!assets/outro/*
 input/
 scratch/
+

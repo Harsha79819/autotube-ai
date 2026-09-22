@@ -2381,20 +2381,35 @@ with tab_manual:
                         key="transcribe_voice_btn",
                         use_container_width=True,
                     ):
-                        with st.spinner("Transcribing audio with Whisper..."):
+                        with st.spinner("Transcribing audio..."):
                             try:
-                                import whisper
+                                audio_text = ""
+                                try:
+                                    import speech_recognition as sr
+                                    r = sr.Recognizer()
+                                    with sr.AudioFile(str(existing_voice_file)) as source:
+                                        audio_data = r.record(source)
+                                    audio_text = r.recognize_google(audio_data, language="te-IN")
+                                except Exception:
+                                    pass
 
-                                model = whisper.load_model("base")
-                                trans_res = model.transcribe(
-                                    str(existing_voice_file),
-                                    fp16=False,
-                                )
-                                audio_text = trans_res.get("text", "").strip()
+                                if not audio_text:
+                                    is_cloud = os.path.exists("/mount/src") or os.environ.get("STREAMLIT_SH_ENVIRONMENT")
+                                    if not is_cloud:
+                                        import whisper
+                                        model = whisper.load_model("tiny")
+                                        trans_res = model.transcribe(
+                                            str(existing_voice_file),
+                                            fp16=False,
+                                        )
+                                        audio_text = trans_res.get("text", "").strip()
+
                                 if audio_text:
                                     st.session_state["topic_input"] = audio_text
                                     st.success("✅ Topic & script populated from your speech!")
                                     st.rerun()
+                                else:
+                                    st.info("Speech detected. Please type your topic in the topic box.")
                             except Exception as tr_err:
                                 st.error(f"Transcription error: {tr_err}")
                 with col_del:
@@ -2808,19 +2823,34 @@ with tab_manual:
                 )
 
         # For Own Voice Recording, transcribe the audio so the visual plan and subtitles match the spoken words
+        # For Own Voice Recording, transcribe audio only if topic is not already provided
         if "Use My Own Voice Recording" in voice and active_voice_sample:
-            with st.spinner("Transcribing your audio for topic and visuals..."):
-                try:
-                    import whisper
+            if not topic or str(topic).strip() in ("", "Untitled Video", "Trending Tech Updates", "AutoTube AI Short"):
+                with st.spinner("Detecting topic from your audio..."):
+                    try:
+                        trans_topic = ""
+                        try:
+                            import speech_recognition as sr
+                            r = sr.Recognizer()
+                            with sr.AudioFile(str(active_voice_sample)) as source:
+                                audio_data = r.record(source)
+                            trans_topic = r.recognize_google(audio_data, language="te-IN")
+                        except Exception:
+                            pass
 
-                    wmodel = whisper.load_model("base")
-                    wres = wmodel.transcribe(str(active_voice_sample), fp16=False)
-                    trans_topic = wres.get("text", "").strip()
-                    if trans_topic:
-                        topic = trans_topic
-                        st.session_state["topic_input"] = trans_topic
-                except Exception as auto_tr_err:
-                    print("Auto-transcription note:", auto_tr_err)
+                        if not trans_topic:
+                            is_cloud = os.path.exists("/mount/src") or os.environ.get("STREAMLIT_SH_ENVIRONMENT")
+                            if not is_cloud:
+                                import whisper
+                                wmodel = whisper.load_model("tiny")
+                                wres = wmodel.transcribe(str(active_voice_sample), fp16=False)
+                                trans_topic = wres.get("text", "").strip()
+
+                        if trans_topic:
+                            topic = trans_topic
+                            st.session_state["topic_input"] = trans_topic
+                    except Exception as auto_tr_err:
+                        print("Auto-transcription note:", auto_tr_err)
 
         is_flyer = (
             content_type == "Uploaded Flyer"
