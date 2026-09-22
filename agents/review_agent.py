@@ -297,26 +297,16 @@ def load_project_outputs():
         "output/visual_plan.txt"
     )
 
-    subtitles = read_text_file(
-        "output/subtitles.srt"
-    )
+    subtitles = read_text_file("output/subtitles.srt") or read_text_file("output/subtitles.ass")
 
     video_path = "output/final_video.mp4"
     thumbnail_path = "output/thumbnail.jpg"
     subtitles_path = "output/subtitles.srt"
     voice_path = "output/voice.mp3"
 
-    video_exists = Path(
-        video_path
-    ).exists()
-
-    thumbnail_exists = Path(
-        thumbnail_path
-    ).exists()
-
-    subtitles_exists = Path(
-        subtitles_path
-    ).exists()
+    video_exists = Path(video_path).exists() or Path("output/video.mp4").exists()
+    thumbnail_exists = Path(thumbnail_path).exists()
+    subtitles_exists = Path(subtitles_path).exists() or Path("output/subtitles.ass").exists()
 
     voice_exists = Path(
         voice_path

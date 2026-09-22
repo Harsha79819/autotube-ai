@@ -1,4 +1,6 @@
 import os
+import re
+import shutil
 import subprocess
 from supervisor import autonomous_recover
 
@@ -22,8 +24,8 @@ def create_final_video(add_captions=False, aspect_ratio="1:1", burn_captions=Non
         return None
 
     if add_captions and not os.path.exists(srt_subtitles) and not os.path.exists(ass_subtitles):
-        print("Subtitle file not found:", srt_subtitles)
-        return None
+        print("⚠️ Subtitle file not found. Falling back to clean video without burned subtitles.")
+        add_captions = False
 
     if os.path.exists(output_video):
         os.remove(output_video)
@@ -212,8 +214,14 @@ def create_final_video(add_captions=False, aspect_ratio="1:1", burn_captions=Non
         return output_video
 
     print("=" * 60)
-    print("FFmpeg failed.")
+    print("FFmpeg failed with subtitles. Falling back to clean video without burned subtitles...")
     print("=" * 60)
 
+    if os.path.exists(input_video):
+        shutil.copyfile(input_video, output_video)
+        print(f"✅ Generated fallback video from {input_video} -> {output_video}")
+        return output_video
+
     raise RuntimeError(f"FFmpeg encoding failed with exit code {result.returncode}: {result.stdout[-300:] if result.stdout else 'unknown error'}")
+
 

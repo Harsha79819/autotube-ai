@@ -902,6 +902,8 @@ def render_copilot_main_studio():
 
         # Video Player Preview (if video exists)
         final_video = OUTPUT_DIR / "final_video.mp4"
+        if not final_video.exists() and (OUTPUT_DIR / "video.mp4").exists():
+            final_video = OUTPUT_DIR / "video.mp4"
         if final_video.exists():
             st.markdown(
                 """

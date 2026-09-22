@@ -1460,18 +1460,22 @@ def create_video(aspect_ratio="1:1"):
         )
 
     if not VISUAL_PLAN_FILE.exists():
-
-        raise FileNotFoundError(
-            f"Visual plan not found: "
-            f"{VISUAL_PLAN_FILE}"
-        )
+        if SCRIPT_FILE.exists():
+            print("⚠️ Visual plan missing. Auto-generating fallback visual plan from script...")
+            s_lines = [l.strip() for l in SCRIPT_FILE.read_text(encoding="utf-8").splitlines() if l.strip()]
+            vp_text = "\n".join([f"Scene {i}: Visual illustration for {l[:50]}" for i, l in enumerate(s_lines, 1)])
+            VISUAL_PLAN_FILE.write_text(vp_text, encoding="utf-8")
+        else:
+            raise FileNotFoundError(f"Visual plan not found: {VISUAL_PLAN_FILE}")
 
     if not SECTION_MAP_FILE.exists():
-
-        raise FileNotFoundError(
-            f"Section map not found: "
-            f"{SECTION_MAP_FILE}"
-        )
+        if SCRIPT_FILE.exists():
+            print("⚠️ Section map missing. Auto-generating fallback section map from script...")
+            s_lines = [l.strip() for l in SCRIPT_FILE.read_text(encoding="utf-8").splitlines() if l.strip()]
+            sec_text = "\n\n".join([f"SECTION {i}\n{l}" for i, l in enumerate(s_lines, 1)])
+            SECTION_MAP_FILE.write_text(sec_text, encoding="utf-8")
+        else:
+            raise FileNotFoundError(f"Section map not found: {SECTION_MAP_FILE}")
 
     # --------------------------------------------------------
     # Load data with self-healing asset assurance

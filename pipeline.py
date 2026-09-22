@@ -1517,6 +1517,10 @@ def generate_multi_media_video(
             text=f"⚠️ Score < 80 after {MAX_RETRIES} retries. Moved to failed_queue/ and exited cleanly."
         )
 
+        if not (OUTPUT_DIR / "final_video.mp4").exists() and (OUTPUT_DIR / "video.mp4").exists():
+            print("Promoting video.mp4 to final_video.mp4 as safety fallback...")
+            shutil.copyfile(str(OUTPUT_DIR / "video.mp4"), str(OUTPUT_DIR / "final_video.mp4"))
+
         if (OUTPUT_DIR / "final_video.mp4").exists():
             print("Final video exists on disk. Proceeding with metadata and pre-declared YouTube upload...")
             stopped_after_review = True

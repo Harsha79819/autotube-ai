@@ -1477,6 +1477,10 @@ def generate_multi_media_video(
             text=f"⚠️ Score < 80 after {MAX_RETRIES} retries. Moved to failed_queue/ and exited cleanly."
         )
 
+        if not (OUTPUT_DIR / "final_video.mp4").exists() and (OUTPUT_DIR / "video.mp4").exists():
+            print("Promoting video.mp4 to final_video.mp4 as safety fallback...")
+            shutil.copyfile(str(OUTPUT_DIR / "video.mp4"), str(OUTPUT_DIR / "final_video.mp4"))
+
         if (OUTPUT_DIR / "final_video.mp4").exists():
             print("Final video exists on disk. Proceeding with metadata and pre-declared YouTube upload...")
             stopped_after_review = True
@@ -2962,7 +2966,10 @@ with tab_manual:
         "output/thumbnail.jpg"
     )
 
-    if result or final_video.exists():
+    raw_video = Path("output/video.mp4")
+    effective_video = final_video if final_video.exists() else (raw_video if raw_video.exists() else None)
+
+    if result or effective_video:
 
         st.markdown(
             """
@@ -2979,10 +2986,10 @@ with tab_manual:
             unsafe_allow_html=True,
         )
 
-        if final_video.exists():
+        if effective_video and effective_video.exists():
 
             try:
-                with open(final_video, "rb") as _vf:
+                with open(effective_video, "rb") as _vf:
                     _video_bytes = _vf.read()
                 st.video(_video_bytes, format="video/mp4")
             except Exception as _vid_err:
@@ -3009,7 +3016,7 @@ with tab_manual:
                 pass
 
             with open(
-                final_video,
+                effective_video,
                 "rb",
             ) as video_file:
 

@@ -1,4 +1,4 @@
-﻿import torchaudio as ta
+import torchaudio as ta
 from huggingface_hub import snapshot_download
 
 from chatterbox.mtl_tts import ChatterboxMultilingualTTS
