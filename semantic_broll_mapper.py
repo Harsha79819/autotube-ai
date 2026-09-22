@@ -92,7 +92,7 @@ def generate_search_queries(chunk: str, topic_category: str = "tech", gemini_cal
                     client = genai.Client(api_key=api_key)
                     def _default_call(p):
                         resp = client.models.generate_content(
-                            model="gemini-3.6-flash",
+                            model="gemini-2.5-flash",
                             contents=p,
                         )
                         return resp.text

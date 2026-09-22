@@ -127,14 +127,28 @@ def inject_mobile_responsive_css():
         unsafe_allow_html=True,
     )
 
+def is_custom_pin_set() -> bool:
+    """Check if user explicitly configured an APP_PIN in env or secrets."""
+    try:
+        from agents.env_loader import get_secret
+        val = get_secret("APP_PIN", "")
+        return bool(val and val.strip() and val.strip().lower() not in ("none", "false", "0"))
+    except Exception:
+        return False
+
 def require_pin_authentication() -> bool:
     """
     Enforces PIN authentication before allowing any dashboard controls to render.
-    If unauthenticated, halts execution with st.stop().
+    If no custom PIN is configured in secrets or env, auto-authenticates for seamless mobile access.
     """
     inject_mobile_responsive_css()
 
     if is_authenticated():
+        return True
+
+    # Auto-grant access if user hasn't explicitly configured a custom APP_PIN
+    if not is_custom_pin_set():
+        st.session_state["authenticated"] = True
         return True
 
     configured_pin = get_configured_pin()

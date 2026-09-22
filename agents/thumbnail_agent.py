@@ -499,7 +499,7 @@ def generate_thumbnail_prompts(topic_data: dict, gemini_call_fn=None) -> list[st
             client = get_client()
             def _call_gem(prompt):
                 resp = client.models.generate_content(
-                    model="gemini-3.6-flash",
+                    model="gemini-2.5-flash",
                     contents=prompt,
                 )
                 return resp.text
@@ -550,7 +550,7 @@ def rank_thumbnails_by_gemini(candidates, topic_data, gemini_call_fn=None):
             client = get_client()
             def _call_gem(prompt):
                 resp = client.models.generate_content(
-                    model="gemini-3.6-flash",
+                    model="gemini-2.5-flash",
                     contents=prompt,
                 )
                 return resp.text

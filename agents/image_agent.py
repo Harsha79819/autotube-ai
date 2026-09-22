@@ -151,7 +151,7 @@ def rewrite_query_for_flux(query_text: str, is_explainer: bool = False) -> str:
                     f"Scene query: {query_text}\n"
                     f"Rewritten prompt:"
                 )
-                for m_name in ["gemini-2.5-flash-lite", "gemini-3.6-flash", "gemini-flash-lite-latest"]:
+                for m_name in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-flash-lite-latest"]:
                     try:
                         response = client.models.generate_content(
                             model=m_name,
@@ -180,7 +180,7 @@ def rewrite_query_for_flux(query_text: str, is_explainer: bool = False) -> str:
                 f"Query to rewrite: {query_text}\n"
                 f"Rewritten prompt:"
             )
-            for m_name in ["gemini-2.5-flash-lite", "gemini-3.6-flash", "gemini-flash-lite-latest"]:
+            for m_name in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-flash-lite-latest"]:
                 try:
                     response = client.models.generate_content(
                         model=m_name,

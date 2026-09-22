@@ -27,15 +27,27 @@ def run_app():
         # Run dashboard within guarded execution context
         runpy.run_path(str(ROOT / "dashboard.py"), run_name="__main__")
 
-    except Exception as fatal_error:
+    except BaseException as fatal_error:
+        # Streamlit control-flow exceptions MUST NOT be intercepted
+        err_type = type(fatal_error).__name__
+        if err_type in ("StopException", "RerunException", "ScriptControlException"):
+            raise fatal_error
+
         tb_str = traceback.format_exc()
         timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+        # Always print to stderr so Streamlit Cloud logs show the exact crash
+        print(
+            f"❌ [AutoTube Fatal Crash] {err_type}: {fatal_error}\n{tb_str}",
+            file=sys.stderr,
+            flush=True,
+        )
 
         # 1. Persist traceback to logs/crash_report.txt
         crash_entry = (
             f"\n{'=' * 70}\n"
             f"CRASH REPORT - {timestamp}\n"
-            f"ERROR TYPE : {type(fatal_error).__name__}\n"
+            f"ERROR TYPE : {err_type}\n"
             f"MESSAGE    : {fatal_error}\n"
             f"{'-' * 70}\n"
             f"{tb_str}\n"
@@ -45,7 +57,7 @@ def run_app():
             with open(CRASH_REPORT_FILE, "a", encoding="utf-8") as f:
                 f.write(crash_entry)
         except Exception as log_err:
-            print(f"⚠️ Failed to write to crash report file: {log_err}")
+            print(f"⚠️ Failed to write to crash report file: {log_err}", file=sys.stderr, flush=True)
 
         # 2. Render user-facing error recovery card instead of killing session
         st.markdown(
