@@ -142,10 +142,19 @@ class BaseTunnelManager:
         try:
             while self.process.poll() is None:
                 line = self.process.stdout.readline() if self.process.stdout else None
-                if not line:
+                if line:
+                    print(line, end="", flush=True)
+                else:
                     time.sleep(0.5)
         except KeyboardInterrupt:
             self.stop()
+            sys.exit(0)
+        
+        # If the process exited on its own, capture and forward exit code
+        code = self.process.poll() if self.process else 1
+        print(f"🛑 Tunnel process exited unexpectedly with code: {code}")
+        self.stop()
+        sys.exit(code if code is not None else 1)
 
 class NgrokTunnelManager(BaseTunnelManager):
     """Manages Ngrok permanent static domain tunnel."""
@@ -173,13 +182,19 @@ class NgrokTunnelManager(BaseTunnelManager):
             except Exception as e:
                 print(f"⚠️ Failed to configure ngrok authtoken: {e}")
 
+        # Kill any stale ngrok processes before binding
+        try:
+            subprocess.run(["pkill", "-f", "ngrok http"], capture_output=True)
+            time.sleep(0.5)
+        except Exception:
+            pass
+
         cmd = [binary, "http"]
         clean_domain = self.domain.replace("https://", "").replace("http://", "").strip().rstrip("/")
         if clean_domain:
-            cmd.extend(["--domain", clean_domain])
+            cmd.extend(["--url", clean_domain])
         cmd.append(str(self.port))
         cmd.extend(["--log", "stdout"])
-
 
         print("\n" + "=" * 70)
         print("🌐 STARTING NGROK PERMANENT STATIC TUNNEL")
@@ -200,10 +215,18 @@ class NgrokTunnelManager(BaseTunnelManager):
         signal.signal(signal.SIGINT, self._sig_handler)
         signal.signal(signal.SIGTERM, self._sig_handler)
 
+        # Verify the ngrok process didn't crash immediately upon launch
+        time.sleep(1.5)
+        if self.process.poll() is not None:
+            err_output = self.process.stdout.read() if self.process.stdout else ""
+            print(f"❌ ngrok failed to launch (exit code {self.process.poll()}): {err_output}")
+            self.stop()
+            return ""
+
         if clean_domain:
             self.public_url = f"https://{clean_domain}"
         else:
-            time.sleep(2.5)
+            time.sleep(1.5)
             # Fetch URL from local ngrok API
             try:
                 import json
@@ -225,6 +248,30 @@ class NgrokTunnelManager(BaseTunnelManager):
             print("⚠️ Could not establish ngrok tunnel.")
             self.stop()
             return ""
+
+        # Validate endpoint reachability & check for ngrok monthly bandwidth exhaustion
+        try:
+            import urllib.request
+            import urllib.error
+            req = urllib.request.Request(self.public_url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=4) as resp:
+                pass
+        except urllib.error.HTTPError as e:
+            if e.code == 403:
+                try:
+                    err_body = e.read().decode(errors="ignore")
+                except Exception:
+                    err_body = ""
+                if "ERR_NGROK_725" in err_body or "bandwidth limit" in err_body:
+                    print("\n" + "!" * 70)
+                    print("⚠️ NGROK BANDWIDTH LIMIT EXCEEDED FOR THE MONTH (ERR_NGROK_725)!")
+                    print("This free ngrok account reached its monthly bandwidth limit.")
+                    print("Switching over to Cloudflare Tunnel (unlimited bandwidth)...")
+                    print("!" * 70 + "\n")
+                    self.stop()
+                    return ""
+        except Exception:
+            pass
 
         TUNNEL_URL_FILE.write_text(self.public_url, encoding="utf-8")
 
@@ -414,6 +461,11 @@ def main():
 
     manager = resolve_tunnel_manager(mode=args.mode, port=args.port, host=args.host)
     url = manager.start()
+
+    if not url and args.mode in ("auto", "ngrok"):
+        print("🔄 Primary tunnel unavailable or quota exhausted. Falling back to Cloudflare Quick Tunnel...")
+        manager = CloudflareQuickTunnelManager(port=args.port, host=args.host)
+        url = manager.start()
 
     if url:
         print("\nTunnel is actively running. Press Ctrl+C anytime to stop.\n")

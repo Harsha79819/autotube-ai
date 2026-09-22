@@ -169,6 +169,12 @@ class ProcessSupervisor:
         return proc
 
     def start_tunnel(self) -> subprocess.Popen:
+        try:
+            subprocess.run(["pkill", "-f", "ngrok http"], capture_output=True)
+            subprocess.run(["pkill", "-f", "cloudflared tunnel"], capture_output=True)
+            time.sleep(0.5)
+        except Exception:
+            pass
         rotate_log_if_large(TUNNEL_LOG)
         tunnel_out = open(TUNNEL_LOG, "a", encoding="utf-8")
         cmd = [
@@ -208,6 +214,11 @@ class ProcessSupervisor:
                         pass
 
         free_port_if_in_use(self.port)
+        try:
+            subprocess.run(["pkill", "-f", "ngrok http"], capture_output=True)
+            subprocess.run(["pkill", "-f", "cloudflared tunnel"], capture_output=True)
+        except Exception:
+            pass
 
         if PID_FILE.exists():
             try:
@@ -215,6 +226,7 @@ class ProcessSupervisor:
             except Exception:
                 pass
         self.log_daemon("Supervisor shutdown complete.")
+        sys.exit(0)
 
     def run_loop(self):
         """Main supervisor monitoring loop with exponential backoff crash recovery."""
@@ -306,6 +318,20 @@ def cmd_start(port: int = 8501, mode: str = "auto"):
         cmd_status()
         return
 
+    # Check if another supervisor process is already running anywhere on the system
+    try:
+        res = subprocess.run(["pgrep", "-f", "daemon_runner.py --run-supervisor"], capture_output=True, text=True)
+        running_pids = [int(p.strip()) for p in res.stdout.strip().split() if p.strip().isdigit() and int(p.strip()) != os.getpid()]
+        if running_pids:
+            print("\n" + "=" * 65)
+            print(f"⚠️  Another AutoTube Supervisor process is already active (PID: {running_pids[0]})!")
+            print("=" * 65)
+            write_daemon_state({"daemon_pid": running_pids[0], "port": port})
+            cmd_status()
+            return
+    except Exception:
+        pass
+
     print("\n" + "=" * 65)
     print("🚀 LAUNCHING AUTOTUBE BACKGROUND PROCESS MANAGER")
     print("=" * 65)
@@ -313,6 +339,14 @@ def cmd_start(port: int = 8501, mode: str = "auto"):
     print(f"Tunnel Mode    : {mode}")
     print(f"Log Directory  : {LOGS_DIR}")
     print("Spawning detached supervisor process...")
+
+    free_port_if_in_use(port)
+    try:
+        subprocess.run(["pkill", "-f", "ngrok http"], capture_output=True)
+        subprocess.run(["pkill", "-f", "cloudflared tunnel"], capture_output=True)
+        time.sleep(0.5)
+    except Exception:
+        pass
 
     rotate_log_if_large(DAEMON_LOG)
     daemon_out = open(DAEMON_LOG, "a", encoding="utf-8")
@@ -419,7 +453,7 @@ def cmd_stop():
     print("=" * 65)
 
     stopped_any = False
-    for name, pid in [("Streamlit", streamlit_pid), ("Tunnel", tunnel_pid), ("Supervisor", daemon_pid)]:
+    for name, pid in [("Supervisor", daemon_pid), ("Tunnel", tunnel_pid), ("Streamlit", streamlit_pid)]:
         if pid and is_pid_alive(pid):
             print(f"Stopping {name} (PID: {pid})...")
             try:
@@ -431,7 +465,7 @@ def cmd_stop():
     time.sleep(1.5)
 
     # Force kill if still lingering
-    for name, pid in [("Streamlit", streamlit_pid), ("Tunnel", tunnel_pid), ("Supervisor", daemon_pid)]:
+    for name, pid in [("Supervisor", daemon_pid), ("Tunnel", tunnel_pid), ("Streamlit", streamlit_pid)]:
         if pid and is_pid_alive(pid):
             try:
                 os.kill(pid, signal.SIGKILL)
@@ -456,6 +490,8 @@ def cmd_stop():
     try:
         subprocess.run(["pkill", "-f", "streamlit run.*app.py"], capture_output=True)
         subprocess.run(["pkill", "-f", "tunnel_runner.py"], capture_output=True)
+        subprocess.run(["pkill", "-f", "ngrok http"], capture_output=True)
+        subprocess.run(["pkill", "-f", "cloudflared tunnel"], capture_output=True)
     except Exception:
         pass
 
