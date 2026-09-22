@@ -16,6 +16,8 @@ if str(ROOT) not in sys.path:
 
 LOGS_DIR = ROOT / "logs"
 LOGS_DIR.mkdir(parents=True, exist_ok=True)
+OUTPUT_DIR = ROOT / "output"
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 CRASH_REPORT_FILE = LOGS_DIR / "crash_report.txt"
 
 def run_app():
