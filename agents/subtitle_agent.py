@@ -3,7 +3,10 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-import whisper
+try:
+    import whisper
+except ImportError:
+    whisper = None
 
 
 # ============================================================
@@ -281,76 +284,62 @@ def transcribe_audio():
         f"{WHISPER_MODEL}"
     )
 
-    from agents.video_agent import get_whisper_model
+    from agents.video_agent import get_whisper_model, fallback_script_word_timestamps
     model = get_whisper_model()
-
-    whisper_lang = "en"
-    script_file = Path("output/script.txt")
-    if script_file.exists():
-        try:
-            s_content = script_file.read_text(encoding="utf-8")
-            if re.search(r"[\u0C00-\u0C7F]", s_content):
-                whisper_lang = "te"
-            elif re.search(r"[\u0900-\u097F]", s_content):
-                whisper_lang = "hi"
-        except Exception:
-            pass
-
-    print()
-    print(f"Transcribing voice.mp3 (language={whisper_lang})...")
-
-    result = model.transcribe(
-        str(VOICE_FILE),
-        language=whisper_lang,
-        fp16=False,
-        word_timestamps=True,
-        verbose=False,
-    )
-
     whisper_words = []
 
-    for segment in result.get(
-        "segments",
-        [],
-    ):
+    if model is not None:
+        try:
+            whisper_lang = "en"
+            script_file = Path("output/script.txt")
+            if script_file.exists():
+                try:
+                    s_content = script_file.read_text(encoding="utf-8")
+                    if re.search(r"[\u0C00-\u0C7F]", s_content):
+                        whisper_lang = "te"
+                    elif re.search(r"[\u0900-\u097F]", s_content):
+                        whisper_lang = "hi"
+                except Exception:
+                    pass
 
-        for word in segment.get(
-            "words",
-            [],
-        ):
+            print()
+            print(f"Transcribing voice.mp3 (language={whisper_lang})...")
 
-            text = word.get(
-                "word",
-                "",
-            ).strip()
-
-            start = word.get("start")
-            end = word.get("end")
-
-            if not text:
-                continue
-
-            if start is None or end is None:
-                continue
-
-            normalized = normalize_text(text)
-
-            if not normalized:
-                continue
-
-            whisper_words.append(
-                {
-                    "text": text,
-                    "normalized": normalized,
-                    "start": float(start),
-                    "end": float(end),
-                }
+            result = model.transcribe(
+                str(VOICE_FILE),
+                language=whisper_lang,
+                fp16=False,
+                word_timestamps=True,
+                verbose=False,
             )
 
+            for segment in result.get("segments", []):
+                for word in segment.get("words", []):
+                    text = word.get("word", "").strip()
+                    start = word.get("start")
+                    end = word.get("end")
+                    if not text or start is None or end is None:
+                        continue
+
+                    normalized = normalize_text(text)
+                    if not normalized:
+                        continue
+
+                    whisper_words.append(
+                        {
+                            "text": text,
+                            "normalized": normalized,
+                            "start": float(start),
+                            "end": float(end),
+                        }
+                    )
+        except Exception as trans_err:
+            print(f"⚠️ Whisper transcription note in subtitle_agent: {trans_err}. Falling back...")
+            whisper_words = []
+
     if not whisper_words:
-        raise RuntimeError(
-            "Whisper returned no word timestamps."
-        )
+        print("ℹ️ Generating resilient script-based word timings for subtitles...")
+        whisper_words = fallback_script_word_timestamps(VOICE_FILE, Path("output/script.txt"))
 
     recognized_duration = max(
         word["end"]

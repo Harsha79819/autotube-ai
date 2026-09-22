@@ -6,7 +6,10 @@ import subprocess
 from pathlib import Path
 
 import random
-import whisper
+try:
+    import whisper
+except ImportError:
+    whisper = None
 from PIL import Image, ImageFilter, ImageEnhance
 from moviepy import AudioFileClip, ImageClip, VideoFileClip, concatenate_videoclips, vfx
 from supervisor import autonomous_recover
@@ -149,8 +152,69 @@ def get_whisper_model():
     """Cache Whisper model in memory across invocations for ultra-fast response."""
     global _CACHED_WHISPER_MODEL
     if _CACHED_WHISPER_MODEL is None:
-        _CACHED_WHISPER_MODEL = whisper.load_model(WHISPER_MODEL)
+        try:
+            import whisper
+            _CACHED_WHISPER_MODEL = whisper.load_model(WHISPER_MODEL)
+        except Exception as e:
+            print(f"⚠️ Whisper model load note: {e}")
+            return None
     return _CACHED_WHISPER_MODEL
+
+
+def fallback_script_word_timestamps(voice_file=None, script_file=None):
+    """
+    Fallback word-level timestamp generator when Whisper is unavailable or fails.
+    Evenly distributes script words across actual audio duration.
+    """
+    v_file = Path(voice_file) if voice_file else VOICE_FILE
+    s_file = Path(script_file) if script_file else SCRIPT_FILE
+
+    duration = 30.0
+    try:
+        import subprocess
+        probe = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", str(v_file)],
+            capture_output=True, text=True, check=True
+        )
+        duration = float(probe.stdout.strip())
+    except Exception:
+        try:
+            from pydub import AudioSegment
+            seg = AudioSegment.from_file(str(v_file))
+            duration = len(seg) / 1000.0
+        except Exception:
+            pass
+
+    script_text = ""
+    if s_file.exists():
+        try:
+            script_text = s_file.read_text(encoding="utf-8")
+        except Exception:
+            pass
+
+    clean_text = re.sub(r"[#*_~`\[\]()]", "", script_text)
+    raw_words = [w.strip() for w in clean_text.split() if w.strip()]
+    if not raw_words:
+        raw_words = ["AutoTube", "AI", "Video"]
+
+    time_per_word = max(0.1, duration / len(raw_words))
+    words = []
+    curr = 0.0
+    for w in raw_words:
+        w_end = min(duration, curr + time_per_word)
+        try:
+            norm = normalize_text(w)
+        except Exception:
+            norm = re.sub(r"[^\w\s]", "", w).strip()
+        words.append({
+            "text": w,
+            "normalized": norm or w,
+            "start": round(curr, 2),
+            "end": round(w_end, 2),
+        })
+        curr = w_end
+
+    return words
 
 
 # ============================================================
@@ -757,76 +821,57 @@ def transcribe_audio():
     print("=" * 60)
 
     model = get_whisper_model()
-
-    whisper_lang = "en"
-    if SCRIPT_FILE.exists():
-        try:
-            with open(SCRIPT_FILE, "r", encoding="utf-8") as f:
-                script_content = f.read()
-            if re.search(r"[\u0C00-\u0C7F]", script_content):
-                whisper_lang = "te"
-            elif re.search(r"[\u0900-\u097F]", script_content):
-                whisper_lang = "hi"
-        except Exception:
-            pass
-
-    print()
-    print(f"Transcribing voice.mp3 (language={whisper_lang})...")
-
-    result = model.transcribe(
-        str(VOICE_FILE),
-        language=whisper_lang,
-        fp16=False,
-        word_timestamps=True,
-        verbose=False,
-    )
-
     words = []
+    result = {"segments": [], "text": ""}
 
-    for segment in result.get(
-        "segments",
-        [],
-    ):
+    if model is not None:
+        try:
+            whisper_lang = "en"
+            if SCRIPT_FILE.exists():
+                try:
+                    with open(SCRIPT_FILE, "r", encoding="utf-8") as f:
+                        script_content = f.read()
+                    if re.search(r"[\u0C00-\u0C7F]", script_content):
+                        whisper_lang = "te"
+                    elif re.search(r"[\u0900-\u097F]", script_content):
+                        whisper_lang = "hi"
+                except Exception:
+                    pass
 
-        for word in segment.get(
-            "words",
-            [],
-        ):
+            print()
+            print(f"Transcribing voice.mp3 (language={whisper_lang})...")
 
-            word_text = word.get(
-                "word",
-                "",
-            ).strip()
-
-            start = word.get(
-                "start"
+            result = model.transcribe(
+                str(VOICE_FILE),
+                language=whisper_lang,
+                fp16=False,
+                word_timestamps=True,
+                verbose=False,
             )
 
-            end = word.get(
-                "end"
-            )
+            for segment in result.get("segments", []):
+                for word in segment.get("words", []):
+                    word_text = word.get("word", "").strip()
+                    start = word.get("start")
+                    end = word.get("end")
+                    if not word_text or start is None or end is None:
+                        continue
 
-            if not word_text:
-                continue
-
-            if start is None or end is None:
-                continue
-
-            words.append(
-                {
-                    "text": word_text,
-                    "normalized": normalize_text(
-                        word_text
-                    ),
-                    "start": float(start),
-                    "end": float(end),
-                }
-            )
+                    words.append(
+                        {
+                            "text": word_text,
+                            "normalized": normalize_text(word_text),
+                            "start": float(start),
+                            "end": float(end),
+                        }
+                    )
+        except Exception as trans_err:
+            print(f"⚠️ Whisper transcription note: {trans_err}. Falling back to script-based timing...")
+            words = []
 
     if not words:
-        raise RuntimeError(
-            "Whisper did not return word timestamps."
-        )
+        print("ℹ️ Using resilient script-based word timings...")
+        words = fallback_script_word_timestamps(VOICE_FILE, SCRIPT_FILE)
 
     # Save to transcription cache for subtitle agent & video agent reuse
     try:

@@ -13,3 +13,8 @@ moviepy
 openai
 edge-tts
 gTTS
+openai-whisper
+tenacity
+google-api-python-client
+google-auth-oauthlib
+google-auth-httplib2
