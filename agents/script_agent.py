@@ -281,17 +281,37 @@ def _parse_and_save_package(text, default_title=None):
         flags=re.IGNORECASE | re.DOTALL,
     )
 
+    paired_visuals_from_sections = []
+
     for match in pattern.finditer(section_text):
         section_number = int(match.group(1))
         visual_number = int(match.group(2))
-        narration = match.group(3).strip()
+        block = match.group(3).strip()
 
-        if narration:
+        # Check if block has explicit VISUAL: and NARRATION:
+        v_match = re.search(r"(?:^|\n)\s*(?:\*{1,2})?VISUAL(?:\*{1,2})?\s*:\s*(.*?)(?=\n\s*(?:\*{1,2})?NARRATION(?:\*{1,2})?\s*:|\Z)", block, re.IGNORECASE | re.DOTALL)
+        n_match = re.search(r"(?:^|\n)\s*(?:\*{1,2})?NARRATION(?:\*{1,2})?\s*:\s*(.*)$", block, re.IGNORECASE | re.DOTALL)
+
+        if v_match and n_match:
+            sec_visual = v_match.group(1).strip().strip("*").strip()
+            sec_narration = n_match.group(1).strip()
+        else:
+            sec_visual = ""
+            sec_narration = block
+
+        if sec_narration:
             sections.append({
                 "section": section_number,
                 "visual": visual_number,
-                "narration": narration,
+                "narration": sec_narration,
             })
+            paired_visuals_from_sections.append(sec_visual)
+
+    # If the LLM returned explicit VISUAL: tags for each section, use those directly!
+    # This guarantees 100% synchronization between what is said and what is shown.
+    if paired_visuals_from_sections and all(bool(v) for v in paired_visuals_from_sections) and len(paired_visuals_from_sections) == len(sections):
+        print(f"✅ Found {len(paired_visuals_from_sections)} 1:1 synchronized section visuals directly inside SECTIONS block.")
+        visual_plan = paired_visuals_from_sections
 
     # If regex missed alternative formatting, try splitting by section headers
     if not sections:
@@ -877,14 +897,17 @@ N. <Primary Query> | <Alternative Query> | <Fallback B-Roll>
 SECTIONS:
 
 SECTION 1 | VISUAL 1
-<narration>
+VISUAL: <Primary Query> | <Alternative Query> | <Fallback B-Roll>
+NARRATION: <narration strictly discussing this visual>
 
 SECTION 2 | VISUAL 2
-<narration>
+VISUAL: <Primary Query> | <Alternative Query> | <Fallback B-Roll>
+NARRATION: <narration strictly discussing this visual>
 
 ...
 SECTION N | VISUAL N
-<narration>
+VISUAL: <Primary Query> | <Alternative Query> | <Fallback B-Roll>
+NARRATION: <narration strictly discussing this visual>
 """
 
     model_errors = []
@@ -1118,14 +1141,17 @@ N. The original flyer.
 SECTIONS:
 
 SECTION 1 | VISUAL 1
-<narration>
+VISUAL: <Primary Query> | <Alternative Query> | <Fallback B-Roll>
+NARRATION: <narration strictly discussing this visual>
 
 SECTION 2 | VISUAL 2
-<narration>
+VISUAL: <Primary Query> | <Alternative Query> | <Fallback B-Roll>
+NARRATION: <narration strictly discussing this visual>
 
 ...
 SECTION N | VISUAL N
-<narration>
+VISUAL: The original flyer.
+NARRATION: <narration strictly discussing the flyer call-to-action>
 """
 
     for model in MODELS:

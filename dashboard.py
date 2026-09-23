@@ -2113,27 +2113,6 @@ if not active_gemini_key:
                 st.rerun()
             else:
                 st.warning("Please enter a valid key.")
-else:
-    with st.expander("🔑 Cloud API Keys & Settings", expanded=False):
-        st.markdown(f"**Google Gemini:** `🟢 Connected`")
-        st.markdown(f"**Pexels Stock:** `{'🟢 Connected' if active_pexels_key else '⚪ Optional (automatic stock fallback active)'}`")
-        ecol1, ecol2 = st.columns(2)
-        with ecol1:
-            new_g = st.text_input("Change Gemini API Key", type="password", key="ui_gemini_update", placeholder="New Gemini key...")
-            if st.button("Update Gemini Key", key="btn_save_gemini"):
-                if new_g.strip():
-                    st.session_state["GEMINI_API_KEY"] = new_g.strip()
-                    os.environ["GEMINI_API_KEY"] = new_g.strip()
-                    st.success("Gemini Key updated!")
-                    st.rerun()
-        with ecol2:
-            new_p = st.text_input("Change Pexels API Key", type="password", key="ui_pexels_update", placeholder="New Pexels key...")
-            if st.button("Update Pexels Key", key="btn_save_pexels"):
-                if new_p.strip():
-                    st.session_state["PEXELS_API_KEY"] = new_p.strip()
-                    os.environ["PEXELS_API_KEY"] = new_p.strip()
-                    st.success("Pexels Key updated!")
-                    st.rerun()
 
 # ============================================================
 # STUDIO NAVIGATION TABS (AI COPILOT vs MANUAL STUDIO)

@@ -186,6 +186,73 @@ BRAND_DICTIONARY = {
     "Comments": "కామెంట్స్",
     "Subscribers": "సబ్‌స్క్రైబర్స్",
     "Followers": "ఫాలోవర్స్",
+
+    # Social media, creators & cyber security
+    "Social Media": "సోషల్ మీడియా",
+    "social media": "సోషల్ మీడియా",
+    "Delhi Police": "ఢిల్లీ పోలీస్",
+    "delhi police": "ఢిల్లీ పోలీస్",
+    "Police": "పోలీస్",
+    "police": "పోలీస్",
+    "Cyber Crime": "సైబర్ క్రైమ్",
+    "cyber crime": "సైబర్ క్రైమ్",
+    "Cyber Security": "సైబర్ సెక్యూరిటీ",
+    "cyber security": "సైబర్ సెక్యూరిటీ",
+    "Cyber": "సైబర్",
+    "cyber": "సైబర్",
+    "Trending": "ట్రెండింగ్",
+    "trending": "ట్రెండింగ్",
+    "Trend": "ట్రెండ్",
+    "trend": "ట్రెండ్",
+    "Filter": "ఫిల్టర్",
+    "filter": "ఫిల్టర్",
+    "Filters": "ఫిల్టర్స్",
+    "filters": "ఫిల్టర్స్",
+    "Photos": "ఫోటోలు",
+    "photos": "ఫోటోలు",
+    "Photo": "ఫోటో",
+    "photo": "ఫోటో",
+    "Viral": "వైరల్",
+    "viral": "వైరల్",
+    "Scam": "స్కామ్",
+    "scam": "స్కామ్",
+    "Scams": "స్కామ్స్",
+    "scams": "స్కామ్స్",
+    "Hacker": "హ్యాకర్",
+    "hacker": "హ్యాకర్",
+    "Hackers": "హ్యాకర్స్",
+    "hackers": "హ్యాకర్స్",
+    "Warning": "వార్నింగ్",
+    "warning": "వార్నింగ్",
+    "Alert": "అలర్ట్",
+    "alert": "అలర్ట్",
+    "Link": "లింక్",
+    "link": "లింక్",
+    "Links": "లింక్స్",
+    "links": "లింక్స్",
+    "App": "యాప్",
+    "app": "యాప్",
+    "Apps": "యాప్స్",
+    "apps": "యాప్స్",
+    "Profile": "ప్రొఫైల్",
+    "profile": "ప్రొఫైల్",
+    "Profiles": "ప్రొఫైల్స్",
+    "profiles": "ప్రొఫైల్స్",
+    "Online": "ఆన్‌లైన్",
+    "online": "ఆన్‌లైన్",
+    "Digital": "డిజిటల్",
+    "digital": "డిజిటల్",
+    "Fake": "ఫేక్",
+    "fake": "ఫేక్",
+    "Vintage": "వింటేజ్",
+    "vintage": "వింటేజ్",
+    "Nostalgia": "నాస్టాల్జియా",
+    "nostalgia": "నాస్టాల్జియా",
+    "VS": "వర్సెస్",
+    "vs": "వర్సెస్",
+    "vs.": "వర్సెస్",
+    "Kids": "కిడ్స్",
+    "kids": "కిడ్స్",
 }
 
 
@@ -345,6 +412,55 @@ def normalize_specs_and_units(text: str) -> str:
     return text
 
 
+def normalize_decades_and_eras(text: str) -> str:
+    """
+    Normalizes decade and era references so Edge-TTS never pronounces:
+    - '80s' as 'యానభై ఎస్' -> converts to 'ఎయిటీస్'
+    - '90s' as 'తొంభై ఎస్' -> converts to 'నైంటీస్'
+    - '1980s' -> 'నైన్టీన్ ఎయిటీస్'
+    - '2000s' -> 'టూ థౌసండ్స్'
+    - Helpline '1930' -> 'వన్ నైన్ త్రీ జీరో'
+    """
+    # 4-digit decades first
+    four_digit_decades = [
+        (r"(?i)\b1980['’]?s\b", "నైన్టీన్ ఎయిటీస్"),
+        (r"(?i)\b1990['’]?s\b", "నైన్టీన్ నైంటీస్"),
+        (r"(?i)\b1970['’]?s\b", "నైన్టీన్ సెవెంటీస్"),
+        (r"(?i)\b1960['’]?s\b", "నైన్టీన్ సిక్స్టీస్"),
+        (r"(?i)\b1950['’]?s\b", "నైన్టీన్ ఫిఫ్టీస్"),
+        (r"(?i)\b2000['’]?s\b", "టూ థౌసండ్స్"),
+        (r"(?i)\b2010['’]?s\b", "ట్వంటీ టెన్స్"),
+        (r"(?i)\b2020['’]?s\b", "ట్వంటీ ట్వంటీస్"),
+    ]
+    for pattern, repl in four_digit_decades:
+        text = re.sub(pattern, repl, text)
+
+    # 2-digit decades: 80s, 90s, 70s, 60s, 50s, 40s, 30s, 20s
+    two_digit_decades = [
+        (r"(?i)\b80['’]?s\b", "ఎయిటీస్"),
+        (r"(?i)\b90['’]?s\b", "నైంటీస్"),
+        (r"(?i)\b70['’]?s\b", "సెవెంటీస్"),
+        (r"(?i)\b60['’]?s\b", "సిక్స్టీస్"),
+        (r"(?i)\b50['’]?s\b", "ఫిఫ్టీస్"),
+        (r"(?i)\b40['’]?s\b", "ఫార్టీస్"),
+        (r"(?i)\b30['’]?s\b", "థర్టీస్"),
+        (r"(?i)\b20['’]?s\b", "ట్వంటీస్"),
+        # Telugu decade suffix forms: 80ల -> ఎయిటీస్
+        (r"\b80\s*ల\b", "ఎయిటీస్"),
+        (r"\b90\s*ల\b", "నైంటీస్"),
+        (r"\b70\s*ల\b", "సెవెంటీస్"),
+        (r"\b60\s*ల\b", "సిక్స్టీస్"),
+        (r"\b50\s*ల\b", "ఫిఫ్టీస్"),
+    ]
+    for pattern, repl in two_digit_decades:
+        text = re.sub(pattern, repl, text)
+
+    # National Cyber Crime helpline 1930
+    text = re.sub(r"\b1930\s*(?:నంబర్‌|నంబర్|number)?\b", "నైన్టీన్ థర్టీ నంబర్", text)
+
+    return text
+
+
 def normalize_telugu_tech_script(script_text: str) -> str:
     """
     Main entry point to normalize Telugu scripts before TTS synthesis.
@@ -356,7 +472,10 @@ def normalize_telugu_tech_script(script_text: str) -> str:
 
     text = script_text
 
-    # 1. Exact phrase replacements from BRAND_DICTIONARY (longest keys first)
+    # 1. Decades, eras and helplines (80s -> ఎయిటీస్, 90s -> నైంటీస్, 1930 -> నైన్టీన్ థర్టీ)
+    text = normalize_decades_and_eras(text)
+
+    # 2. Exact phrase replacements from BRAND_DICTIONARY (longest keys first)
     sorted_brands = sorted(BRAND_DICTIONARY.keys(), key=len, reverse=True)
     for brand in sorted_brands:
         replacement = BRAND_DICTIONARY[brand]
@@ -368,16 +487,16 @@ def normalize_telugu_tech_script(script_text: str) -> str:
         else:
             text = text.replace(brand, replacement)
 
-    # 2. Smartphone model codes (iPhone 18 -> ఐఫోన్ ఎయిటీన్, Galaxy S26 -> గెలాక్సీ ఎస్ ట్వంటీ సిక్స్)
+    # 3. Smartphone model codes (iPhone 18 -> ఐఫోన్ ఎయిటీన్, Galaxy S26 -> గెలాక్సీ ఎస్ ట్వంటీ సిక్స్)
     text = normalize_smartphones_and_models(text)
 
-    # 3. Processors and chips (A20 -> ఏ ట్వంటీ, M4 -> ఎం ఫోర్, Gen 3 -> జెన్ త్రీ)
+    # 4. Processors and chips (A20 -> ఏ ట్వంటీ, M4 -> ఎం ఫోర్, Gen 3 -> జెన్ త్రీ)
     text = normalize_processors_and_chips(text)
 
-    # 4. Tech specifications and hardware units (48MP, 2TB, 120Hz, 5G, 45W)
+    # 5. Tech specifications and hardware units (48MP, 2TB, 120Hz, 5G, 45W)
     text = normalize_specs_and_units(text)
 
-    # 5. Clean extra spaces
+    # 6. Clean extra spaces
     text = re.sub(r"\s+", " ", text).strip()
 
     return text

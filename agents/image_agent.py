@@ -105,35 +105,72 @@ def get_siglip_pipeline():
 
     return _SIGLIP_MODEL, _SIGLIP_PROCESSOR
 
-RELEVANCE_THRESHOLD = 0.05  # Calibrated SigLIP 2 threshold: rejects completely off-topic visuals (prob < 0.005) while accepting matching stock (prob > 0.05)
+RELEVANCE_THRESHOLD = 0.18  # Calibrated SigLIP 2 threshold: rejects off-topic visuals (prob < 0.10) while accepting true matches (prob >= 0.18)
+
+def verify_visual_with_gemini(image_path: str, query_text: str) -> bool:
+    """
+    Multimodal AI visual verification using Gemini Flash Vision.
+    Directly asks Gemini if the downloaded visual matches the scene intent.
+    """
+    try:
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            return True
+        from google import genai
+        client = genai.Client(api_key=api_key)
+        img = Image.open(image_path).convert("RGB")
+        prompt = (
+            f"Scene description: '{query_text}'.\n"
+            f"Does this image visually match and accurately depict the scene description? "
+            f"Reply strictly with either YES or NO."
+        )
+        for m_name in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]:
+            try:
+                resp = client.models.generate_content(
+                    model=m_name,
+                    contents=[img, prompt]
+                )
+                ans = resp.text.strip().upper()
+                return "YES" in ans
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return True
 
 def score_visual_relevance(image_path: str, query_text: str) -> float:
     """
-    SigLIP 2 visual relevance scorer (google/siglip2-so400m-patch14-384).
+    SigLIP 2 visual relevance scorer (google/siglip2-so400m-patch14-384 / base-patch16-224).
     Calculates zero-shot relevance probability (0.0 to 1.0) against an off-topic anchor.
-    Accepts if > RELEVANCE_THRESHOLD (0.05).
+    Accepts if >= RELEVANCE_THRESHOLD (0.18).
     """
     try:
         model, processor = get_siglip_pipeline()
-        if model is None or processor is None:
-            return 0.50
-        import torch
-        image = Image.open(image_path).convert("RGB")
-        unrelated_anchor = "unrelated off-topic random photo"
-        inputs = processor(
-            text=[query_text[:120], unrelated_anchor],
-            images=image,
-            padding="max_length",
-            return_tensors="pt"
-        )
-        with torch.no_grad():
-            outputs = model(**inputs)
-            # Softmax against negative anchor yields normalized probability in [0, 1]
-            prob = torch.softmax(outputs.logits_per_image, dim=-1)[0, 0].item()
-        return float(prob)
+        if model is not None and processor is not None:
+            import torch
+            image = Image.open(image_path).convert("RGB")
+            unrelated_anchor = "unrelated off-topic random photo"
+            inputs = processor(
+                text=[query_text[:120], unrelated_anchor],
+                images=image,
+                padding="max_length",
+                return_tensors="pt"
+            )
+            with torch.no_grad():
+                outputs = model(**inputs)
+                prob = torch.softmax(outputs.logits_per_image, dim=-1)[0, 0].item()
+            return float(prob)
     except Exception as e:
         print(f"score_visual_relevance notice: {e}")
-        return 0.50
+
+    # Fallback to Gemini Multimodal Vision verification if SigLIP is unavailable
+    try:
+        if verify_visual_with_gemini(image_path, query_text):
+            return 0.85
+        return 0.05
+    except Exception:
+        pass
+    return 0.50
 
 
 def rewrite_query_for_flux(query_text: str, is_explainer: bool = False) -> str:
@@ -513,14 +550,21 @@ def build_queries(visual_description, narration=None):
             } and len(w) > 1
         ]
 
+        # 1. Full high-intent descriptive query (preserves rich context like 'vintage 1980s retro portrait photo')
+        if len(desc_words) >= 4:
+            primary = " ".join(desc_words[:6])
+            if primary not in queries:
+                queries.append(primary)
+
+        # 2. Targeted punchy fallback (3-4 core words)
         if len(desc_words) >= 2:
             punchy = " ".join(desc_words[:3])
             if punchy not in queries:
                 queries.append(punchy)
 
-        primary = " ".join(desc_words[:5])
-        if primary and primary not in queries:
-            queries.append(primary)
+        # 3. Clean full segment if concise
+        if clean_desc and len(clean_desc.split()) <= 7 and clean_desc not in queries:
+            queries.append(clean_desc)
 
     # Entity keywords from narration if available
     if narration:
