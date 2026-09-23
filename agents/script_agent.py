@@ -702,14 +702,18 @@ def generate_script(
     is_hindi = "hindi" in lang_str or "हिंदी" in str(language_style)
 
     if is_telugu:
-        role_desc = "You are a professional Telugu YouTube script writer and visual-content planning director."
+        role_desc = "You are a professional Telugu YouTube creator and script writer (conversational Teluglish style like Prasadtechintelugu)."
         language_rules = """LANGUAGE & SCRIPT RULES:
 
-- Write the TITLE and SCRIPT narration strictly in natural, fluent, engaging spoken Telugu (తెలుగు లిపి).
-- STRICT HOOK RULE: NEVER start with a greeting, "Welcome back", or intro pleasantry. First sentence must be a bold claim, shocking spec/price fact, or curiosity-gap question -- hook within 3 seconds.
-- PACING: Each beat must be speakable in 2.0-3.5 seconds (6-12 Telugu words).
-- Preserve proper names, product models, tech terms, dates, and amounts clearly.
-- CRITICAL VISUAL RULE: All VISUAL_PLAN descriptions and keywords MUST be written strictly in concise ENGLISH keywords (e.g., "1. Apple iPhone 16 Pro Max smartphone on table", "2. Tim Cook keynote presentation"), because our stock video search engine queries in English. Do NOT write visual descriptions in Telugu."""
+- Write the TITLE and SCRIPT narration in natural, energetic, conversational spoken Telugu (తెలుగు లిపి).
+- CRITICAL CREATOR PRONUNCIATION RULE (TELUGLISH TECH):
+  When discussing tech models, specs, numbers, and features, ALWAYS write them phonetically in Telugu script using their conversational English pronunciations, NOT bookish formal Telugu numbers!
+  * Phone models: Write "గెలాక్సీ ఎస్ ట్వంటీ సెవెన్" (Galaxy S27), "ఐఫోన్ ఎయిటీన్ ప్రో" (iPhone 18 Pro), "ఎస్ ట్వంటీ సిక్స్" (S26). NEVER write formal Telugu numbers like "గెలాక్సీ ఇరవై ఏడు" or "పద్దెనిమిది".
+  * Storage & RAM: Write "యూఎఫ్ఎస్ ఫైవ్ పాయింట్ వన్" (UFS 5.1), "యూఎఫ్ఎస్ ఫైవ్" (UFS 5), "టూ ఫిఫ్టీ సిక్స్ జీబీ" (256GB), "ట్వెల్వ్ జీబీ ర్యామ్" (12GB RAM), "సిక్స్టీన్ జీబీ ర్యామ్" (16GB RAM). NEVER write "ఐదు", "రెండు వందల యాభై ఆరు", or "పన్నెండు".
+  * Specs & Units: Write "సిక్స్టీ వాట్ల ఫాస్ట్ ఛార్జింగ్" (60W), "ఫైవ్ థౌసండ్ ఎంఏహెచ్ బ్యాటరీ" (5000mAh), "వన్ ట్వంటీ హెర్ట్జ్ డిస్‌ప్లే" (120Hz), "ఫోర్ కే వీడియో" (4K).
+- STRICT HOOK RULE: First 3 seconds MUST HOOK the viewer immediately with a shocking claim, curiosity-gap question, or mind-blowing spec revelation. NEVER start with greetings, "Welcome back", or boring pleasantries.
+- PACING: Each beat must be speakable in 2.0-3.5 seconds (6-12 words) for maximum retention.
+- CRITICAL VISUAL RULE: All VISUAL descriptions MUST be written strictly in concise ENGLISH keywords (e.g. "Samsung Galaxy S27 smartphone hands on display | futuristic smartphone chassis | mobile processor macro shot"), because stock video search engines query in English. Do NOT write visual descriptions in Telugu."""
     elif is_hindi:
         role_desc = "You are a professional Hindi YouTube script writer and visual-content planning director."
         language_rules = """LANGUAGE & SCRIPT RULES:
@@ -1035,11 +1039,11 @@ def generate_script_from_image(
     is_hindi = "hindi" in lang_str or "हिंदी" in str(language_style)
 
     if is_telugu:
-        flyer_role = "You are an expert visual-content analyst and professional Telugu YouTube script writer."
+        flyer_role = "You are an expert visual-content analyst and professional Telugu YouTube creator (conversational Teluglish style)."
         flyer_lang = """LANGUAGE:
 - Write the TITLE and SCRIPT narration strictly in natural, fluent, engaging spoken Telugu (తెలుగు లిపి).
-- Sound like an engaging Telugu creator explaining the flyer.
-- CRITICAL VISUAL RULE: All VISUAL_PLAN descriptions MUST be in concise ENGLISH keywords so our stock search engine can find visuals."""
+- Sound like an engaging Telugu creator. Write all numbers, models, and specs using conversational English phonetics in Telugu script (e.g. 'గెలాక్సీ ఎస్ ట్వంటీ సెవెన్', 'టూ ఫిఫ్టీ సిక్స్ జీబీ', 'యూఎఫ్ఎస్ ఫైవ్'). NEVER use formal textbook Telugu numbers.
+- CRITICAL VISUAL RULE: All VISUAL descriptions MUST be in concise ENGLISH keywords so our stock search engine can find visuals."""
     elif is_hindi:
         flyer_role = "You are an expert visual-content analyst and professional Hindi YouTube script writer."
         flyer_lang = """LANGUAGE:

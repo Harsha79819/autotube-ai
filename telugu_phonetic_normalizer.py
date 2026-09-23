@@ -7,6 +7,7 @@ specs ('48MP' -> 'ఫార్టీ ఎయిట్ మెగాపిక్స
 and technical terms into natural conversational Telugu creator pronunciation.
 """
 
+import os
 import re
 from typing import Union
 
@@ -89,6 +90,19 @@ def number_to_english_phonetic_telugu(n: Union[int, str]) -> str:
         if r < 10:
             return f"{ENGLISH_UNITS_TELUGU.get(h, str(h))} నాట్ {ENGLISH_UNITS_TELUGU.get(r, str(r))}"
         return f"{ENGLISH_UNITS_TELUGU.get(h, str(h))} {number_to_english_phonetic_telugu(r)}"
+
+    if val < 1000000:
+        th, r = divmod(val, 1000)
+        th_str = number_to_english_phonetic_telugu(th) + " థౌసండ్"
+        if r == 0:
+            return th_str
+        if r < 100:
+            return f"{th_str} {number_to_english_phonetic_telugu(r)}"
+        h, r2 = divmod(r, 100)
+        h_str = ENGLISH_UNITS_TELUGU.get(h, str(h)) + " హండ్రెడ్"
+        if r2 == 0:
+            return f"{th_str} {h_str}"
+        return f"{th_str} {h_str} {number_to_english_phonetic_telugu(r2)}"
 
     return str(val)
 
@@ -259,12 +273,32 @@ BRAND_DICTIONARY = {
 def normalize_smartphones_and_models(text: str) -> str:
     """
     Normalizes phone model numbers to English phonetics so that:
+    - 'Galaxy S27' / 'గెలాక్సీ 27' / 'ఎస్ ఇరవై ఏడు' -> 'గెలాక్సీ ఎస్ ట్వంటీ సెవెన్'
     - 'iPhone 18' -> 'ఐఫోన్ ఎయిటీన్' (never 'ఐఫోన్ పద్దెనిమిది')
     - 'iPhone 18 Pro Max' -> 'ఐఫోన్ ఎయిటీన్ ప్రో మ్యాక్స్'
     - 'S26' / 'ఎస్ 26' -> 'ఎస్ ట్వంటీ సిక్స్'
     - 'OnePlus 13' -> 'వన్‌ప్లస్ థర్టీన్'
     - 'Pixel 9 Pro' -> 'పిక్సెల్ నైన్ ప్రో'
     """
+    # 0. Convert written formal Telugu numbers for Samsung Galaxy S-series
+    LB = r"(?<![A-Za-z0-9\u0C00-\u0C7F])"
+    RB = r"(?=(?:[లోతోకికునిలపైనుంచినాటివరకు]*)(?:[^A-Za-z0-9\u0C00-\u0C7F]|$))"
+
+    s_series_telugu_words = [
+        (LB + r"(?:Samsung\s*|సామ్‌సంగ్\s*|శామ్‌సంగ్\s*)?(?:Galaxy\s*|గెలాక్సీ\s*)?(?:S|ఎస్)\s*ఇరవై\s*ఏడు" + RB, "గెలాక్సీ ఎస్ ట్వంటీ సెవెన్"),
+        (LB + r"(?:Samsung\s*|సామ్‌సంగ్\s*|శామ్‌సంగ్\s*)?(?:Galaxy\s*|గెలాక్సీ\s*)ఇరవై\s*ఏడు" + RB, "గెలాక్సీ ఎస్ ట్వంటీ సెవెన్"),
+        (LB + r"(?:Samsung\s*|సామ్‌సంగ్\s*|శామ్‌సంగ్\s*)?(?:Galaxy\s*|గెలాక్సీ\s*)?(?:S|ఎస్)\s*ఇరవై\s*ఆరు" + RB, "గెలాక్సీ ఎస్ ట్వంటీ సిక్స్"),
+        (LB + r"(?:Samsung\s*|సామ్‌సంగ్\s*|శామ్‌సంగ్\s*)?(?:Galaxy\s*|గెలాక్సీ\s*)ఇరవై\s*ఆరు" + RB, "గెలాక్సీ ఎస్ ట్వంటీ సిక్స్"),
+        (LB + r"(?:Samsung\s*|సామ్‌సంగ్\s*|శామ్‌సంగ్\s*)?(?:Galaxy\s*|గెలాక్సీ\s*)?(?:S|ఎస్)\s*ఇరవై\s*ఐదు" + RB, "గెలాక్సీ ఎస్ ట్వంటీ ఫైవ్"),
+        (LB + r"(?:Samsung\s*|సామ్‌సంగ్\s*|శామ్‌సంగ్\s*)?(?:Galaxy\s*|గెలాక్సీ\s*)?(?:S|ఎస్)\s*ఇరవై\s*నాలుగు" + RB, "గెలాక్సీ ఎస్ ట్వంటీ ఫోర్"),
+        (LB + r"(?:Samsung\s*|సామ్‌సంగ్\s*|శామ్‌సంగ్\s*)?(?:Galaxy\s*|గెలాక్సీ\s*)?(?:S|ఎస్)\s*ఇరవై\s*మూడు" + RB, "గెలాక్సీ ఎస్ ట్వంటీ త్రీ"),
+        (LB + r"(?:Samsung\s*|సామ్‌సంగ్\s*|శామ్‌సంగ్\s*)?(?:Galaxy\s*|గెలాక్సీ\s*)?(?:S|ఎస్)\s*ఇరవై\s*రెండు" + RB, "గెలాక్సీ ఎస్ ట్వంటీ టూ"),
+        (LB + r"(?:Samsung\s*|సామ్‌సంగ్\s*|శామ్‌సంగ్\s*)?(?:Galaxy\s*|గెలాక్సీ\s*)?(?:S|ఎస్)\s*ఇరవై\s*ఒకటి" + RB, "గెలాక్సీ ఎస్ ట్వంటీ వన్"),
+        (LB + r"(?:Samsung\s*|సామ్‌సంగ్\s*|శామ్‌సంగ్\s*)?(?:Galaxy\s*|గెలాక్సీ\s*)?(?:S|ఎస్)\s*ఇరవై" + RB, "గెలాక్సీ ఎస్ ట్వంటీ"),
+    ]
+    for pat, repl in s_series_telugu_words:
+        text = re.sub(pat, repl, text, flags=re.IGNORECASE)
+
     # 1. iPhone model numbers
     def replace_iphone(m):
         num = int(m.group(1))
@@ -272,7 +306,13 @@ def normalize_smartphones_and_models(text: str) -> str:
 
     text = re.sub(r"(?i)\b(?:iphone|ఐఫోన్)\s*(\d{1,2})\b", replace_iphone, text)
 
-    # 2. Samsung Galaxy S-series
+    # 2. Samsung Galaxy / S-series digits: Galaxy 27, Galaxy S27, S27, గెలాక్సీ 27, గెలాక్సీ ఎస్ 27
+    def replace_galaxy_series(m):
+        num = int(m.group(1))
+        return f"గెలాక్సీ ఎస్ {number_to_english_phonetic_telugu(num)}"
+
+    text = re.sub(r"(?i)\b(?:Samsung\s*|సామ్‌సంగ్\s*|శామ్‌సంగ్\s*)?(?:Galaxy|గెలాక్సీ)\s*(?:S|ఎస్)?\s*(\d{1,2})\b", replace_galaxy_series, text)
+
     def replace_s_series(m):
         num = int(m.group(1))
         return f"ఎస్ {number_to_english_phonetic_telugu(num)}"
@@ -345,6 +385,90 @@ def normalize_specs_and_units(text: str) -> str:
     - '5G' -> 'ఫైవ్ జీ'
     - '45W' -> 'ఫార్టీ ఫైవ్ వాట్ల'
     """
+    # UFS Storage specification (UFS 5.1 -> యూఎఫ్ఎస్ ఫైవ్ పాయింట్ వన్, UFS 5 -> యూఎఫ్ఎస్ ఫైవ్)
+    def replace_ufs(m):
+        whole = number_to_english_phonetic_telugu(int(m.group(1)))
+        if m.group(2):
+            dec = number_to_english_phonetic_telugu(int(m.group(2)))
+            return f"యూఎఫ్ఎస్ {whole} పాయింట్ {dec}"
+        return f"యూఎఫ్ఎస్ {whole}"
+
+    text = re.sub(r"(?i)\b(?:UFS|యూఎఫ్ఎస్|యుఎఫ్ఎస్)\s*(\d+)(?:\.(\d+))?\b", replace_ufs, text)
+
+    LB = r"(?<![A-Za-z0-9\u0C00-\u0C7F])"
+    RB = r"(?![A-Za-z0-9\u0C00-\u0C7F])"
+
+    # Convert written formal Telugu words for UFS:
+    ufs_telugu_words = [
+        (LB + r"(?:యూఎఫ్ఎస్|యుఎఫ్ఎస్)\s*ఐదు\s*పాయింట్\s*(?:ఒకటి|వన్)" + RB, "యూఎఫ్ఎస్ ఫైవ్ పాయింట్ వన్"),
+        (LB + r"(?:యూఎఫ్ఎస్|యుఎఫ్ఎస్)\s*ఐదు" + RB, "యూఎఫ్ఎస్ ఫైవ్"),
+        (LB + r"(?:యూఎఫ్ఎస్|యుఎఫ్ఎస్)\s*నాలుగు\s*పాయింట్\s*జీరో" + RB, "యూఎఫ్ఎస్ ఫోర్ పాయింట్ జీరో"),
+        (LB + r"(?:యూఎఫ్ఎస్|యుఎఫ్ఎస్)\s*నాలుగు" + RB, "యూఎఫ్ఎస్ ఫోర్"),
+        (LB + r"(?:యూఎఫ్ఎస్|యుఎఫ్ఎస్)\s*మూడు\s*పాయింట్\s*(?:ఒకటి|వన్)" + RB, "యూఎఫ్ఎస్ త్రీ పాయింట్ వన్"),
+    ]
+    for pat, repl in ufs_telugu_words:
+        text = re.sub(pat, repl, text)
+
+    # RAM Types & Specs
+    text = re.sub(r"(?i)\bLPDDR\s*5X\b", "ఎల్పీడీడీఆర్ ఫైవ్ ఎక్స్", text)
+    text = re.sub(r"(?i)\bLPDDR\s*6\b", "ఎల్పీడీడీఆర్ సిక్స్", text)
+    text = re.sub(r"(?i)\bLPDDR\s*5\b", "ఎల్పీడీడీఆర్ ఫైవ్", text)
+    text = re.sub(r"\bఎల్పీడీడీఆర్\s*ఫైవ్\s*ఎక్స్\b", "ఎల్పీడీడీఆర్ ఫైవ్ ఎక్స్", text)
+
+    # RAM capacity words in English or formal Telugu
+    text = re.sub(
+        r"(?i)\b(\d+)\s*(?:GB|జీబీ)\s*(?:RAM|రామ్|ర్యామ్)\b",
+        lambda m: f"{number_to_english_phonetic_telugu(int(m.group(1)))} జీబీ ర్యామ్",
+        text,
+    )
+
+    # RAM capacity words in formal Telugu
+    ram_telugu_words = [
+        (LB + r"పన్నెండు\s*జీబీ\s*(?:రామ్|ర్యామ్|RAM)" + RB, "ట్వెల్వ్ జీబీ ర్యామ్"),
+        (LB + r"పదహారు\s*జీబీ\s*(?:రామ్|ర్యామ్|RAM)" + RB, "సిక్స్టీన్ జీబీ ర్యామ్"),
+        (LB + r"ఎనిమిది\s*జీబీ\s*(?:రామ్|ర్యామ్|RAM)" + RB, "ఎయిట్ జీబీ ర్యామ్"),
+        (LB + r"ఇరవై\s*నాలుగు\s*జీబీ\s*(?:రామ్|ర్యామ్|RAM)" + RB, "ట్వంటీ ఫోర్ జీబీ ర్యామ్"),
+        (LB + r"నాలుగు\s*జీబీ\s*(?:రామ్|ర్యామ్|RAM)" + RB, "ఫోర్ జీబీ ర్యామ్"),
+        (LB + r"(?:రామ్|RAM)" + RB, "ర్యామ్"),
+        (r"(?i)\bRAM\b", "ర్యామ్"),
+    ]
+    for pat, repl in ram_telugu_words:
+        text = re.sub(pat, repl, text)
+
+    # Storage in formal Telugu words (256GB, 128GB, 512GB, 1TB)
+    storage_telugu_words = [
+        (LB + r"రెండు\s*వందల\s*యాభై\s*ఆరు\s*(?:జీబీ|GB|గిగాబైట్|గిగాబైట్లు)" + RB, "టూ ఫిఫ్టీ సిక్స్ జీబీ"),
+        (LB + r"రెండు\s*వందల\s*యాభై\s*ఆరు" + RB + r"(?=.*(?:స్టోరేజ్|జీబీ|GB))", "టూ ఫిఫ్టీ సిక్స్"),
+        (LB + r"నూట\s*ఇరవై\s*ఎనిమిది\s*(?:జీబీ|GB|గిగాబైట్|గిగాబైట్లు)" + RB, "వన్ ట్వంటీ ఎయిట్ జీబీ"),
+        (LB + r"ఐదు\s*వందల\s*పన్నెండు\s*(?:జీబీ|GB|గిగాబైట్|గిగాబైట్లు)" + RB, "ఫైవ్ ట్వెల్వ్ జీబీ"),
+        (LB + r"ఒక\s*(?:టెరాబైట్|టీబీ|TB)" + RB, "వన్ టీబీ"),
+    ]
+    for pat, repl in storage_telugu_words:
+        text = re.sub(pat, repl, text)
+
+    # Fast charging wattage in formal Telugu words
+    watt_telugu_words = [
+        (LB + r"అరవై\s*(?:వాట్ల|వాట్|వాట్స్)" + RB, "సిక్స్టీ వాట్ల"),
+        (LB + r"నలభై\s*ఐదు\s*(?:వాట్ల|వాట్|వాట్స్)" + RB, "ఫార్టీ ఫైవ్ వాట్ల"),
+        (LB + r"యాభై\s*(?:వాట్ల|వాట్|వాట్స్)" + RB, "ఫిఫ్టీ వాట్ల"),
+        (LB + r"వంద\s*(?:వాట్ల|వాట్|వాట్స్)" + RB, "హండ్రెడ్ వాట్ల"),
+        (LB + r"నూట\s*ఇరవై\s*(?:వాట్ల|వాట్|వాట్స్)" + RB, "వన్ ట్వంటీ వాట్ల"),
+    ]
+    for pat, repl in watt_telugu_words:
+        text = re.sub(pat, repl, text)
+
+    # Battery capacity in formal Telugu words
+    battery_telugu_words = [
+        (LB + r"ఐదు\s*వేల\s*రెండు\s*వందల\s*(?:ఎంఏహెచ్|mAh)?\s*బ్యాటరీ" + RB, "ఫైవ్ థౌసండ్ టూ హండ్రెడ్ ఎంఏహెచ్ బ్యాటరీ"),
+        (LB + r"ఐదు\s*వేల\s*రెండు\s*వందల\s*బ్యాటరీ" + RB, "ఫైవ్ థౌసండ్ టూ హండ్రెడ్ ఎంఏహెచ్ బ్యాటరీ"),
+        (LB + r"ఐదు\s*వేల\s*ఏడు\s*వందల\s*(?:ఎంఏహెచ్|mAh)?\s*బ్యాటరీ" + RB, "ఫైవ్ థౌసండ్ సెవెన్ హండ్రెడ్ ఎంఏహెచ్ బ్యాటరీ"),
+        (LB + r"ఐదు\s*వేల\s*ఏడు\s*వందల\s*బ్యాటరీ" + RB, "ఫైవ్ థౌసండ్ సెవెన్ హండ్రెడ్ ఎంఏహెచ్ బ్యాటరీ"),
+        (LB + r"ఐదు\s*వేల\s*(?:ఎంఏహెచ్|mAh)?\s*బ్యాటరీ" + RB, "ఫైవ్ థౌసండ్ ఎంఏహెచ్ బ్యాటరీ"),
+        (LB + r"ఆరు\s*వేల\s*(?:ఎంఏహెచ్|mAh)?\s*బ్యాటరీ" + RB, "సిక్స్ థౌసండ్ ఎంఏహెచ్ బ్యాటరీ"),
+    ]
+    for pat, repl in battery_telugu_words:
+        text = re.sub(pat, repl, text)
+
     # Storage (TB / GB)
     text = re.sub(
         r"(?i)\b(\d+)\s*(?:TB|టీబీ|టెరాబైట్|టెరాబైట్లు)\b",
@@ -373,9 +497,14 @@ def normalize_specs_and_units(text: str) -> str:
     )
 
     # Fast charging wattage (W / వాట్ / వాట్ల)
+    def replace_watt(m):
+        num_str = number_to_english_phonetic_telugu(int(m.group(1)))
+        has_fast = bool(m.group(2))
+        return f"{num_str} వాట్ల ఫాస్ట్ ఛార్జింగ్" if has_fast else f"{num_str} వాట్ల"
+
     text = re.sub(
-        r"(\d+)\s*(?:W|వాట్|వాట్ల)\s*(?:ఫాస్ట్\s*ఛార్జింగ్|fast\s*charging)?",
-        lambda m: f"{number_to_english_phonetic_telugu(int(m.group(1)))} వాట్ల ఫాస్ట్ ఛార్జింగ్",
+        r"(\d+)\s*(?:W|వాట్|వాట్ల)(?:\s*(ఫాస్ట్\s*ఛార్జింగ్|fast\s*charging))?",
+        replace_watt,
         text,
     )
 
@@ -500,3 +629,54 @@ def normalize_telugu_tech_script(script_text: str) -> str:
     text = re.sub(r"\s+", " ", text).strip()
 
     return text
+
+
+def polish_telugu_voice_with_ai(script_text: str) -> str:
+    """
+    Uses Gemini AI (if available) to ensure the Telugu narration script sounds like
+    an authentic human Telugu YouTuber (Teluglish).
+    Converts any remaining textbook Telugu numbers or formal words into spoken English phonetics in Telugu script.
+    """
+    if not script_text or not isinstance(script_text, str):
+        return ""
+
+    # Always run deterministic rule-based normalizer first
+    normalized = normalize_telugu_tech_script(script_text)
+
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        return normalized
+
+    try:
+        from google import genai
+        client = genai.Client(api_key=api_key)
+        prompt = (
+            "You are a professional Telugu YouTube creator editor (like Prasadtechintelugu).\n"
+            "Review and polish this Telugu narration script so it sounds 100% natural, human, conversational, and energetic.\n"
+            "CRITICAL RULES:\n"
+            "1. NEVER use formal textbook Telugu numbers for tech models or specs (e.g. NEVER write 'ఇరవై ఏడు' for 27, NEVER write 'ఐదు' for UFS 5).\n"
+            "2. Ensure all phone models and specs use conversational English phonetics written in Telugu script:\n"
+            "   - 'Galaxy S27' -> 'గెలాక్సీ ఎస్ ట్వంటీ సెవెన్'\n"
+            "   - 'UFS 5.1' -> 'యూఎఫ్ఎస్ ఫైవ్ పాయింట్ వన్'\n"
+            "   - '256GB' -> 'టూ ఫిఫ్టీ సిక్స్ జీబీ'\n"
+            "   - '12GB RAM' -> 'ట్వెల్వ్ జీబీ ర్యామ్'\n"
+            "   - '60W' -> 'సిక్స్టీ వాట్ల ఛార్జింగ్'\n"
+            "3. Keep the exact meaning and section lines. Do NOT add markdown, explanations, or English letters (except necessary brand acronyms).\n"
+            "4. Output ONLY the polished Telugu script lines:\n\n"
+            f"{normalized}"
+        )
+        for m_name in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]:
+            try:
+                resp = client.models.generate_content(
+                    model=m_name,
+                    contents=prompt,
+                )
+                polished = resp.text.strip()
+                if polished and len(polished) >= len(normalized) * 0.7:
+                    return normalize_telugu_tech_script(polished)
+            except Exception:
+                continue
+    except Exception:
+        pass
+
+    return normalized

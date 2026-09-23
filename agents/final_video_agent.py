@@ -110,21 +110,21 @@ def create_final_video(add_captions=False, aspect_ratio="1:1", burn_captions=Non
                     f"force_style='FontName={font_family},FontSize=24,Bold=1,"
                     "PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,"
                     "BorderStyle=1,Outline=2.5,Shadow=1.5,Alignment=2,"
-                    "MarginV=260,MarginR=160,MarginL=80'"
+                    "MarginV=150,MarginR=80,MarginL=80'"
                 )
             elif aspect_ratio == "16:9":
                 style = (
                     f"force_style='FontName={font_family},FontSize=22,Bold=1,"
                     "PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,"
                     "BorderStyle=1,Outline=2.5,Shadow=1.5,Alignment=2,"
-                    "MarginV=55,MarginR=60,MarginL=60'"
+                    "MarginV=40,MarginR=50,MarginL=50'"
                 )
             else:
                 style = (
                     f"force_style='FontName={font_family},FontSize=20,Bold=1,"
                     "PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,"
                     "BorderStyle=1,Outline=2.5,Shadow=1.5,Alignment=2,"
-                    "MarginV=45,MarginR=40,MarginL=40'"
+                    "MarginV=35,MarginR=35,MarginL=35'"
                 )
 
             video_filter = (

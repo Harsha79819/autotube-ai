@@ -898,15 +898,15 @@ def write_ass_karaoke_subtitles(items, output_ass="output/subtitles.ass", aspect
     if aspect_ratio == "9:16":
         res_x, res_y = 1080, 1920
         font_size = 62
-        margin_v = 380
+        margin_v = 210  # Calibrated middle-bottom lower-third position (avoids blocking center subject)
     elif aspect_ratio == "16:9":
         res_x, res_y = 1920, 1080
         font_size = 54
-        margin_v = 85
+        margin_v = 65
     else:  # 1:1
         res_x, res_y = 1080, 1080
         font_size = 56
-        margin_v = 75
+        margin_v = 55
 
     script_file = Path("output/script.txt")
     script_text = ""

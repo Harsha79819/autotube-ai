@@ -1639,15 +1639,17 @@ def create_video(aspect_ratio="1:1"):
         # Render extra overlap frames for smooth xfade transition if not the last clip
         render_dur = job_dur + transition_dur if not is_last else job_dur
 
-        direction = motion_directions[dir_idx % len(motion_directions)]
-        dir_idx += 1
+        is_hook = (idx == 0)
+        direction = "hook_snap_zoom" if is_hook else motion_directions[dir_idx % len(motion_directions)]
+        if not is_hook:
+            dir_idx += 1
 
         clip_filename = f"scene_{idx:03d}_sec{job['section']}_vis{job['visual']}_{direction}.mp4"
         clip_path = scene_clips_dir / clip_filename
 
         print(
             f"[{idx+1}/{len(scene_jobs)}] Section {job['section']} | Visual {job['visual']} | "
-            f"{job['image_path'].name} -> {direction} | {job_dur:.2f}s (render: {render_dur:.2f}s)"
+            f"{job['image_path'].name} -> {direction}{' ⚡ [VIRAL HOOK PUNCH-IN & FLASH]' if is_hook else ''} | {job_dur:.2f}s (render: {render_dur:.2f}s)"
         )
 
         prepare_scene_clip(
@@ -1657,7 +1659,8 @@ def create_video(aspect_ratio="1:1"):
             direction=direction,
             width=target_w,
             height=target_h,
-            fps=FPS
+            fps=FPS,
+            is_hook=is_hook,
         )
 
         scene_clips.append(str(clip_path))

@@ -98,27 +98,33 @@ def _find_best_background(aspect_ratio="16:9"):
     return selected
 
 
-def _load_font(size):
+def _load_font(size, is_telugu=False):
     """
-    Find a usable bold font on macOS/Linux/Windows.
+    Find a usable bold font on macOS/Linux/Windows, with full Telugu Unicode support.
     """
-
-    font_paths = [
-        "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
-        "/System/Library/Fonts/Supplemental/Helvetica Bold.ttf",
-        "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf",
-        "C:/Windows/Fonts/arialbd.ttf",
+    project_fonts = [
+        str(ROOT / "fonts" / "NotoSansTelugu-Bold.ttf"),
+        str(ROOT / "fonts" / "KohinoorTelugu.ttc"),
+        str(ROOT / "fonts" / "Telugu MN.ttc"),
     ]
+    if is_telugu:
+        font_paths = project_fonts + [
+            "/System/Library/Fonts/Supplemental/KohinoorTelugu.ttc",
+            "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+        ]
+    else:
+        font_paths = [
+            "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+            "/System/Library/Fonts/Supplemental/Helvetica Bold.ttf",
+        ] + project_fonts + [
+            "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf",
+            "C:/Windows/Fonts/arialbd.ttf",
+        ]
 
     for path in font_paths:
-
         if os.path.exists(path):
-
             try:
-                return ImageFont.truetype(
-                    path,
-                    size,
-                )
+                return ImageFont.truetype(path, size)
             except OSError:
                 pass
 
@@ -292,46 +298,44 @@ def create_thumbnail(title, aspect_ratio="16:9"):
     )
 
     if aspect_ratio == "9:16":
-        # Centered safe-zone banner for vertical shorts (avoiding top & bottom UI)
+        # Subtle gradient/soft darkening banner for vertical shorts (avoids looking like a black caption bar)
         overlay_draw.rectangle(
-            (0, 860, canvas_w, 1420),
-            fill=(0, 0, 0, 185),
+            (0, 920, canvas_w, 1380),
+            fill=(0, 0, 0, 85),
         )
         overlay_draw.rectangle(
             (0, 0, canvas_w, 120),
-            fill=(0, 0, 0, 40),
+            fill=(0, 0, 0, 30),
         )
-        font_size = 66
-        line_height = 80
+        font_size = 64
+        line_height = 78
         target_center_y = 1140
         max_text_width = canvas_w - 140
     elif aspect_ratio == "1:1":
-        # Lower-third dark band for square
         overlay_draw.rectangle(
-            (0, 680, canvas_w, canvas_h),
-            fill=(0, 0, 0, 175),
+            (0, 720, canvas_w, canvas_h),
+            fill=(0, 0, 0, 85),
         )
         overlay_draw.rectangle(
             (0, 0, canvas_w, 90),
-            fill=(0, 0, 0, 40),
+            fill=(0, 0, 0, 30),
         )
-        font_size = 60
-        line_height = 74
+        font_size = 58
+        line_height = 72
         target_center_y = 880
         max_text_width = canvas_w - 120
     else:  # 16:9
-        # Bottom dark area
         overlay_draw.rectangle(
-            (0, 390, canvas_w, canvas_h),
-            fill=(0, 0, 0, 165),
+            (0, 440, canvas_w, canvas_h),
+            fill=(0, 0, 0, 85),
         )
         overlay_draw.rectangle(
             (0, 0, canvas_w, 90),
-            fill=(0, 0, 0, 45),
+            fill=(0, 0, 0, 30),
         )
-        font_size = 58
-        line_height = 68
-        target_center_y = 555
+        font_size = 56
+        line_height = 66
+        target_center_y = 560
         max_text_width = canvas_w - 160
 
     image = Image.alpha_composite(
@@ -349,7 +353,8 @@ def create_thumbnail(title, aspect_ratio="16:9"):
         title
     )
 
-    font = _load_font(font_size)
+    is_telugu_title = bool(re.search(r"[\u0C00-\u0C7F]", thumbnail_title))
+    font = _load_font(font_size, is_telugu=is_telugu_title)
 
     # Wrap based on pixel width rather than
     # blindly using a fixed word count.

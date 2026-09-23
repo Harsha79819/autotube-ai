@@ -7,7 +7,7 @@ from pathlib import Path
 # Available ffmpeg xfade transitions
 TRANSITIONS = ["fade", "wipeleft", "wiperight", "circleopen", "pixelize"]
 
-DIRECTIONS = ["zoom_in", "zoom_out", "pan_left", "pan_right"]
+DIRECTIONS = ["zoom_in", "zoom_out", "pan_left", "pan_right", "hook_snap_zoom"]
 
 
 def get_clip_duration(clip_path):
@@ -38,7 +38,12 @@ def _zoompan_expr(direction, duration_seconds, out_w=1080, out_h=1920, fps=30):
     """
     total_frames = max(1, int(round(duration_seconds * fps)))
 
-    if direction == "zoom_in":
+    if direction == "hook_snap_zoom":
+        # Viral YouTube Shorts / Reels Hook: Rapid punch-in during first 0.8s (frames 1-25), then smooth drift
+        z = "if(lt(on,25),min(1.0+on*0.010,1.25),min(1.25+(on-25)*0.001,1.40))"
+        x = "iw/2-(iw/zoom/2)"
+        y = "ih/2-(ih/zoom/2)"
+    elif direction == "zoom_in":
         z = "min(zoom+0.0015,1.5)"
         x = "iw/2-(iw/zoom/2)"
         y = "ih/2-(ih/zoom/2)"
@@ -70,15 +75,19 @@ def build_ken_burns_clip(
     width=1080,
     height=1920,
     fps=30,
+    is_hook=False,
 ):
     """
     Renders a still image into a video clip with smooth Ken Burns pan/zoom motion.
     Upscales 2x before zoompan to maintain crisp resolution and prevent pixelation.
+    If is_hook=True, applies a high-energy snap-zoom and subtle exposure flash.
     """
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
 
-    if direction is None or direction not in DIRECTIONS:
-        direction = random.choice(DIRECTIONS)
+    if is_hook:
+        direction = "hook_snap_zoom"
+    elif direction is None or direction not in DIRECTIONS:
+        direction = random.choice(["zoom_in", "zoom_out", "pan_left", "pan_right"])
 
     upscale_w = int(width * 2)
     upscale_h = int(height * 2)
@@ -91,13 +100,17 @@ def build_ken_burns_clip(
         fps=fps,
     )
 
-    vf = (
-        f"scale={upscale_w}:{upscale_h}:force_original_aspect_ratio=increase,"
-        f"crop={upscale_w}:{upscale_h},"
-        f"{zp},"
-        f"setsar=1,"
-        f"format=yuv420p"
-    )
+    vf_filters = [
+        f"scale={upscale_w}:{upscale_h}:force_original_aspect_ratio=increase",
+        f"crop={upscale_w}:{upscale_h}",
+        zp,
+    ]
+    if is_hook:
+        # Subtle 0.2s camera flash impact on the first 7 frames to grab immediate visual attention
+        vf_filters.append("eq=brightness='if(lt(n,7),0.22*(1-n/7),0)'")
+
+    vf_filters.extend(["setsar=1", "format=yuv420p"])
+    vf = ",".join(vf_filters)
 
     cmd = [
         "ffmpeg", "-y",
@@ -127,6 +140,7 @@ def prepare_scene_clip(
     width=1080,
     height=1920,
     fps=30,
+    is_hook=False,
 ):
     """
     Prepares a scene clip from either an image or a video file.
@@ -137,13 +151,18 @@ def prepare_scene_clip(
     ext = p.suffix.lower()
 
     if ext in (".mp4", ".mov", ".webm", ".mkv", ".m4v"):
-        vf = (
-            f"scale={width}:{height}:force_original_aspect_ratio=increase,"
-            f"crop={width}:{height},"
-            f"fps={fps},"
-            f"setsar=1,"
-            f"format=yuv420p"
-        )
+        vf_filters = [
+            f"scale={width}:{height}:force_original_aspect_ratio=increase",
+            f"crop={width}:{height}",
+        ]
+        if is_hook:
+            vf_filters.append("eq=brightness='if(lt(n,7),0.22*(1-n/7),0)'")
+        vf_filters.extend([
+            f"fps={fps}",
+            "setsar=1",
+            "format=yuv420p",
+        ])
+        vf = ",".join(vf_filters)
         cmd = [
             "ffmpeg", "-y",
             "-stream_loop", "-1",
@@ -170,6 +189,7 @@ def prepare_scene_clip(
         width=width,
         height=height,
         fps=fps,
+        is_hook=is_hook,
     )
 
 
