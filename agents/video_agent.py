@@ -1719,6 +1719,7 @@ def create_video(aspect_ratio="1:1"):
         "-c:a", "aac",
         "-b:a", "192k",
         "-shortest",
+        "-movflags", "+faststart",
         str(VIDEO_FILE),
     ]
     r_mux = subprocess.run(mux_cmd, capture_output=True, text=True)

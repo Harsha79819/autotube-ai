@@ -57,9 +57,16 @@ def create_final_video(add_captions=False, aspect_ratio="1:1", burn_captions=Non
 
     # Optimization: When burn_captions is OFF, skip re-encoding if video already has audio!
     if not add_captions and video_has_audio:
-        print("⏩ Burn Captions is OFF: Video already has audio and smart canvas. Copying directly (instant processing)!")
-        import shutil
-        shutil.copyfile(input_video, output_video)
+        print("⏩ Burn Captions is OFF: Video already has audio. Applying +faststart for instant mobile streaming...")
+        try:
+            subprocess.run([
+                "ffmpeg", "-y", "-i", input_video,
+                "-c", "copy", "-movflags", "+faststart",
+                output_video
+            ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        except Exception:
+            import shutil
+            shutil.copyfile(input_video, output_video)
         if include_outro:
             from agents.video_agent import append_outro
             outro_path = outro_clip or "assets/outro/like_share_subscribe.mp4"

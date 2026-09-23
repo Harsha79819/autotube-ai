@@ -247,9 +247,10 @@ def assemble_with_transitions(
         "-filter_complex", ";".join(filter_parts),
         "-map", f"[{prev}]",
         "-c:v", "libx264",
-        "-preset", "ultrafast",
-        "-crf", "18",
+        "-preset", "fast",
+        "-crf", "21",
         "-pix_fmt", "yuv420p",
+        "-movflags", "+faststart",
         str(output_path),
     ]
 

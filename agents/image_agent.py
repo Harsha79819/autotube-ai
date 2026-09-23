@@ -1081,6 +1081,44 @@ def is_relevant(candidate, query):
     )
 
 
+def is_document_or_text_sheet(image_input) -> bool:
+    """
+    Detects whether an image is a scanned document, research paper,
+    black-and-white text sheet, or PDF cover (e.g. > 70% pure white pixels
+    with near-zero color saturation).
+    """
+    try:
+        import numpy as np
+        if isinstance(image_input, (str, Path)):
+            img = Image.open(image_input).convert("RGB")
+        else:
+            img = image_input.convert("RGB")
+
+        arr = np.array(img)
+        # White background pixel ratio (R > 235, G > 235, B > 235)
+        white_mask = (arr[:, :, 0] > 235) & (arr[:, :, 1] > 235) & (arr[:, :, 2] > 235)
+        white_ratio = float(np.mean(white_mask))
+
+        # Check color saturation in HSV
+        hsv = img.convert("HSV")
+        sat_arr = np.array(hsv)[:, :, 1]
+        mean_sat = float(np.mean(sat_arr))
+
+        # If more than 70% pure white and almost no color saturation, it's a document/paper
+        if white_ratio > 0.70 and mean_sat < 15.0:
+            return True
+
+        # Black sheet with minimal content
+        black_mask = (arr[:, :, 0] < 20) & (arr[:, :, 1] < 20) & (arr[:, :, 2] < 20)
+        black_ratio = float(np.mean(black_mask))
+        if black_ratio > 0.85 and mean_sat < 10.0:
+            return True
+
+        return False
+    except Exception:
+        return False
+
+
 # ============================================================
 # IMAGE DOWNLOAD
 # ============================================================
@@ -1173,6 +1211,13 @@ def download_image(
             return False
 
         if pixel_y < MIN_PIXEL_Y:
+            destination.unlink(
+                missing_ok=True
+            )
+            return False
+
+        if is_document_or_text_sheet(destination):
+            print(f"⚠️ Rejected document/text-sheet image: {destination.name}")
             destination.unlink(
                 missing_ok=True
             )
