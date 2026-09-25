@@ -440,7 +440,7 @@ def prepare_uploaded_media(
 # VIDEO CREATION
 # ============================================================
 
-def create_pipeline_video(aspect_ratio="1:1"):
+def create_pipeline_video(aspect_ratio="9:16"):
     """Run the project's video agent."""
 
     from agents.video_agent import create_video
@@ -454,7 +454,7 @@ def create_pipeline_video(aspect_ratio="1:1"):
 
 def create_final_video(
     captions=False,
-    aspect_ratio="1:1",
+    aspect_ratio="9:16",
     burn_captions=None,
     include_outro=False,
     outro_clip=None,
@@ -487,7 +487,7 @@ def create_final_video(
 
 def create_thumbnail(
     topic,
-    aspect_ratio="16:9",
+    aspect_ratio="9:16",
 ):
     """Create thumbnail using existing thumbnail agent."""
 
@@ -789,7 +789,8 @@ def generate_multi_media_video(
     youtube_upload=False,
     youtube_privacy="private",
     script_override=None,
-    aspect_ratio="1:1",
+    aspect_ratio="9:16",
+    target_duration="30-50s",
     include_outro=True,
     instagram_upload=False,
     progress_callback=None,
@@ -1037,6 +1038,7 @@ def generate_multi_media_video(
                         content_type="Explainer",
                         language_style=language_style,
                         source_context=news_verification,
+                        target_duration=target_duration,
                     )
                 else:
                     from agents.script_agent import generate_script
@@ -1045,6 +1047,7 @@ def generate_multi_media_video(
                         content_type=content_type,
                         language_style=language_style,
                         source_context=news_verification,
+                        target_duration=target_duration,
                     )
 
             else:
@@ -2612,6 +2615,78 @@ with tab_manual:
             """
             <div style="margin-top: 8px; margin-bottom: 4px;">
                 <span style="font-size: 0.85rem; font-weight: 600; color: #E2E8F0;">
+                    📐 Video Aspect Ratio & Format
+                </span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        aspect_ratio_options = [
+            "📱 9:16 Vertical (YouTube Shorts / Instagram Reels)",
+            "📺 16:9 Widescreen (YouTube Standard Video)",
+            "⏹️ 1:1 Square (Social Feed)",
+        ]
+        saved_aspect = st.session_state.get("selected_aspect_ratio_label", aspect_ratio_options[0])
+        saved_aspect_idx = aspect_ratio_options.index(saved_aspect) if saved_aspect in aspect_ratio_options else 0
+
+        selected_aspect_label = st.selectbox(
+            "Video Aspect Ratio",
+            aspect_ratio_options,
+            index=saved_aspect_idx,
+            key="declared_aspect_ratio_select",
+            label_visibility="collapsed",
+            help="Choose 9:16 vertical for YouTube Shorts and Instagram Reels, or 16:9 for landscape YouTube videos.",
+        )
+        st.session_state["selected_aspect_ratio_label"] = selected_aspect_label
+        if "9:16" in selected_aspect_label:
+            aspect_ratio = "9:16"
+        elif "16:9" in selected_aspect_label:
+            aspect_ratio = "16:9"
+        else:
+            aspect_ratio = "1:1"
+        st.session_state["selected_aspect_ratio"] = aspect_ratio
+
+        st.markdown(
+            """
+            <div style="margin-top: 8px; margin-bottom: 4px;">
+                <span style="font-size: 0.85rem; font-weight: 600; color: #E2E8F0;">
+                    ⏱️ Target Video Duration & Pacing
+                </span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        duration_options = [
+            "⚡ 30–50 Seconds (YouTube Shorts / Instagram Reels)",
+            "⏱️ 60–90 Seconds (Spotlight / Full Story)",
+            "🎬 2–4 Minutes (In-Depth Explainer)",
+        ]
+        saved_dur = st.session_state.get("selected_duration_label", duration_options[0])
+        saved_dur_idx = duration_options.index(saved_dur) if saved_dur in duration_options else 0
+
+        selected_duration_label = st.selectbox(
+            "Target Video Duration",
+            duration_options,
+            index=saved_dur_idx,
+            key="declared_duration_select",
+            label_visibility="collapsed",
+            help="Controls script word count and visual pacing. 30–50s is optimized for viral Shorts retention.",
+        )
+        st.session_state["selected_duration_label"] = selected_duration_label
+        if "60–90" in selected_duration_label:
+            target_duration = "60-90s"
+        elif "2–4" in selected_duration_label:
+            target_duration = "2-4m"
+        else:
+            target_duration = "30-50s"
+        st.session_state["target_duration"] = target_duration
+
+        st.markdown(
+            """
+            <div style="margin-top: 8px; margin-bottom: 4px;">
+                <span style="font-size: 0.85rem; font-weight: 600; color: #E2E8F0;">
                     📺 YouTube Destination & Privacy (Final Decision)
                 </span>
             </div>
@@ -2957,6 +3032,8 @@ with tab_manual:
                         metadata=metadata,
                         youtube_upload=youtube_upload,
                         youtube_privacy=youtube_privacy,
+                        aspect_ratio=aspect_ratio,
+                        target_duration=target_duration,
                         include_outro=include_outro,
                         instagram_upload=instagram_upload,
                         generation_mode=generation_mode,

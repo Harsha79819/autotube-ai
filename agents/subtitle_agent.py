@@ -886,7 +886,7 @@ def create_subtitle_chunks(
     return subtitles
 
 
-def write_ass_karaoke_subtitles(items, output_ass="output/subtitles.ass", aspect_ratio="1:1"):
+def write_ass_karaoke_subtitles(items, output_ass="output/subtitles.ass", aspect_ratio="9:16"):
     """
     Generate Advanced SubStation Alpha (.ass) word-by-word highlighted karaoke subtitles.
     Supports either pre-chunked script items (all_subtitles) or raw whisper_words.
@@ -1026,7 +1026,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 # CREATE SUBTITLES
 # ============================================================
 
-def create_subtitles(aspect_ratio="1:1"):
+def create_subtitles(aspect_ratio="9:16"):
 
     print("=" * 60)
     print("SUBTITLE GENERATION")

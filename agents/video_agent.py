@@ -1426,7 +1426,7 @@ def find_section_timestamps(
 # ============================================================
 
 @autonomous_recover("video_agent")
-def create_video(aspect_ratio="1:1"):
+def create_video(aspect_ratio="9:16"):
 
     print()
     print("=" * 60)
@@ -1585,7 +1585,10 @@ def create_video(aspect_ratio="1:1"):
     print("BUILDING KEN BURNS & TRANSITION SCENE CLIPS")
     print("=" * 60)
 
-    motion_directions = ["zoom_in", "pan_left", "zoom_out", "pan_right"]
+    motion_directions = [
+        "zoom_in", "slow_cinematic_push", "pan_left", "zoom_in_tilt_up",
+        "zoom_out", "pan_right", "zoom_in_tilt_down"
+    ]
     dir_idx = 0
     scene_clips = []
     scene_durations = []
@@ -1644,16 +1647,34 @@ def create_video(aspect_ratio="1:1"):
         if not is_hook:
             dir_idx += 1
 
+        media_input = job["image_path"]
+        if media_input.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp"):
+            try:
+                with Image.open(media_input) as img_inspect:
+                    w, h = img_inspect.size
+                    orig_aspect = w / max(1, h)
+                    tgt_aspect = target_w / max(1, target_h)
+                    # If aspect ratio mismatch is noticeable (> 0.35 difference)
+                    # Use Smart Canvas to avoid aggressive 70% cropping and provide blurred background
+                    if abs(orig_aspect - tgt_aspect) > 0.35:
+                        media_input = Path(render_smart_canvas_image(
+                            media_input,
+                            target_width=target_w,
+                            target_height=target_h
+                        ))
+            except Exception as canvas_err:
+                print(f"Smart canvas check notice for {media_input.name}: {canvas_err}")
+
         clip_filename = f"scene_{idx:03d}_sec{job['section']}_vis{job['visual']}_{direction}.mp4"
         clip_path = scene_clips_dir / clip_filename
 
         print(
             f"[{idx+1}/{len(scene_jobs)}] Section {job['section']} | Visual {job['visual']} | "
-            f"{job['image_path'].name} -> {direction}{' ⚡ [VIRAL HOOK PUNCH-IN & FLASH]' if is_hook else ''} | {job_dur:.2f}s (render: {render_dur:.2f}s)"
+            f"{media_input.name} -> {direction}{' ⚡ [VIRAL HOOK PUNCH-IN & FLASH]' if is_hook else ''} | {job_dur:.2f}s (render: {render_dur:.2f}s)"
         )
 
         prepare_scene_clip(
-            media_path=job["image_path"],
+            media_path=media_input,
             output_path=clip_path,
             duration_seconds=render_dur,
             direction=direction,

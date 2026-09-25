@@ -888,15 +888,26 @@ def search_wikimedia(query):
             or info.get("url")
         )
 
-        if not image_url:
+        mime = str(info.get("mime", "")).lower()
+        if any(bad in mime for bad in ("pdf", "djvu", "audio", "video", "ogg", "postscript")):
+            continue
+
+        raw_title = page.get("title", "")
+        title_clean = clean_text(raw_title)
+        title_lower = title_clean.lower()
+        doc_words = (
+            "hearing", "report", "dissertation", "thesis", "congress", "bulletin",
+            "minutes", "act of", "bill", "proceedings", "gazette", "census",
+            "treaty", "statutes", "handbook", "journal of", "ordinance", "court",
+            "document", "pamphlet", "circular", "declaration"
+        )
+        if any(w in title_lower for w in doc_words):
             continue
 
         results.append(
             {
                 "image_url": image_url,
-                "title": clean_text(
-                    page.get("title", "")
-                ),
+                "title": title_clean,
                 "source": "Wikimedia",
                 "width": info.get(
                     "width",
@@ -906,10 +917,7 @@ def search_wikimedia(query):
                     "height",
                     0,
                 ),
-                "mime": info.get(
-                    "mime",
-                    "",
-                ),
+                "mime": mime,
             }
         )
 

@@ -467,7 +467,7 @@ def prepare_uploaded_media(
 # VIDEO CREATION
 # ============================================================
 
-def create_pipeline_video(aspect_ratio="1:1"):
+def create_pipeline_video(aspect_ratio="9:16"):
     """Run the project's video agent."""
 
     from agents.video_agent import create_video
@@ -481,7 +481,7 @@ def create_pipeline_video(aspect_ratio="1:1"):
 
 def create_final_video(
     captions=True,
-    aspect_ratio="1:1",
+    aspect_ratio="9:16",
     include_outro=False,
     outro_clip=None,
 ):
@@ -512,7 +512,7 @@ def create_final_video(
 
 def create_thumbnail(
     topic,
-    aspect_ratio="16:9",
+    aspect_ratio="9:16",
 ):
     """Create thumbnail using existing thumbnail agent."""
 
@@ -814,7 +814,8 @@ def generate_multi_media_video(
     youtube_upload=False,
     youtube_privacy="private",
     script_override=None,
-    aspect_ratio="1:1",
+    aspect_ratio="9:16",
+    target_duration="30-50s",
     include_outro=True,
     instagram_upload=False,
     progress_callback=None,
@@ -1069,6 +1070,7 @@ def generate_multi_media_video(
                         content_type="Explainer",
                         language_style=language_style,
                         source_context=news_verification,
+                        target_duration=target_duration,
                     )
                 else:
                     from agents.script_agent import generate_script
@@ -1077,6 +1079,7 @@ def generate_multi_media_video(
                         content_type=content_type,
                         language_style=language_style,
                         source_context=news_verification,
+                        target_duration=target_duration,
                     )
 
             else:

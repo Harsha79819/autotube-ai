@@ -593,6 +593,7 @@ def generate_script(
     language_style="English news style",
     source_context=None,
     default_title=None,
+    target_duration="30-50s",
 ):
     """
     Generate a complete content package for a normal topic.
@@ -730,6 +731,31 @@ def generate_script(
 - Do not invent facts, quotes or statistics.
 - All VISUAL_PLAN descriptions in concise English keywords."""
 
+    dur_str = str(target_duration).lower()
+    if "60" in dur_str or "90" in dur_str or "spotlight" in dur_str:
+        duration_guidelines = """TARGET DURATION & PACING (SPOTLIGHT FORMAT):
+- TARGET LENGTH: 60 to 90 seconds.
+- WORD COUNT: Strictly 160 to 220 spoken words total across the whole script.
+- SCENE / BEAT COUNT: Exactly 16 to 24 dynamic beats (each beat 2.5 to 3.8s / 8 to 12 words).
+- INSTANT HOOK: Beat 1 (first 3 seconds) MUST deliver a high-curiosity hook.
+- NO FILLER: Every beat must reveal new facts or progress the story rapidly."""
+        visual_count_text = "- 60–90 second scripts: 16–24 dynamic visuals (each 2.5 to 3.8s)"
+    elif "2-4" in dur_str or "240" in dur_str or "explainer" in dur_str or "long" in dur_str or "minute" in dur_str:
+        duration_guidelines = """TARGET DURATION & PACING (LONG-FORM EXPLAINER):
+- TARGET LENGTH: 2 to 4 minutes.
+- WORD COUNT: Approximately 350 to 500 spoken words total.
+- SCENE / BEAT COUNT: 30 to 45 dynamic beats (each beat 3.0 to 5.0s).
+- STRUCTURE: Strong opening hook, systematic deep dive, and actionable takeaway."""
+        visual_count_text = "- 120–240+ second scripts: 30–45 dynamic visuals (each 3.0 to 5.0s)"
+    else:
+        duration_guidelines = """TARGET DURATION & PACING (YOUTUBE SHORTS / INSTAGRAM REELS):
+- TARGET LENGTH: 30 to 50 seconds STRICTLY.
+- WORD COUNT: Strictly between 80 and 120 spoken words total across the whole script. Do NOT exceed 120 words!
+- SCENE / BEAT COUNT: Exactly 10 to 15 short punchy beats (each beat 2.0 to 3.5s / 6 to 10 words).
+- INSTANT 3-SECOND HOOK: Beat 1 MUST hook the viewer instantly with a shocking fact, curiosity gap, or breakthrough reveal. Never start with greetings.
+- FAST RETENTION PACING: High-energy cuts, zero pause, concise punchy narration designed for 100% viewer retention."""
+        visual_count_text = "- 30–50 second scripts (Shorts): 10–15 dynamic visuals (each 2.0 to 3.5s)"
+
     prompt = f"""
 {role_desc}
 
@@ -816,9 +842,10 @@ NEWS ACCURACY:
 
 {language_rules}
 
-SCRIPT:
+SCRIPT & DURATION:
 
-- Approximately 2 to 4 minutes.
+{duration_guidelines}
+
 - Start with a strong professional hook.
 - Explain the topic clearly.
 - Use natural spoken sentences.
@@ -837,9 +864,7 @@ VISUAL PLAN & PACING:
 
 Generate a RICH, FAST-PACED, and DYNAMIC visual plan with frequent scene transitions (a new visual every 2.0 to 3.5 seconds of speech).
 Guidelines for visual count:
-- 30–60 second scripts (Shorts): 10–18 dynamic visuals (each 2.0 to 3.5s)
-- 60–120 second scripts: 18–35 dynamic visuals (each 2.0 to 3.5s)
-- 120–240+ second scripts: 35–60 dynamic visuals (each 2.0 to 3.5s)
+{visual_count_text}
 
 Divide your narration into short, punchy beats (each 2.0 to 3.5 seconds of speech, about 6 to 12 words).
 STRICT RULE: Never hold a single shot or section longer than 3.5 seconds! If a thought or sentence takes longer than 3.5 seconds to speak, you MUST split it into two distinct beats with different visuals.

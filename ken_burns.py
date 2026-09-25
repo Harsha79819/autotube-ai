@@ -4,10 +4,16 @@ import shutil
 import subprocess
 from pathlib import Path
 
-# Available ffmpeg xfade transitions
-TRANSITIONS = ["fade", "wipeleft", "wiperight", "circleopen", "pixelize"]
+# Available ffmpeg xfade transitions (smooth, cinematic, no glitchy pixelize)
+TRANSITIONS = [
+    "fade", "smoothleft", "smoothright", "dissolve", "circlecrop",
+    "wipeleft", "wiperight", "circleopen"
+]
 
-DIRECTIONS = ["zoom_in", "zoom_out", "pan_left", "pan_right", "hook_snap_zoom"]
+DIRECTIONS = [
+    "zoom_in", "slow_cinematic_push", "pan_left", "zoom_in_tilt_up",
+    "zoom_out", "pan_right", "zoom_in_tilt_down", "hook_snap_zoom"
+]
 
 
 def get_clip_duration(clip_path):
@@ -43,6 +49,21 @@ def _zoompan_expr(direction, duration_seconds, out_w=1080, out_h=1920, fps=30):
         z = "if(lt(on,25),min(1.0+on*0.010,1.25),min(1.25+(on-25)*0.001,1.40))"
         x = "iw/2-(iw/zoom/2)"
         y = "ih/2-(ih/zoom/2)"
+    elif direction == "slow_cinematic_push":
+        # Subtle slow push (1.0 to 1.18) ideal for tech & explainer videos
+        z = "min(zoom+0.0008,1.20)"
+        x = "iw/2-(iw/zoom/2)"
+        y = "ih/2-(ih/zoom/2)"
+    elif direction == "zoom_in_tilt_up":
+        # Dynamic push in drifting upward toward focal head/top area
+        z = "min(zoom+0.0012,1.35)"
+        x = "iw/2-(iw/zoom/2)"
+        y = "if(eq(on,1),ih*0.25,max(0,y-1.5))"
+    elif direction == "zoom_in_tilt_down":
+        # Dynamic push in drifting downward toward hardware/details
+        z = "min(zoom+0.0012,1.35)"
+        x = "iw/2-(iw/zoom/2)"
+        y = "if(eq(on,1),0,min(ih-ih/zoom,y+1.5))"
     elif direction == "zoom_in":
         z = "min(zoom+0.0015,1.5)"
         x = "iw/2-(iw/zoom/2)"
@@ -87,7 +108,8 @@ def build_ken_burns_clip(
     if is_hook:
         direction = "hook_snap_zoom"
     elif direction is None or direction not in DIRECTIONS:
-        direction = random.choice(["zoom_in", "zoom_out", "pan_left", "pan_right"])
+        available_dirs = [d for d in DIRECTIONS if d != "hook_snap_zoom"]
+        direction = random.choice(available_dirs)
 
     upscale_w = int(width * 2)
     upscale_h = int(height * 2)
@@ -231,8 +253,11 @@ def assemble_with_transitions(
 
     for i in range(1, len(scene_clips)):
         t = random.choice(TRANSITIONS)
-        clip_dur = get_clip_duration(scene_clips[i - 1])
-        offset += max(0.1, clip_dur - transition_duration)
+        if scene_durations and len(scene_durations) >= i:
+            nominal_dur = float(scene_durations[i - 1])
+        else:
+            nominal_dur = max(0.1, get_clip_duration(scene_clips[i - 1]) - transition_duration)
+        offset += nominal_dur
 
         out = f"v{i}"
         filter_parts.append(

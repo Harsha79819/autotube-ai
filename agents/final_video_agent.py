@@ -6,7 +6,7 @@ from supervisor import autonomous_recover
 
 
 @autonomous_recover("final_video_agent")
-def create_final_video(add_captions=False, aspect_ratio="1:1", burn_captions=None, captions=None, include_outro=False, outro_clip=None):
+def create_final_video(add_captions=False, aspect_ratio="9:16", burn_captions=None, captions=None, include_outro=False, outro_clip=None):
     if burn_captions is not None:
         add_captions = burn_captions
     elif captions is not None:
