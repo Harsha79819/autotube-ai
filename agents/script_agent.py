@@ -594,6 +594,7 @@ def generate_script(
     source_context=None,
     default_title=None,
     target_duration="30-50s",
+    voice=None,
 ):
     """
     Generate a complete content package for a normal topic.
@@ -699,22 +700,35 @@ def generate_script(
     )
 
     lang_str = str(language_style).lower()
+    voice_str = str(voice or "").lower()
     topic_str = str(topic).lower() if isinstance(topic, str) else ""
     is_telugu = (
         "telugu" in lang_str
         or "తెలుగు" in str(language_style)
+        or "te-in" in voice_str
+        or "mohan" in voice_str
+        or "shruti" in voice_str
+        or "telugu" in voice_str
         or bool(re.search(r"[\u0C00-\u0C7F]", str(topic)))
         or "telugu" in topic_str
     )
     is_hindi = (
         "hindi" in lang_str
         or "हिंदी" in str(language_style)
+        or "hi-in" in voice_str
+        or "madhur" in voice_str
+        or "swara" in voice_str
+        or "hindi" in voice_str
         or bool(re.search(r"[\u0900-\u097F]", str(topic)))
         or "hindi" in topic_str
     )
 
     if is_telugu:
-        role_desc = "You are a professional Telugu YouTube creator and script writer (conversational Teluglish style like Prasad Tech in Telugu)."
+        role_desc = """🚨 CRITICAL MANDATORY LANGUAGE DIRECTIVE:
+You are an expert Telugu YouTube creator and tech script writer (conversational Teluglish style like Prasad Tech in Telugu).
+EVERY SINGLE SENTENCE OF THE SCRIPT NARRATION AND TITLE MUST BE WRITTEN IN NATURAL SPOKEN TELUGU (తెలుగు లిపి).
+Even if the topic or news source articles are provided in English, DO NOT write English sentences in the script.
+TRANSLATE AND ADAPT ALL NEWS/TOPIC FACTS DIRECTLY INTO ENGAGING TELUGU SPOKEN CREATOR NARRATION!"""
         hook_instruction = """- CURIOSITY-GAP HOOK RULE (First 2-3 seconds) - TELUGU CREATOR STYLE:
   The opening line (Beat 1) must NEVER be a flat statement like "Today we are talking about X" or "ఈ రోజు మనం X గురించి మాట్లాడబోతున్నాం".
   It MUST be an irresistible, high-energy curiosity-gap question or shocking claim in natural spoken Telugu creator slang!
@@ -807,9 +821,24 @@ def generate_script(
 - FAST RETENTION PACING: High-energy cuts, zero pause, concise punchy narration designed for 100% viewer retention."""
         visual_count_text = "- 30–50 second scripts (Shorts): 10–15 dynamic visuals (each 2.0 to 3.5s)"
 
+    mandatory_lang_warning = ""
+    if is_telugu:
+        mandatory_lang_warning = """
+============================================================
+🚨 MANDATORY LANGUAGE DIRECTIVE: TELUGU (తెలుగు) ONLY
+============================================================
+- The user has chosen TELUGU.
+- You MUST write the entire TITLE and SCRIPT narration in natural, fluent, conversational spoken Telugu script (తెలుగు లిపి).
+- Even though the NEWS SOURCE CONTEXT or Topic title may be written in English, YOU MUST TRANSLATE AND ADAPT ALL INFORMATION DIRECTLY INTO ENGAGING SPOKEN TELUGU!
+- English sentences in the SCRIPT narration are STRICTLY FORBIDDEN!
+- Use Teluglish creator style for tech words & models (e.g. గెలాక్సీ ఎస్ ట్వంటీ సెవెన్, 5200mAh బ్యాటరీ, డిస్‌ప్లే, ప్రాసెసర్).
+- Stock visual descriptions in the VISUAL PLAN must remain in concise English for stock footage search.
+============================================================
+"""
+
     prompt = f"""
 {role_desc}
-
+{mandatory_lang_warning}
 Create a complete YouTube content package about:
 
 {topic}

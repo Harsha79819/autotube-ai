@@ -173,12 +173,28 @@ def heal_network_or_quota(stage_name, context=None):
         ]
 
     if stage_name == "script_agent":
+        import re
         topic = context.get("topic", "Latest Breakthroughs")
-        script = (
-            f"Here is what you need to know about {topic}.\n"
-            f"Groundbreaking developments are shifting expectations worldwide.\n"
-            f"Stay tuned as we follow the story closely."
+        ctx_str = str(context).lower()
+        is_tel = (
+            bool(re.search(r"[\u0C00-\u0C7F]", str(topic)))
+            or "telugu" in ctx_str
+            or "mohan" in ctx_str
+            or "shruti" in ctx_str
+            or "te-in" in ctx_str
         )
+        if is_tel:
+            script = (
+                f"హాయ్ ఫ్రెండ్స్! {topic} గురించి వచ్చిన లేటెస్ట్ అప్‌డేట్ చూశారా?\n"
+                f"చూడండి ఫ్రెండ్స్, అసలు విషయం ఏంటంటే ఇందులో సరికొత్త మార్పులు రాబోతున్నాయి!\n"
+                f"మరి దీనిపై మీరేమంటారు? కింద కామెంట్స్ లో చెప్పండి, వీడియో నచ్చితే లైక్ చేసి సబ్‌స్క్రైబ్ చేసుకోండి!"
+            )
+        else:
+            script = (
+                f"Here is what you need to know about {topic}.\n"
+                f"Groundbreaking developments are shifting expectations worldwide.\n"
+                f"Stay tuned as we follow the story closely."
+            )
         visual_plan = (
             "1. Close-up establishing visual of the news development\n"
             "2. Detailed infographic showing global impact and key facts\n"

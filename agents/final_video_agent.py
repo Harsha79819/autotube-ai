@@ -91,7 +91,27 @@ def create_final_video(add_captions=False, aspect_ratio="9:16", burn_captions=No
 
     if add_captions:
         fonts_dir = os.path.abspath("fonts").replace("\\", "/")
+        use_ass = False
         if os.path.exists(ass_subtitles) and os.path.getsize(ass_subtitles) > 50:
+            # Prevent stale ASS file burn: verify ass_subtitles is fresh compared to audio/video
+            ass_mtime = os.path.getmtime(ass_subtitles)
+            ref_mtime = 0
+            if os.path.exists(audio_source):
+                ref_mtime = os.path.getmtime(audio_source)
+            elif os.path.exists(input_video):
+                ref_mtime = os.path.getmtime(input_video)
+            
+            # If ASS is not significantly older than the current audio/video, it belongs to this run
+            if ref_mtime == 0 or ass_mtime >= (ref_mtime - 90):
+                use_ass = True
+            else:
+                print(f"⚠️ Stale subtitles.ass detected (older than current run's audio). Removing stale ASS file.")
+                try:
+                    os.remove(ass_subtitles)
+                except Exception:
+                    pass
+
+        if use_ass:
             subtitle_path = os.path.abspath(ass_subtitles).replace("\\", "/").replace(":", "\\:")
             video_filter = (
                 f"scale={target_w}:{target_h}:force_original_aspect_ratio=decrease:flags=lanczos,"

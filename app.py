@@ -30,6 +30,11 @@ def run_app():
         pass
 
     try:
+        # Ensure fresh code reload for modified agent modules
+        for mod in list(sys.modules.keys()):
+            if mod.startswith("agents.") or mod in ("telugu_phonetic_normalizer", "pipeline", "supervisor"):
+                sys.modules.pop(mod, None)
+
         # Run dashboard within guarded execution context
         runpy.run_path(str(ROOT / "dashboard.py"), run_name="__main__")
 

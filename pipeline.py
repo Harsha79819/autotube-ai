@@ -673,6 +673,7 @@ def improve_script_from_review(
     attempt,
     content_type="News",
     source_context=None,
+    voice=None,
 ):
     """
     Revise the EXISTING script using AI review feedback.
@@ -812,6 +813,7 @@ Do not start over.
             if content_type == "News"
             else None
         ),
+        voice=voice,
     )
 
 def generate_multi_media_video(
@@ -871,6 +873,31 @@ def generate_multi_media_video(
         )
 
     media_files = media_files or []
+
+    # Clean lingering artifacts from previous runs
+    for stale_file in (
+        "output/subtitles.ass",
+        "output/subtitles.srt",
+        "output/voice.mp3",
+        "output/voice_raw.wav",
+        "output/voice_paced.wav",
+        "output/transcription.json",
+        "output/final_video.mp4",
+        "output/video.mp4",
+        "output/verify_frame.jpg",
+    ):
+        try:
+            sp = Path(stale_file)
+            if sp.exists():
+                sp.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+    # Auto-sync language_style if a Telugu voice is selected
+    voice_str = str(voice or "").lower()
+    if any(tv in voice_str for tv in ("mohan", "shruti", "te-in")) and not ("telugu" in str(language_style).lower() or "తెలుగు" in str(language_style)):
+        print(f"🎙️ [Pipeline] Auto-syncing language_style to Telugu because voice is {voice}")
+        language_style = "Telugu - తెలుగు (Creator / Casual)"
 
     review = {
         "status": "REVIEW_NOT_RUN",
@@ -1084,6 +1111,7 @@ def generate_multi_media_video(
                         language_style=language_style,
                         source_context=news_verification,
                         target_duration=target_duration,
+                        voice=voice,
                     )
                 else:
                     from agents.script_agent import generate_script
@@ -1093,6 +1121,7 @@ def generate_multi_media_video(
                         language_style=language_style,
                         source_context=news_verification,
                         target_duration=target_duration,
+                        voice=voice,
                     )
 
             else:
@@ -1126,6 +1155,7 @@ def generate_multi_media_video(
                         if content_type == "News"
                         else None
                     ),
+                    voice=voice,
                 )
 
             if not script:

@@ -1044,6 +1044,15 @@ def create_subtitles(aspect_ratio="9:16"):
     print("SUBTITLE GENERATION")
     print("=" * 60)
 
+    # Clean previous subtitle files to prevent stale burns
+    for stale_sub in ("output/subtitles.ass", "output/subtitles.srt"):
+        try:
+            p = Path(stale_sub)
+            if p.exists():
+                p.unlink(missing_ok=True)
+        except Exception:
+            pass
+
     sections = load_section_map()
 
     whisper_words = transcribe_audio()
