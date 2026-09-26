@@ -31,6 +31,8 @@ UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 # ============================================================
 
 VOICE_IDS = {
+    "👨 Mohan (Telugu Creator / Anchor) - Natural Spoken Delivery": "te-IN-MohanNeural",
+    "👩 Shruti (Telugu Creator / Anchor) - Conversational": "te-IN-ShrutiNeural",
     "👨 Mohan (Telugu Male Anchor) - Edge-TTS": "te-IN-MohanNeural",
     "👩 Shruti (Telugu Female Anchor) - Edge-TTS": "te-IN-ShrutiNeural",
     "👨 Adam (Male Creator) - Fast & Crisp": "am_adam",
@@ -66,8 +68,10 @@ VOICE_IDS = {
 }
 
 VOICE_TUNING = {
-    "👨 Mohan (Telugu Male Anchor) - Edge-TTS": ("+0%", "+0Hz"),
-    "👩 Shruti (Telugu Female Anchor) - Edge-TTS": ("+0%", "+0Hz"),
+    "👨 Mohan (Telugu Creator / Anchor) - Natural Spoken Delivery": ("+8%", "+2Hz"),
+    "👩 Shruti (Telugu Creator / Anchor) - Conversational": ("+8%", "+2Hz"),
+    "👨 Mohan (Telugu Male Anchor) - Edge-TTS": ("+8%", "+2Hz"),
+    "👩 Shruti (Telugu Female Anchor) - Edge-TTS": ("+8%", "+2Hz"),
     "👨 Adam (Male Creator) - Fast & Crisp": ("-5%", "+0Hz"),
     "👨 Michael (News Anchor) - Professional": ("-5%", "+0Hz"),
     "👩 Heart (Female Creator) - Smooth": ("-5%", "+0Hz"),
@@ -255,9 +259,22 @@ def create_voice_for_script(
     else:
         voice_id = VOICE_IDS.get(voice, VOICE_IDS.get(voice_str, "am_adam"))
 
+    # Auto-detect Telugu script and route away from English voice
+    script_path = Path("output/script.txt")
+    if script_path.exists():
+        try:
+            s_text = script_path.read_text(encoding="utf-8")
+            if re.search(r"[\u0C00-\u0C7F]", s_text) and voice_id in ("am_adam", "af_heart", "am_michael", "af_bella"):
+                print("🎙️ [Voice Agent] Detected Telugu script narration - auto-selecting te-IN-MohanNeural for authentic Telugu creator delivery.")
+                voice_id = "te-IN-MohanNeural"
+        except Exception:
+            pass
+
     from agents.voice_agent import create_voice
 
     rate, pitch = VOICE_TUNING.get(voice, VOICE_TUNING.get(voice_id, ("-5%", "+0Hz")))
+    if voice_id == "te-IN-MohanNeural" and rate in ("-5%", "+0%"):
+        rate, pitch = ("+8%", "+2Hz")
 
     # Resolve audio sample if using direct own voice recording or cloning
     effective_sample = (

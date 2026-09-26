@@ -955,6 +955,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             words = c_text.split()
             if not words:
                 continue
+            chunk_dur_sec = max(0.2, c_end - c_start)
+            word_dur_cs = max(5, int((chunk_dur_sec / len(words)) * 100))
             k_parts = []
             for w in words:
                 clean_w = w.replace("**", "").replace("*", "")

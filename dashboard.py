@@ -39,6 +39,8 @@ UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 # ============================================================
 
 VOICE_IDS = {
+    "👨 Mohan (Telugu Creator / Anchor) - Natural Spoken Delivery": "te-IN-MohanNeural",
+    "👩 Shruti (Telugu Creator / Anchor) - Conversational": "te-IN-ShrutiNeural",
     "👨 Adam (Male Creator) - Fast, Crisp & Natural": "am_adam",
     "👩 Heart (Female Creator) - Smooth & Conversational": "af_heart",
     "👨 Michael (News Anchor) - Professional & Authoritative": "am_michael",
@@ -83,6 +85,8 @@ VOICE_IDS = {
 }
 
 VOICE_TUNING = {
+    "👨 Mohan (Telugu Creator / Anchor) - Natural Spoken Delivery": ("+8%", "+2Hz"),
+    "👩 Shruti (Telugu Creator / Anchor) - Conversational": ("+8%", "+2Hz"),
     "👨 Adam (Male Creator) - Fast, Crisp & Natural": ("-5%", "+0Hz"),
     "👩 Heart (Female Creator) - Smooth & Conversational": ("-5%", "+0Hz"),
     "👨 Michael (News Anchor) - Professional & Authoritative": ("-5%", "+0Hz"),
@@ -243,9 +247,22 @@ def create_voice_for_script(
     else:
         voice_id = VOICE_IDS.get(voice, VOICE_IDS.get(voice_str, "am_adam"))
 
+    # Auto-detect Telugu script and route away from English voice
+    script_path = Path("output/script.txt")
+    if script_path.exists():
+        try:
+            s_text = script_path.read_text(encoding="utf-8")
+            if re.search(r"[\u0C00-\u0C7F]", s_text) and voice_id in ("am_adam", "af_heart", "am_michael", "af_bella"):
+                print("🎙️ [Voice Agent] Detected Telugu script narration - auto-selecting te-IN-MohanNeural for authentic Telugu creator delivery.")
+                voice_id = "te-IN-MohanNeural"
+        except Exception:
+            pass
+
     from agents.voice_agent import create_voice
 
     rate, pitch = VOICE_TUNING.get(voice, VOICE_TUNING.get(voice_id, ("-5%", "+0Hz")))
+    if voice_id == "te-IN-MohanNeural" and rate in ("-5%", "+0%"):
+        rate, pitch = ("+8%", "+2Hz")
 
     # Resolve audio sample if using direct own voice recording or cloning
     effective_sample = (
@@ -2151,19 +2168,35 @@ with tab_manual:
         voice_samples_dir = ROOT / "voice_samples"
         voice_samples_dir.mkdir(parents=True, exist_ok=True)
 
-        voice_options = [
-            "👨 Adam (Male Creator) - Fast, Crisp & Natural",
-            "👩 Heart (Female Creator) - Smooth & Conversational",
-            "👨 Michael (News Anchor) - Professional & Authoritative",
-            "👩 Bella (Warm Female) - Expressive & Storytelling",
-            "🎙️ OmniVoice Presenter (Zero-Shot AI Voice Design)",
-            "🤖 Clone My Voice with AI (Local XTTS-v2 / OmniVoice)",
-            "🎙️ Use My Own Voice Recording (Upload Audio)",
-            "👨 Mohan (Telugu Male Anchor) - Edge-TTS (Fallback)",
-            "👩 Shruti (Telugu Female Anchor) - Edge-TTS (Fallback)",
-            "👨 Madhur (Hindi Male Anchor) - Edge-TTS (Fallback)",
-            "👩 Swara (Hindi Female Anchor) - Edge-TTS (Fallback)",
-        ]
+        is_telugu_lang = "telugu" in str(language_style).lower() or "తెలుగు" in str(language_style)
+        if is_telugu_lang:
+            voice_options = [
+                "👨 Mohan (Telugu Creator / Anchor) - Natural Spoken Delivery",
+                "👩 Shruti (Telugu Creator / Anchor) - Conversational",
+                "🤖 Clone My Voice with AI (Local XTTS-v2 / OmniVoice)",
+                "🎙️ Use My Own Voice Recording (Upload Audio)",
+                "👨 Adam (Male Creator) - Fast, Crisp & Natural",
+                "👩 Heart (Female Creator) - Smooth & Conversational",
+                "👨 Michael (News Anchor) - Professional & Authoritative",
+                "👩 Bella (Warm Female) - Expressive & Storytelling",
+                "🎙️ OmniVoice Presenter (Zero-Shot AI Voice Design)",
+                "👨 Madhur (Hindi Male Anchor) - Edge-TTS (Fallback)",
+                "👩 Swara (Hindi Female Anchor) - Edge-TTS (Fallback)",
+            ]
+        else:
+            voice_options = [
+                "👨 Adam (Male Creator) - Fast, Crisp & Natural",
+                "👩 Heart (Female Creator) - Smooth & Conversational",
+                "👨 Michael (News Anchor) - Professional & Authoritative",
+                "👩 Bella (Warm Female) - Expressive & Storytelling",
+                "🎙️ OmniVoice Presenter (Zero-Shot AI Voice Design)",
+                "🤖 Clone My Voice with AI (Local XTTS-v2 / OmniVoice)",
+                "🎙️ Use My Own Voice Recording (Upload Audio)",
+                "👨 Mohan (Telugu Creator / Anchor) - Natural Spoken Delivery",
+                "👩 Shruti (Telugu Creator / Anchor) - Conversational",
+                "👨 Madhur (Hindi Male Anchor) - Edge-TTS (Fallback)",
+                "👩 Swara (Hindi Female Anchor) - Edge-TTS (Fallback)",
+            ]
 
         voice = st.selectbox(
             "Voice",

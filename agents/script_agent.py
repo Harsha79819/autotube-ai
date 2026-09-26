@@ -699,30 +699,81 @@ def generate_script(
     )
 
     lang_str = str(language_style).lower()
-    is_telugu = "telugu" in lang_str or "తెలుగు" in str(language_style)
-    is_hindi = "hindi" in lang_str or "हिंदी" in str(language_style)
+    topic_str = str(topic).lower() if isinstance(topic, str) else ""
+    is_telugu = (
+        "telugu" in lang_str
+        or "తెలుగు" in str(language_style)
+        or bool(re.search(r"[\u0C00-\u0C7F]", str(topic)))
+        or "telugu" in topic_str
+    )
+    is_hindi = (
+        "hindi" in lang_str
+        or "हिंदी" in str(language_style)
+        or bool(re.search(r"[\u0900-\u097F]", str(topic)))
+        or "hindi" in topic_str
+    )
 
     if is_telugu:
-        role_desc = "You are a professional Telugu YouTube creator and script writer (conversational Teluglish style like Prasadtechintelugu)."
+        role_desc = "You are a professional Telugu YouTube creator and script writer (conversational Teluglish style like Prasad Tech in Telugu)."
+        hook_instruction = """- CURIOSITY-GAP HOOK RULE (First 2-3 seconds) - TELUGU CREATOR STYLE:
+  The opening line (Beat 1) must NEVER be a flat statement like "Today we are talking about X" or "ఈ రోజు మనం X గురించి మాట్లాడబోతున్నాం".
+  It MUST be an irresistible, high-energy curiosity-gap question or shocking claim in natural spoken Telugu creator slang!
+  Authentic Telugu Creator Hook Examples:
+  * "హాయ్ ఫ్రెండ్స్! Samsung నుంచి రాబోతున్న Galaxy S27 లో ఈ బిగ్గెస్ట్ ప్రాబ్లమ్‌ని నిజంగా ఫిక్స్ చేశారా?"
+  * "బడ్జెట్ ప్రైస్ లోనే ₹1,00,000 అల్ట్రా ఫోన్ లో ఉండే సేమ్ ఫ్లాగ్‌షిప్ **UFS 5.1** స్టోరేజ్ ఇస్తే ఎలా ఉంటుంది?"
+  * "ఈ **6000mAh** బిగ్ బ్యాటరీతో డైలీ ఛార్జింగ్ కి ఫుల్‌స్టాప్ పడబోతోందా?"
+  * "చూడండి బాస్, ఈ ఫోన్ ప్రైస్ కి ఇది నిజంగా వర్త్ ఆ కాదా? అసలు ట్విస్ట్ ఏంటో వీడియో చివరి దాకా చూడండి!"
+  Follow this exact high-retention Telugu creator hook style!"""
+
+        cta_instruction = """- STRONG ACTIONABLE CTA (Final beat) - TELUGU CREATOR STYLE:
+  End with a concrete, answerable question in authentic Telugu creator conversational tone!
+  Examples: "మరి ఈ స్పెసిఫికేషన్స్ కి ఈ ప్రైస్ వర్త్ అంటారా? మీరేమంటారు? కింద కామెంట్స్ లో చెప్పండి! వీడియో నచ్చితే లైక్ చేసి సబ్‌స్క్రైబ్ చేసుకోండి!" or "ఈ కెమెరా కోసం మీరు అప్‌గ్రేడ్ అవుతారా లేదా? డ్రాప్ యువర్ థాట్స్ ఇన్ ద కామెంట్స్!" """
+
         language_rules = """LANGUAGE & SCRIPT RULES:
 
 - Write the TITLE and SCRIPT narration in natural, energetic, conversational spoken Telugu (తెలుగు లిపి).
+- TITLE: Must be in Telugu script with English model/brand name (e.g. "గెలాక్సీ ఎస్ 27 లీక్స్: 6000mAh బ్యాటరీ & మైండ్ బ్లోయింగ్ ఫీచర్లు!").
+- AUTHENTIC TELUGU CREATOR CONVERSATIONAL CONNECTORS:
+  Naturally weave in conversational creator slang connectors between beats:
+  * "చూడండి ఫ్రెండ్స్..."
+  * "కానీ ఇక్కడ ట్విస్ట్ ఏంటంటే..."
+  * "బాస్, నిజం చెప్పాలంటే..."
+  * "అసలు విషయం ఏంటంటే..."
+  * "ఇక పెర్ఫార్మెన్స్ విషయానికి వస్తే..."
+  * "ఇందులో అదిరిపోయే ఫీచర్ ఏంటంటే..."
+  * "ఒక్కసారి ఆలోచించండి..."
 - CRITICAL CREATOR PRONUNCIATION RULE (TELUGLISH TECH):
   When discussing tech models, specs, numbers, and features, ALWAYS write them phonetically in Telugu script using their conversational English pronunciations, NOT bookish formal Telugu numbers!
   * Phone models: Write "గెలాక్సీ ఎస్ ట్వంటీ సెవెన్" (Galaxy S27), "ఐఫోన్ ఎయిటీన్ ప్రో" (iPhone 18 Pro), "ఎస్ ట్వంటీ సిక్స్" (S26). NEVER write formal Telugu numbers like "గెలాక్సీ ఇరవై ఏడు" or "పద్దెనిమిది".
   * Storage & RAM: Write "యూఎఫ్ఎస్ ఫైవ్ పాయింట్ వన్" (UFS 5.1), "యూఎఫ్ఎస్ ఫైవ్" (UFS 5), "టూ ఫిఫ్టీ సిక్స్ జీబీ" (256GB), "ట్వెల్వ్ జీబీ ర్యామ్" (12GB RAM), "సిక్స్టీన్ జీబీ ర్యామ్" (16GB RAM). NEVER write "ఐదు", "రెండు వందల యాభై ఆరు", or "పన్నెండు".
-  * Specs & Units: Write "సిక్స్టీ వాట్ల ఫాస్ట్ ఛార్జింగ్" (60W), "ఫైవ్ థౌసండ్ ఎంఏహెచ్ బ్యాటరీ" (5000mAh), "వన్ ట్వంటీ హెర్ట్జ్ డిస్‌ప్లే" (120Hz), "ఫోర్ కే వీడియో" (4K).
-- STRICT HOOK RULE: First 3 seconds MUST HOOK the viewer immediately with a shocking claim, curiosity-gap question, or mind-blowing spec revelation. NEVER start with greetings, "Welcome back", or boring pleasantries.
+  * Specs & Units: Write "సిక్స్టీ వాట్ల ఫాస్ట్ ఛార్జింగ్" (60W), "ఫైవ్ థౌసండ్ ఎంఏహెచ్ బ్యాటరీ" (5000mAh), "సిక్స్ థౌసండ్ ఎంఏహెచ్ బ్యాటరీ" (6000mAh), "వన్ ట్వంటీ హెర్ట్జ్ డిస్‌ప్లే" (120Hz), "ఫోర్ కే వీడియో" (4K).
+- DYNAMIC KEY SPEC TAGGING: Wrap standout specs and numbers in double asterisks (e.g. **6000mAh**, **120Hz**, **UFS 5.1**, **Galaxy S27**, **₹19,999**, **12GB RAM**).
 - PACING: Each beat must be speakable in 2.0-3.5 seconds (6-12 words) for maximum retention.
 - CRITICAL VISUAL RULE: All VISUAL descriptions MUST be written strictly in concise ENGLISH keywords (e.g. "Samsung Galaxy S27 smartphone hands on display | futuristic smartphone chassis | mobile processor macro shot"), because stock video search engines query in English. Do NOT write visual descriptions in Telugu."""
     elif is_hindi:
         role_desc = "You are a professional Hindi YouTube script writer and visual-content planning director."
+        hook_instruction = """- CURIOSITY-GAP HOOK RULE (First 2-3 seconds):
+  Must be an irresistible curiosity-gap question in natural spoken Hindi that stops the viewer from scrolling!"""
+        cta_instruction = """- STRONG ACTIONABLE CTA (Final beat):
+  End with a concrete question tied directly to the topic in conversational Hindi!"""
         language_rules = """LANGUAGE & SCRIPT RULES:
 
 - Write the TITLE and SCRIPT narration strictly in natural, fluent spoken Hindi (देवनागरी लिपि).
 - CRITICAL VISUAL RULE: All VISUAL_PLAN descriptions and keywords MUST be written strictly in concise ENGLISH keywords. Do NOT write visual descriptions in Hindi."""
     else:
         role_desc = "You are a professional YouTube script writer and visual-content planning director."
+        hook_instruction = """- CURIOSITY-GAP HOOK RULE (First 2-3 seconds):
+  The opening line (Beat 1) must NEVER be a flat statement like "Today we are talking about X" or "X just announced Y".
+  It MUST be an irresistible curiosity-gap question or shocking claim that stops the viewer from scrolling!
+  Few-Shot Hook Examples:
+  * "Did Samsung just fix the single biggest flaw in the new Galaxy S27?"
+  * "What if a budget phone packed the exact same flagship storage as a ₹1,00,000 Ultra?"
+  * "Is this massive 6000mAh battery about to make daily charging completely obsolete?"
+  Follow this exact high-retention hook style!"""
+        cta_instruction = """- STRONG ACTIONABLE CTA (Final beat):
+  Do NOT end with generic pleasantries like "subscribe and comment below".
+  End with a concrete, answerable question tied directly to the topic!
+  Examples: "Would you upgrade for this camera, or is your current phone still good enough? Tell me below!" or "Is ₹25,000 worth it for this chip? Drop your thoughts!" """
         language_rules = """LANGUAGE:
 
 - Write the TITLE and SCRIPT narration in natural spoken English.
@@ -846,22 +897,12 @@ SCRIPT & DURATION:
 
 {duration_guidelines}
 
-- CURIOSITY-GAP HOOK RULE (First 2-3 seconds):
-  The opening line (Beat 1) must NEVER be a flat statement like "Today we are talking about X" or "X just announced Y".
-  It MUST be an irresistible curiosity-gap question or shocking claim that stops the viewer from scrolling!
-  Few-Shot Hook Examples:
-  * "Did Samsung just fix the single biggest flaw in the new Galaxy S27?"
-  * "What if a budget phone packed the exact same flagship storage as a ₹1,00,000 Ultra?"
-  * "Is this massive 6000mAh battery about to make daily charging completely obsolete?"
-  Follow this exact high-retention hook style!
+{hook_instruction}
 
 - DYNAMIC KEY SPEC TAGGING:
   Wrap standout specs, numbers, capacities, and model names in double asterisks so our video subtitle engine can dynamically highlight them on-screen with custom emphasis (e.g. **6000mAh**, **120Hz**, **UFS 5.1**, **Galaxy S27**, **₹19,999**, **12GB RAM**).
 
-- STRONG ACTIONABLE CTA (Final beat):
-  Do NOT end with generic pleasantries like "subscribe and comment below".
-  End with a concrete, answerable question tied directly to the topic!
-  Examples: "Would you upgrade for this camera, or is your current phone still good enough? Tell me below!" or "Is ₹25,000 worth it for this chip? Drop your thoughts!"
+{cta_instruction}
 
 - Explain the topic clearly.
 - Use natural spoken sentences.

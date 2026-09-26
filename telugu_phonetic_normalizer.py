@@ -267,6 +267,217 @@ BRAND_DICTIONARY = {
     "vs.": "వర్సెస్",
     "Kids": "కిడ్స్",
     "kids": "కిడ్స్",
+
+    # Creator conversational slang & everyday tech terms
+    "Hi Friends": "హాయ్ ఫ్రెండ్స్",
+    "hi friends": "హాయ్ ఫ్రెండ్స్",
+    "Hello Friends": "హలో ఫ్రెండ్స్",
+    "hello friends": "హలో ఫ్రెండ్స్",
+    "Friends": "ఫ్రెండ్స్",
+    "friends": "ఫ్రెండ్స్",
+    "Friend": "ఫ్రెండ్",
+    "friend": "ఫ్రెండ్",
+    "Boss": "బాస్",
+    "boss": "బాస్",
+    "Bro": "బ్రో",
+    "bro": "బ్రో",
+    "Guys": "గాయ్స్",
+    "guys": "గాయ్స్",
+    "Look": "చూడండి",
+    "look": "చూడండి",
+    "Twist": "ట్విస్ట్",
+    "twist": "ట్విస్ట్",
+    "Worth": "వర్త్",
+    "worth": "వర్త్",
+    "Worth it": "వర్త్",
+    "worth it": "వర్త్",
+    "Phone": "ఫోన్",
+    "phone": "ఫోన్",
+    "Phones": "ఫోన్లు",
+    "phones": "ఫోన్లు",
+    "Smartphone": "స్మార్ట్‌ఫోన్",
+    "smartphone": "స్మార్ట్‌ఫోన్",
+    "Smartphones": "స్మార్ట్‌ఫోన్లు",
+    "smartphones": "స్మార్ట్‌ఫోన్లు",
+    "Processor": "ప్రాసెసర్",
+    "processor": "ప్రాసెసర్",
+    "Processors": "ప్రాసెసర్లు",
+    "processors": "ప్రాసెసర్లు",
+    "Performance": "పెర్ఫార్మెన్స్",
+    "performance": "పెర్ఫార్మెన్స్",
+    "Gaming": "గేమింగ్",
+    "gaming": "గేమింగ్",
+    "Game": "గేమ్",
+    "game": "గేమ్",
+    "Quality": "క్వాలిటీ",
+    "quality": "క్వాలిటీ",
+    "Secret": "సీక్రెట్",
+    "secret": "సీక్రెట్",
+    "Shocking": "షాకింగ్",
+    "shocking": "షాకింగ్",
+    "Crazy": "క్రేజీ",
+    "crazy": "క్రేజీ",
+    "Super": "సూపర్",
+    "super": "సూపర్",
+    "Smooth": "స్మూత్",
+    "smooth": "స్మూత్",
+    "Fast": "ఫాస్ట్",
+    "fast": "ఫాస్ట్",
+    "Speed": "స్పీడ్",
+    "speed": "స్పీడ్",
+    "Sensor": "సెన్సార్",
+    "sensor": "సెన్సార్",
+    "Sensors": "సెన్సార్లు",
+    "sensors": "సెన్సార్లు",
+    "Night Mode": "నైట్ మోడ్",
+    "night mode": "నైట్ మోడ్",
+    "Portrait": "పోర్ట్రెయిట్",
+    "portrait": "పోర్ట్రెయిట్",
+    "Selfie": "సెల్ఫీ",
+    "selfie": "సెల్ఫీ",
+    "Back Panel": "బ్యాక్ ప్యానెల్",
+    "back panel": "బ్యాక్ ప్యానెల్",
+    "In Hand Feel": "ఇన్ హ్యాండ్ ఫీల్",
+    "in hand feel": "ఇన్ హ్యాండ్ ఫీల్",
+    "Box": "బాక్స్",
+    "box": "బాక్స్",
+    "Opinion": "ఒపీనియన్",
+    "opinion": "ఒపీనియన్",
+    "Verdict": "వెర్డిక్ట్",
+    "verdict": "వెర్డిక్ట్",
+    "Comment": "కామెంట్",
+    "comment": "కామెంట్",
+    "Subscribe": "సబ్‌స్క్రైబ్",
+    "subscribe": "సబ్‌స్క్రైబ్",
+    "Like": "లైక్",
+    "like": "లైక్",
+    "Share": "షేర్",
+    "share": "షేర్",
+    "Bell Icon": "బెల్ ఐకాన్",
+    "bell icon": "బెల్ ఐకాన్",
+    "Video": "వీడియో",
+    "video": "వీడియో",
+    "Videos": "వీడియోలు",
+    "videos": "వీడియోలు",
+    "Channel": "ఛానల్",
+    "channel": "ఛానల్",
+    "Next Level": "నెక్స్ట్ లెవెల్",
+    "next level": "నెక్స్ట్ లెవెల్",
+    "Mind Blowing": "మైండ్ బ్లోయింగ్",
+    "mind blowing": "మైండ్ బ్లోయింగ్",
+    "mind-blowing": "మైండ్ బ్లోయింగ్",
+    "Value For Money": "వాల్యూ ఫర్ మనీ",
+    "value for money": "వాల్యూ ఫర్ మనీ",
+    "Daily Life": "డైలీ లైఫ్",
+    "daily life": "డైలీ లైఫ్",
+    "Daily": "డైలీ",
+    "daily": "డైలీ",
+    "Normal Use": "నార్మల్ యూజ్",
+    "normal use": "నార్మల్ యూజ్",
+    "Heavy Use": "హెవీ యూజ్",
+    "heavy use": "హెవీ యూజ్",
+    "Design": "డిజైన్",
+    "design": "డిజైన్",
+    "Looks": "లుక్స్",
+    "looks": "లుక్స్",
+    "Look": "లుక్",
+    "look": "లుక్",
+    "Launch": "లాంచ్",
+    "launch": "లాంచ్",
+    "Launched": "లాంచ్ అయింది",
+    "launched": "లాంచ్ అయింది",
+    "Release Date": "రిలీజ్ డేట్",
+    "release date": "రిలీజ్ డేట్",
+    "Release": "రిలీజ్",
+    "release": "రిలీజ్",
+    "Brand": "బ్రాండ్",
+    "brand": "బ్రాండ్",
+    "Brands": "బ్రాండ్స్",
+    "brands": "బ్రాండ్స్",
+    "Storage": "స్టోరేజ్",
+    "storage": "స్టోరేజ్",
+    "Variant": "వేరియంట్",
+    "variant": "వేరియంట్",
+    "Variants": "వేరియంట్లు",
+    "variants": "వేరియంట్లు",
+    "Base Model": "బేస్ మోడల్",
+    "base model": "బేస్ మోడల్",
+    "Top Model": "టాప్ మోడల్",
+    "top model": "టాప్ మోడల్",
+    "Punch Hole": "పంచ్ హోల్",
+    "punch hole": "పంచ్ హోల్",
+    "Bezels": "బెజెల్స్",
+    "bezels": "బెజెల్స్",
+    "Bezel": "బెజెల్",
+    "bezel": "బెజెల్",
+    "Curved Display": "కర్వ్‌డ్ డిస్‌ప్లే",
+    "curved display": "కర్వ్‌డ్ డిస్‌ప్లే",
+    "Flat Display": "ఫ్లాట్ డిస్‌ప్లే",
+    "flat display": "ఫ్లాట్ డిస్‌ప్లే",
+    "Refresh Rate": "రిఫ్రెష్ రేట్",
+    "refresh rate": "రిఫ్రెష్ రేట్",
+    "Brightness": "బ్రైట్‌నెస్",
+    "brightness": "బ్రైట్‌నెస్",
+    "Nits": "నిట్స్",
+    "nits": "నిట్స్",
+    "Audio": "ఆడియో",
+    "audio": "ఆడియో",
+    "Speakers": "స్పీకర్లు",
+    "speakers": "స్పీకర్లు",
+    "Speaker": "స్పీకర్",
+    "speaker": "స్పీకర్",
+    "Microphone": "మైక్రోఫోన్",
+    "microphone": "మైక్రోఫోన్",
+    "Mic": "మైక్",
+    "mic": "మైక్",
+    "Weight": "వెయిట్",
+    "weight": "వెయిట్",
+    "Thickness": "థిక్‌నెస్",
+    "thickness": "థిక్‌నెస్",
+    "Heating Issue": "హీటింగ్ ఇష్యూ",
+    "heating issue": "హీటింగ్ ఇష్యూ",
+    "Heating Problem": "హీటింగ్ ప్రాబ్లమ్",
+    "heating problem": "హీటింగ్ ప్రాబ్లమ్",
+    "Heating": "హీటింగ్",
+    "heating": "హీటింగ్",
+    "Cooling": "కూలింగ్",
+    "cooling": "కూలింగ్",
+    "Test": "టెస్ట్",
+    "test": "టెస్ట్",
+    "Testing": "టెస్టింగ్",
+    "testing": "టెస్టింగ్",
+    "Benchmark Score": "బెంచ్‌మార్క్ స్కోర్",
+    "benchmark score": "బెంచ్‌మార్క్ స్కోర్",
+    "Benchmark": "బెంచ్‌మార్క్",
+    "benchmark": "బెంచ్‌మార్క్",
+    "AnTuTu": "అంటూటూ",
+    "antutu": "అంటూటూ",
+    "Geekbench": "గీక్‌బెంచ్",
+    "geekbench": "గీక్‌బెంచ్",
+    "Battery Drain": "బ్యాటరీ డ్రెయిన్",
+    "battery drain": "బ్యాటరీ డ్రెయిన్",
+    "Battery Backup": "బ్యాటరీ బ్యాకప్",
+    "battery backup": "బ్యాటరీ బ్యాకప్",
+    "Overall": "ఓవరాల్ గా",
+    "overall": "ఓవరాల్ గా",
+    "Totally": "టోటల్ గా",
+    "totally": "టోటల్ గా",
+    "Namaste": "నమస్తే",
+    "namaste": "నమస్తే",
+    "Leaks": "లీక్స్",
+    "leaks": "లీక్స్",
+    "Leak": "లీక్",
+    "leak": "లీక్",
+    "Price": "ప్రైస్",
+    "price": "ప్రైస్",
+    "Budget": "బడ్జెట్",
+    "budget": "బడ్జెట్",
+    "Flagship": "ఫ్లాగ్‌షిప్",
+    "flagship": "ఫ్లాగ్‌షిప్",
+    "Specifications": "స్పెసిఫికేషన్స్",
+    "specifications": "స్పెసిఫికేషన్స్",
+    "Specs": "స్పెక్స్",
+    "specs": "స్పెక్స్",
 }
 
 
@@ -633,8 +844,8 @@ def normalize_telugu_tech_script(script_text: str) -> str:
 
 def polish_telugu_voice_with_ai(script_text: str) -> str:
     """
-    Uses Gemini AI (if available) to ensure the Telugu narration script sounds like
-    an authentic human Telugu YouTuber (Teluglish).
+    Uses Free Multi-Provider LLM Cascade (Gemini -> Groq -> OpenRouter) to ensure
+    the Telugu narration script sounds like an authentic human Telugu YouTuber (Teluglish).
     Converts any remaining textbook Telugu numbers or formal words into spoken English phonetics in Telugu script.
     """
     if not script_text or not isinstance(script_text, str):
@@ -643,39 +854,30 @@ def polish_telugu_voice_with_ai(script_text: str) -> str:
     # Always run deterministic rule-based normalizer first
     normalized = normalize_telugu_tech_script(script_text)
 
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        return normalized
+    prompt = (
+        "You are a professional Telugu YouTube creator editor (like Prasadtechintelugu).\n"
+        "Review and polish this Telugu narration script so it sounds 100% natural, human, conversational, and energetic.\n"
+        "CRITICAL RULES:\n"
+        "1. NEVER use formal textbook Telugu numbers for tech models or specs (e.g. NEVER write 'ఇరవై ఏడు' for 27, NEVER write 'ఐదు' for UFS 5).\n"
+        "2. Ensure all phone models and specs use conversational English phonetics written in Telugu script:\n"
+        "   - 'Galaxy S27' -> 'గెలాక్సీ ఎస్ ట్వంటీ సెవెన్'\n"
+        "   - 'UFS 5.1' -> 'యూఎఫ్ఎస్ ఫైవ్ పాయింట్ వన్'\n"
+        "   - '256GB' -> 'టూ ఫిఫ్టీ సిక్స్ జీబీ'\n"
+        "   - '12GB RAM' -> 'ట్వెల్వ్ జీబీ ర్యామ్'\n"
+        "   - '60W' -> 'సిక్స్టీ వాట్ల ఛార్జింగ్'\n"
+        "   - '120Hz' -> 'వన్ ట్వంటీ హెర్ట్జ్'\n"
+        "   - '6000mAh' -> 'సిక్స్ థౌసండ్ ఎంఏహెచ్ బ్యాటరీ'\n"
+        "3. Keep the exact meaning and section lines. Do NOT add markdown, explanations, or English letters (except necessary brand acronyms).\n"
+        "4. Output ONLY the polished Telugu script lines:\n\n"
+        f"{normalized}"
+    )
 
     try:
-        from google import genai
-        client = genai.Client(api_key=api_key)
-        prompt = (
-            "You are a professional Telugu YouTube creator editor (like Prasadtechintelugu).\n"
-            "Review and polish this Telugu narration script so it sounds 100% natural, human, conversational, and energetic.\n"
-            "CRITICAL RULES:\n"
-            "1. NEVER use formal textbook Telugu numbers for tech models or specs (e.g. NEVER write 'ఇరవై ఏడు' for 27, NEVER write 'ఐదు' for UFS 5).\n"
-            "2. Ensure all phone models and specs use conversational English phonetics written in Telugu script:\n"
-            "   - 'Galaxy S27' -> 'గెలాక్సీ ఎస్ ట్వంటీ సెవెన్'\n"
-            "   - 'UFS 5.1' -> 'యూఎఫ్ఎస్ ఫైవ్ పాయింట్ వన్'\n"
-            "   - '256GB' -> 'టూ ఫిఫ్టీ సిక్స్ జీబీ'\n"
-            "   - '12GB RAM' -> 'ట్వెల్వ్ జీబీ ర్యామ్'\n"
-            "   - '60W' -> 'సిక్స్టీ వాట్ల ఛార్జింగ్'\n"
-            "3. Keep the exact meaning and section lines. Do NOT add markdown, explanations, or English letters (except necessary brand acronyms).\n"
-            "4. Output ONLY the polished Telugu script lines:\n\n"
-            f"{normalized}"
-        )
-        for m_name in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]:
-            try:
-                resp = client.models.generate_content(
-                    model=m_name,
-                    contents=prompt,
-                )
-                polished = resp.text.strip()
-                if polished and len(polished) >= len(normalized) * 0.7:
-                    return normalize_telugu_tech_script(polished)
-            except Exception:
-                continue
+        from providers.llm import generate_text_cascade
+        polished = generate_text_cascade(prompt, step_name="telugu_voice_polish")
+        if polished and len(polished.strip()) >= len(normalized) * 0.7:
+            clean = re.sub(r"```.*?```", "", polished, flags=re.DOTALL).strip()
+            return normalize_telugu_tech_script(clean)
     except Exception:
         pass
 

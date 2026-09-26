@@ -1,6 +1,7 @@
 import asyncio
 import os
 import re
+import time
 
 # Allow online HuggingFace Hub downloads on fresh container deployments if not already cached
 if os.getenv("HF_HUB_OFFLINE") is None:
@@ -1249,7 +1250,6 @@ async def create_voice(
     # ----------------------------------------------------
     try:
         import json
-        import time
         from pathlib import Path
         cache_file = Path("output/transcription.json")
         cache_file.parent.mkdir(parents=True, exist_ok=True)
