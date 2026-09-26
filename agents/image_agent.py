@@ -503,7 +503,7 @@ def detect_named_product(text):
 # SEARCH QUERIES
 # ============================================================
 
-def build_queries(visual_description, narration=None):
+def build_queries(visual_description, narration=None, topic_category="tech"):
     """
     Build highly relevant, concrete search queries derived from the visual concept
     (including multi-query alternatives separated by '|') and its assigned narration section.
@@ -520,7 +520,7 @@ def build_queries(visual_description, narration=None):
     if re.search(r"[\u0c00-\u0c7f]", str(visual_description)):
         try:
             from semantic_broll_mapper import generate_search_queries
-            mapped_qs = generate_search_queries(str(visual_description), topic_category="tech")
+            mapped_qs = generate_search_queries(str(visual_description), topic_category=topic_category)
             if mapped_qs:
                 queries.extend(mapped_qs)
         except Exception:
@@ -577,6 +577,34 @@ def build_queries(visual_description, narration=None):
             entity_query = " ".join(entities[:3])
             if entity_query and entity_query not in queries:
                 queries.append(entity_query)
+
+    # Bias search queries based on topic category (Section 12)
+    cat_lower = str(topic_category).lower()
+    base_q = queries[0] if queries else str(visual_description)[:40]
+    if any(k in cat_lower for k in ["movie", "cinema", "film", "entertainment"]):
+        cinema_keywords = ["cinema film movie", "cinematography movie scene"]
+        for ck in cinema_keywords:
+            aug_q = f"{base_q} {ck}".strip()
+            if aug_q not in queries and len(queries) < 5:
+                queries.append(aug_q)
+    elif any(k in cat_lower for k in ["news", "politics", "current"]):
+        news_keywords = ["press conference broadcast", "official report news"]
+        for nk in news_keywords:
+            aug_q = f"{base_q} news broadcast".strip()
+            if aug_q not in queries and len(queries) < 5:
+                queries.append(aug_q)
+    elif any(k in cat_lower for k in ["finance", "crypto", "business", "stock", "market"]):
+        fin_keywords = ["stock market chart finance", "cryptocurrency trading investment"]
+        for fk in fin_keywords:
+            aug_q = f"{base_q} stock finance".strip()
+            if aug_q not in queries and len(queries) < 5:
+                queries.append(aug_q)
+    elif any(k in cat_lower for k in ["explainer", "education", "science", "guide"]):
+        exp_keywords = ["infographic concept diagram", "educational illustration visual"]
+        for ek in exp_keywords:
+            aug_q = f"{base_q} diagram visual".strip()
+            if aug_q not in queries and len(queries) < 5:
+                queries.append(aug_q)
 
     if not queries:
         queries.append(visual_description[:60].replace("|", " ").strip())
@@ -1825,6 +1853,20 @@ def download_images_from_visual_plan(
     elif aspect_ratio == "1:1":
         orientation = "square"
 
+    # Derive normalized topic category for visual matching (Section 12)
+    raw_cat = kwargs.get("topic_category") or kwargs.get("content_type") or "tech"
+    raw_cat_lower = str(raw_cat).lower()
+    if any(k in raw_cat_lower for k in ["movie", "cinema", "film", "entertainment"]):
+        topic_category = "entertainment"
+    elif any(k in raw_cat_lower for k in ["news", "politics", "current"]):
+        topic_category = "news"
+    elif any(k in raw_cat_lower for k in ["finance", "crypto", "business", "stock", "market"]):
+        topic_category = "finance"
+    elif any(k in raw_cat_lower for k in ["explainer", "education", "science", "guide"]):
+        topic_category = "explainer"
+    else:
+        topic_category = "tech"
+
     visuals = []
 
     with open(
@@ -1940,6 +1982,7 @@ def download_images_from_visual_plan(
         queries = build_queries(
             visual_query,
             narration=assigned_narration,
+            topic_category=topic_category,
         )
 
         # Mode 3: Explainer Style Query Transformation
@@ -1955,7 +1998,7 @@ def download_images_from_visual_plan(
             from semantic_broll_mapper import generate_search_queries
             semantic_qs = generate_search_queries(
                 chunk=f"{visual_query}. {assigned_narration}"[:250],
-                topic_category="tech",
+                topic_category=topic_category,
             )
             for sq in semantic_qs:
                 if sq not in queries:
@@ -2089,7 +2132,7 @@ def download_images_from_visual_plan(
 
         # 2. Search and verify stock image candidates with SigLIP 2 relevance
         if not destination.exists():
-            candidates = collect_candidates(queries, orientation=orientation)
+            candidates = collect_candidates(queries, orientation=orientation, topic_category=topic_category)
             for candidate in candidates:
                 cand_url = candidate.get("image_url")
                 if not cand_url:
@@ -2140,7 +2183,7 @@ def download_images_from_visual_plan(
             if len(broad_words) >= 2:
                 broad_q = " ".join(broad_words[:2])
                 print(f"🔄 [Visual {visual_number}] Broadening search query to: '{broad_q}'...")
-                b_candidates = collect_candidates([broad_q], orientation=orientation)
+                b_candidates = collect_candidates([broad_q], orientation=orientation, topic_category=topic_category)
                 for b_cand in b_candidates:
                     cand_url = b_cand.get("image_url")
                     if not cand_url or cand_url in claimed_urls:

@@ -92,17 +92,48 @@ def append_outro(main_video_path, outro_clip_path="assets/outro/like_share_subsc
             os.rename(temp_out, output_path)
             return str(output_path)
 
+    def _has_audio(fpath):
+        try:
+            cmd = ["ffprobe", "-v", "error", "-select_streams", "a:0",
+                   "-show_entries", "stream=codec_name", "-of", "csv=p=0", str(fpath)]
+            out = subprocess.run(cmd, capture_output=True, text=True).stdout.strip()
+            return bool(out)
+        except Exception:
+            return False
+
+    has_a0 = _has_audio(main_video_path)
+    has_a1 = _has_audio(outro_clip_path)
+
     # Fallback to matched filter_complex concatenation with scale/pad & audio resample
-    fc = (
-        f"[1:v]scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30,format=yuv420p[v1];"
-        f"[0:v]setsar=1,fps=30,format=yuv420p[v0];"
-        f"[0:a]aformat=sample_rates=48000:channel_layouts=stereo[a0];"
-        f"[1:a]aformat=sample_rates=48000:channel_layouts=stereo[a1];"
-        f"[v0][a0][v1][a1]concat=n=2:v=1:a=1[v][a]"
-    )
+    if has_a0 and has_a1:
+        fc = (
+            f"[1:v]scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30,format=yuv420p[v1];"
+            f"[0:v]setsar=1,fps=30,format=yuv420p[v0];"
+            f"[0:a]aformat=sample_rates=48000:channel_layouts=stereo[a0];"
+            f"[1:a]aformat=sample_rates=48000:channel_layouts=stereo[a1];"
+            f"[v0][a0][v1][a1]concat=n=2:v=1:a=1[v][a]"
+        )
+        map_args = ["-map", "[v]", "-map", "[a]", "-c:a", "aac", "-b:a", "192k"]
+    elif has_a0 and not has_a1:
+        fc = (
+            f"[1:v]scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30,format=yuv420p[v1];"
+            f"[0:v]setsar=1,fps=30,format=yuv420p[v0];"
+            f"[0:a]aformat=sample_rates=48000:channel_layouts=stereo[a0];"
+            f"aevalsrc=0:d=2.0:s=48000[a1];"
+            f"[v0][a0][v1][a1]concat=n=2:v=1:a=1[v][a]"
+        )
+        map_args = ["-map", "[v]", "-map", "[a]", "-c:a", "aac", "-b:a", "192k"]
+    else:
+        fc = (
+            f"[1:v]scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30,format=yuv420p[v1];"
+            f"[0:v]setsar=1,fps=30,format=yuv420p[v0];"
+            f"[v0][v1]concat=n=2:v=1:a=0[v]"
+        )
+        map_args = ["-map", "[v]"]
+
     cmd_fc = ["ffmpeg", "-y", "-i", str(main_video_path), "-i", str(outro_clip_path),
-              "-filter_complex", fc, "-map", "[v]", "-map", "[a]",
-              "-c:v", "libx264", "-c:a", "aac", "-b:a", "192k", "-preset", "ultrafast", temp_out]
+              "-filter_complex", fc] + map_args + [
+              "-c:v", "libx264", "-preset", "ultrafast", temp_out]
     r_fc = subprocess.run(cmd_fc, capture_output=True, text=True)
     if r_fc.returncode == 0 and os.path.exists(temp_out) and os.path.getsize(temp_out) > 0:
         if os.path.exists(output_path):
@@ -271,9 +302,9 @@ def mix_audio_with_ducking(voice_path, bgm_path=None, output_audio_path=None):
     """
     Mix voiceover and background music using FFmpeg sidechain audio ducking.
     - Voiceover acts as the sidechain trigger.
-    - When voice is active: BGM ducks to ~15% (-18dB).
-    - When voice pauses/silent: BGM smoothly rises to ~35% (-10dB).
-    - Output is normalized to broadcast standard (-16 LUFS) with loudnorm.
+    - When voice is active: BGM ducks to -24dB relative to speech.
+    - When voice pauses/silent: BGM smoothly rises to base level.
+    - Output is normalized to YouTube broadcast standard (-14 LUFS) with loudnorm.
     """
     voice_p = Path(voice_path)
     if not voice_p.exists():
@@ -290,9 +321,9 @@ def mix_audio_with_ducking(voice_path, bgm_path=None, output_audio_path=None):
     output_p.parent.mkdir(parents=True, exist_ok=True)
 
     duck_filter = (
-        "[1:a]volume=0.35[bgm_base]; "
-        "[bgm_base][0:a]sidechaincompress=threshold=0.15:ratio=4:attack=150:release=600[ducked_bgm]; "
-        "[0:a][ducked_bgm]amix=inputs=2:duration=first:weights=1.0 1.0,loudnorm=I=-16:LRA=11:TP=-1.5[aout]"
+        "[1:a]volume=0.22[bgm_base]; "
+        "[bgm_base][0:a]sidechaincompress=threshold=0.10:ratio=6:attack=50:release=400[ducked_bgm]; "
+        "[0:a][ducked_bgm]amix=inputs=2:duration=first:weights=1.0 1.0,loudnorm=I=-14:LRA=11:TP=-1.5[aout]"
     )
 
     cmd = [

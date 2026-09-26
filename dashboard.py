@@ -565,6 +565,7 @@ def create_metadata(
     script,
     youtube_upload=False,
     privacy="private",
+    channel="Channel 1 (Primary)",
 ):
     """Generate metadata and optionally upload to YouTube."""
 
@@ -609,6 +610,9 @@ def create_metadata(
         print(
             f"Privacy: {privacy.upper()}"
         )
+        print(
+            f"Channel: {channel}"
+        )
 
         try:
             video_id = upload_video(
@@ -617,6 +621,7 @@ def create_metadata(
                 description,
                 tags,
                 privacy=privacy,
+                channel=channel,
             )
 
             print(
@@ -819,6 +824,7 @@ def generate_multi_media_video(
     metadata=True,
     youtube_upload=False,
     youtube_privacy="private",
+    youtube_channel="Channel 1 (Primary)",
     script_override=None,
     aspect_ratio="9:16",
     target_duration="30-50s",
@@ -1216,6 +1222,7 @@ def generate_multi_media_video(
                         aspect_ratio=aspect_ratio,
                         generation_mode=generation_mode,
                         user_assets=saved_media or media_files,
+                        content_type=content_type,
                     )
                     print("✅ [Parallel Stage] Visual Sourcing Complete.")
                 except Exception as error:
@@ -1257,6 +1264,7 @@ def generate_multi_media_video(
                         aspect_ratio=aspect_ratio,
                         generation_mode=generation_mode,
                         user_assets=saved_media or media_files,
+                        content_type=content_type,
                     )
                 except Exception as error:
                     print("Visual sourcing warning:", error)
@@ -1676,6 +1684,7 @@ def generate_multi_media_video(
             script,
             youtube_upload=youtube_upload,
             privacy=youtube_privacy,
+            channel=youtube_channel,
         )
 
     else:
@@ -2575,6 +2584,22 @@ with tab_manual:
         )
         st.session_state["declared_yt_mode"] = selected_yt_mode
 
+        yt_channel_options = [
+            "Channel 1 (Primary)",
+            "Channel 2 (Secondary)",
+        ]
+        saved_yt_ch = st.session_state.get("declared_yt_channel", yt_channel_options[0])
+        saved_yt_ch_idx = yt_channel_options.index(saved_yt_ch) if saved_yt_ch in yt_channel_options else 0
+
+        selected_yt_channel = st.selectbox(
+            "Target YouTube Channel",
+            yt_channel_options,
+            index=saved_yt_ch_idx,
+            key="declared_yt_channel_select",
+            help="Select destination YouTube channel (Channel 1 uses token.json, Channel 2 uses token_channel2.json).",
+        )
+        st.session_state["declared_yt_channel"] = selected_yt_channel
+
         if "Do Not Upload" in selected_yt_mode:
             youtube_upload = False
             youtube_privacy = "private"
@@ -2893,6 +2918,7 @@ with tab_manual:
                         metadata=metadata,
                         youtube_upload=youtube_upload,
                         youtube_privacy=youtube_privacy,
+                        youtube_channel=selected_yt_channel,
                         aspect_ratio=aspect_ratio,
                         target_duration=target_duration,
                         include_outro=include_outro,
@@ -3114,6 +3140,7 @@ with tab_manual:
                                 rdesc,
                                 rtags,
                                 privacy=declared_priv,
+                                channel=st.session_state.get("declared_yt_channel", "Channel 1 (Primary)"),
                             )
                             st.session_state["pipeline_result"] = {
                                 **(result or {}),

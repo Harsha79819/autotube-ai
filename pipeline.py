@@ -574,6 +574,7 @@ def create_metadata(
     script,
     youtube_upload=False,
     privacy="private",
+    channel="Channel 1 (Primary)",
 ):
     """Generate metadata and optionally upload to YouTube."""
 
@@ -618,6 +619,9 @@ def create_metadata(
         print(
             f"Privacy: {privacy.upper()}"
         )
+        print(
+            f"Channel: {channel}"
+        )
 
         try:
             video_id = upload_video(
@@ -626,6 +630,7 @@ def create_metadata(
                 description,
                 tags,
                 privacy=privacy,
+                channel=channel,
             )
 
             print(
@@ -828,6 +833,7 @@ def generate_multi_media_video(
     metadata=True,
     youtube_upload=False,
     youtube_privacy="private",
+    youtube_channel="Channel 1 (Primary)",
     script_override=None,
     aspect_ratio="9:16",
     target_duration="30-50s",
@@ -1232,6 +1238,7 @@ def generate_multi_media_video(
                         aspect_ratio=aspect_ratio,
                         generation_mode=generation_mode,
                         user_assets=saved_media or media_files,
+                        content_type=content_type,
                     )
                     print("✅ [Parallel Stage] Visual Sourcing Complete.")
                 except Exception as error:
@@ -1272,6 +1279,7 @@ def generate_multi_media_video(
                         aspect_ratio=aspect_ratio,
                         generation_mode=generation_mode,
                         user_assets=saved_media or media_files,
+                        content_type=content_type,
                     )
                 except Exception as error:
                     print("Visual sourcing warning:", error)
@@ -1694,6 +1702,7 @@ def generate_multi_media_video(
             script,
             youtube_upload=youtube_upload,
             privacy=youtube_privacy,
+            channel=youtube_channel,
         )
 
     else:

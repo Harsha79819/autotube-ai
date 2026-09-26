@@ -17,17 +17,28 @@ SCOPES = [
     "https://www.googleapis.com/auth/youtube.force-ssl",
 ]
 
-def reauth():
+def reauth(channel=1):
     print("=" * 60)
-    print("AutoTube AI — YouTube OAuth Re-authentication")
+    print(f"AutoTube AI — YouTube OAuth Re-authentication (Channel {channel})")
     print("=" * 60)
 
-    # Look for client_secret.json in current directory or project root
-    candidate_secrets = [
-        Path("client_secret.json"),
-        Path("client_secret 2.json"),
-        Path(__file__).parent.parent / "client_secret.json",
-    ]
+    is_ch2 = (channel == 2 or str(channel).lower() in ("2", "channel 2", "channel2", "secondary"))
+    if is_ch2:
+        token_path = Path("token_channel2.json")
+        candidate_secrets = [
+            Path("client_secret 2.json"),
+            Path("client_secret_channel2.json"),
+            Path("client_secret.json"),
+            Path(__file__).parent.parent / "client_secret 2.json",
+            Path(__file__).parent.parent / "client_secret.json",
+        ]
+    else:
+        token_path = Path("token.json")
+        candidate_secrets = [
+            Path("client_secret.json"),
+            Path("client_secret 2.json"),
+            Path(__file__).parent.parent / "client_secret.json",
+        ]
 
     secret_file = None
     for cand in candidate_secrets:
@@ -36,24 +47,24 @@ def reauth():
             break
 
     if not secret_file:
-        print("❌ Error: 'client_secret.json' not found!")
-        print("Please place client_secret.json in the project root directory.")
+        print(f"❌ Error: Client secret file not found for Channel {channel}!")
+        print("Please place client_secret.json or client_secret 2.json in the project root directory.")
         return False
 
+    print(f"📺 Target Token: {token_path}")
     print(f"📄 Using credentials config: {secret_file}")
 
-    # Remove expired or stale token.json
-    token_path = Path("token.json")
+    # Remove expired or stale token
     if token_path.exists():
         try:
             token_path.unlink()
-            print("🗑️ Removed expired token.json")
+            print(f"🗑️ Removed expired {token_path}")
         except Exception as e:
-            print(f"⚠️ Could not remove token.json: {e}")
+            print(f"⚠️ Could not remove {token_path}: {e}")
 
     print()
     print("🌐 Launching browser for Google authentication...")
-    print("👉 Please select your Google account and click 'Continue' / 'Allow'...")
+    print(f"👉 Please select your Google account for Channel {channel} and click 'Continue' / 'Allow'...")
     print()
 
     try:
@@ -66,7 +77,7 @@ def reauth():
         with open(token_path, "w", encoding="utf-8") as f:
             f.write(creds.to_json())
 
-        print("✅ New token.json saved successfully!")
+        print(f"✅ New {token_path} saved successfully!")
 
         # Verify access
         try:
@@ -82,7 +93,7 @@ def reauth():
             print(f"⚠️ Channel check notice: {ver_err}")
 
         print("=" * 60)
-        print("YouTube authentication complete! You can now publish videos.")
+        print(f"YouTube authentication complete for Channel {channel}! You can now publish videos.")
         print("=" * 60)
         return True
 
@@ -92,4 +103,16 @@ def reauth():
 
 
 if __name__ == "__main__":
-    reauth()
+    ch = 1
+    if len(sys.argv) > 1:
+        for i, arg in enumerate(sys.argv[1:], 1):
+            if arg in ("--channel", "-c") and i < len(sys.argv) - 1:
+                try:
+                    ch = int(sys.argv[i + 1])
+                except ValueError:
+                    ch = sys.argv[i + 1]
+            elif arg in ("1", "2"):
+                ch = int(arg)
+            elif "channel2" in arg.lower() or "channel-2" in arg.lower():
+                ch = 2
+    reauth(channel=ch)

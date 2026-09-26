@@ -95,7 +95,7 @@ def clean_and_pace_voice(
         "-i",
         str(inp),
         "-af",
-        f"{silence},atempo={target_speed},loudnorm=I=-16:TP=-1.5:LRA=11",
+        f"{silence},atempo={target_speed},loudnorm=I=-14:TP=-1.5:LRA=11",
         str(outp),
     ]
 
@@ -115,11 +115,11 @@ def mix_with_background_music(
     voice_path: str,
     music_path: str,
     output_path: str,
-    music_base_volume: float = 0.35,
-    threshold: float = 0.08,
+    music_base_volume: float = 0.22,
+    threshold: float = 0.10,
 ) -> str:
     """
-    Ducks background music under voice track using sidechain compression, then mixes and normalizes.
+    Ducks background music under voice track using sidechain compression (-24dB relative), then mixes and normalizes to -14 LUFS.
     Guarantees audible, balanced music with zero voice masking.
     """
     v_path = Path(voice_path)
@@ -132,12 +132,12 @@ def mix_with_background_music(
     if not m_path.exists() or m_path.stat().st_size < 512:
         raise FileNotFoundError(f"Music track missing or empty: {music_path}")
 
-    # Sidechain compression filter with tuned threshold (0.08 ensures music is audible and ducked)
+    # Sidechain compression filter with tuned threshold (ensures music is ducked ~-24dB under voice)
     filt = (
         f"[1:a]volume={music_base_volume}[music];"
-        f"[music][0:a]sidechaincompress=threshold={threshold}:ratio=8:attack=5:release=300:makeup=1[ducked];"
+        f"[music][0:a]sidechaincompress=threshold={threshold}:ratio=6:attack=50:release=400:makeup=1[ducked];"
         f"[0:a][ducked]amix=inputs=2:duration=first:dropout_transition=2[mixed];"
-        f"[mixed]loudnorm=I=-16:TP=-1.5:LRA=11[out]"
+        f"[mixed]loudnorm=I=-14:TP=-1.5:LRA=11[out]"
     )
 
     cmd = [

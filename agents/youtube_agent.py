@@ -408,6 +408,42 @@ def print_video_status(
     print()
 
 
+def get_channel_credential_paths(channel="Channel 1 (Primary)"):
+    """
+    Resolve token and client secret file paths based on YouTube channel choice.
+    Supports Dual-Channel setups:
+      - Channel 1 (Primary): token.json (or token_channel1.json), client_secret.json
+      - Channel 2 (Secondary): token_channel2.json, client_secret 2.json / client_secret_channel2.json
+    """
+    ch_str = str(channel).lower()
+    is_ch2 = ("channel 2" in ch_str) or ("secondary" in ch_str) or (ch_str == "2")
+
+    if is_ch2:
+        token_path = "token_channel2.json"
+        candidate_secrets = [
+            "client_secret 2.json",
+            "client_secret_channel2.json",
+            "client_secret.json",
+        ]
+    else:
+        token_path = "token.json" if os.path.exists("token.json") or not os.path.exists("token_channel1.json") else "token_channel1.json"
+        candidate_secrets = [
+            "client_secret.json",
+            "client_secret_channel1.json",
+        ]
+
+    secret_path = None
+    for cand in candidate_secrets:
+        if os.path.exists(cand):
+            secret_path = cand
+            break
+
+    if not secret_path:
+        secret_path = "client_secret.json"
+
+    return token_path, secret_path
+
+
 # ============================================================
 # UPLOAD VIDEO
 # ============================================================
@@ -419,6 +455,7 @@ def upload_video(
     description,
     tags,
     privacy="public",
+    channel="Channel 1 (Primary)",
 ):
 
     uploaded_videos = (
@@ -560,15 +597,15 @@ def upload_video(
     # AUTHENTICATION
     # --------------------------------------------------------
 
+    token_path, secret_path = get_channel_credential_paths(channel)
+    print(f"📺 Target YouTube Channel: {channel} (Token: {token_path}, Secret: {secret_path})")
+
     creds = None
 
-    if os.path.exists(
-        "token.json"
-    ):
-
+    if os.path.exists(token_path):
         creds = (
             Credentials.from_authorized_user_file(
-                "token.json",
+                token_path,
                 SCOPES,
             )
         )
@@ -585,11 +622,11 @@ def upload_video(
                     Request()
                 )
             except Exception as ref_err:
-                print(f"⚠️ YouTube token refresh failed: {ref_err}")
+                print(f"⚠️ YouTube token refresh failed for {channel}: {ref_err}")
                 creds = None
-                if os.path.exists("token.json"):
+                if os.path.exists(token_path):
                     try:
-                        os.remove("token.json")
+                        os.remove(token_path)
                     except OSError:
                         pass
 
@@ -612,14 +649,14 @@ def upload_video(
                     "pip install google-auth-oauthlib"
                 ) from exc
 
-            if not os.path.exists("client_secret.json"):
+            if not os.path.exists(secret_path):
                 raise FileNotFoundError(
-                    "client_secret.json not found. Cannot authenticate YouTube."
+                    f"{secret_path} not found. Cannot authenticate YouTube for {channel}."
                 )
 
             flow = (
                 InstalledAppFlow.from_client_secrets_file(
-                    "client_secret.json",
+                    secret_path,
                     SCOPES,
                 )
             )
@@ -630,7 +667,7 @@ def upload_video(
 
         if creds and creds.valid:
             with open(
-                "token.json",
+                token_path,
                 "w",
                 encoding="utf-8",
             ) as token:
