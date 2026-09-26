@@ -139,11 +139,20 @@ class BaseTunnelManager:
     def run_forever(self):
         if not self.process:
             return
+        consecutive_errors = 0
         try:
             while self.process.poll() is None:
                 line = self.process.stdout.readline() if self.process.stdout else None
                 if line:
                     print(line, end="", flush=True)
+                    if "Serve tunnel error" in line or "control stream encountered a failure" in line:
+                        consecutive_errors += 1
+                        if consecutive_errors >= 8:
+                            print("\n⚠️ Detected persistent broken tunnel control stream (8 consecutive errors). Auto-restarting tunnel...")
+                            self.stop()
+                            sys.exit(1)
+                    elif "Registered tunnel connection" in line or "HTTP" in line or "200" in line:
+                        consecutive_errors = 0
                 else:
                     time.sleep(0.5)
         except KeyboardInterrupt:
