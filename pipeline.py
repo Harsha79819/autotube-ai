@@ -353,23 +353,19 @@ def download_visuals(
     )
     from agents.video_agent import ensure_visual_assets_exist
 
-    try:
-        res = download_images_from_visual_plan(
-            visual_plan_file,
-            flyer_path=flyer_path,
-            feedback=feedback,
-            aspect_ratio=aspect_ratio,
-            generation_mode=generation_mode,
-            user_assets=user_assets,
-            *args,
-            **kwargs,
-        )
-    except Exception as err:
-        print(f"Visual plan download note: {err}. Triggering self-healing fallback...")
-        ensure_visual_assets_exist()
-        res = []
-
-    ensure_visual_assets_exist()
+    res = download_images_from_visual_plan(
+        visual_plan_file,
+        flyer_path=flyer_path,
+        feedback=feedback,
+        aspect_ratio=aspect_ratio,
+        generation_mode=generation_mode,
+        user_assets=user_assets,
+        *args,
+        **kwargs,
+    )
+    if not res:
+        raise RuntimeError("No visual assets were returned by image agent.")
+    ensure_visual_assets_exist(needed_count=len(res))
     return res
 
 

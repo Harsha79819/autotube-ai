@@ -576,15 +576,17 @@ def generate_kokoro_speech(
     )
 
     audio_parts = []
+    import numpy as np
+    silence_gap = np.zeros(int(24000 * 0.18), dtype=np.float32)
+
     for _, _, audio in generator:
         audio_parts.append(audio)
+        audio_parts.append(silence_gap)
 
     if not audio_parts:
         raise RuntimeError(
             "Kokoro did not generate any audio."
         )
-
-    import numpy as np
 
     full_audio = np.concatenate(
         audio_parts
@@ -638,6 +640,38 @@ async def generate_edge_tts_speech(
             await communicate.save(output_mp3)
 
     return word_timings
+
+
+async def generate_omnivoice_speech(
+    speech_text,
+    output_mp3="output/voice.mp3",
+    voice_sample=None,
+    instruct="natural conversational human voice, warm and relaxed tone, slight vocal variation, not robotic, mid-20s energetic presenter",
+):
+    """
+    OmniVoice zero-shot voice-cloning & voice-design TTS adapter (github.com/k2-fsa/OmniVoice).
+    Free, open-weight, runs locally.
+    Gracefully falls back to Edge-TTS / Kokoro if omnivoice package is not installed.
+    """
+    try:
+        import omnivoice
+        print(f"🎙️ Generating speech via OmniVoice ({'Cloning' if voice_sample else 'Voice Design'})...")
+        # If omnivoice package is present, invoke CLI or module
+        import subprocess
+        cmd = ["omnivoice-infer", "--text", speech_text, "--output", output_mp3]
+        if voice_sample and os.path.exists(voice_sample):
+            cmd.extend(["--ref-audio", str(voice_sample)])
+        elif instruct:
+            cmd.extend(["--instruct", instruct])
+        res = subprocess.run(cmd, capture_output=True, text=True)
+        if res.returncode == 0 and os.path.exists(output_mp3) and os.path.getsize(output_mp3) > 1000:
+            print("✅ OmniVoice generation completed successfully.")
+            return []
+    except ImportError:
+        print("ℹ️ OmniVoice package not installed on this system. Falling back safely to default neural engine...")
+    except Exception as e:
+        print(f"⚠️ OmniVoice notice: {e}. Falling back to default neural engine...")
+    return None
 
 
 @autonomous_recover("voice_agent")
@@ -833,9 +867,33 @@ async def create_voice(
         or (is_telugu_text and not is_clone)
         or (is_hindi_text and not is_clone)
     )
+    t_start_voice = time.time()
+    tts_engine_cfg = os.getenv("TTS_ENGINE", "kokoro").strip().lower()
+    is_omnivoice = bool("omnivoice" in voice_lower or tts_engine_cfg == "omnivoice")
 
     used_mode = None
-    if is_clone and speaker_sample_path and is_telugu_text:
+
+    if is_omnivoice:
+        print()
+        print("=" * 60)
+        print("OMNIVOICE ZERO-SHOT NEURAL TTS GENERATION")
+        print("=" * 60)
+        print("TTS text preview:")
+        print(speech_text[:400])
+        print()
+        omni_res = await generate_omnivoice_speech(
+            speech_text=speech_text,
+            output_mp3=output_mp3,
+            voice_sample=speaker_sample_path,
+        )
+        if omni_res is not None and os.path.exists(output_mp3) and os.path.getsize(output_mp3) > 1000:
+            used_mode = "OmniVoice (Voice Design: Natural Presenter)"
+            subprocess.run(
+                ["ffmpeg", "-y", "-i", output_mp3, "-ar", "24000", "-ac", "1", output_wav],
+                check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+
+    if not used_mode and is_clone and speaker_sample_path and is_telugu_text:
         print()
         print("=" * 60)
         print("FREEVC24 CROSS-LINGUAL TELUGU VOICE CLONING")
@@ -923,7 +981,7 @@ async def create_voice(
                 output_mp3=output_wav,
             )
             used_mode = f"Edge-TTS Fallback ({base_telugu_voice})"
-    elif is_clone and speaker_sample_path and not is_telugu_text:
+    elif not used_mode and is_clone and speaker_sample_path and not is_telugu_text:
         print()
         print("=" * 60)
         print("COQUI XTTS-V2 LOCAL VOICE CLONING GENERATION")
@@ -1037,7 +1095,7 @@ async def create_voice(
                 output_wav=output_wav,
             )
             used_mode = "Kokoro Fallback (am_adam)"
-    elif is_edge_voice:
+    elif not used_mode and is_edge_voice:
         if "shruti" in voice_lower:
             edge_voice_id = "te-IN-ShrutiNeural"
         elif "swara" in voice_lower:
@@ -1103,7 +1161,7 @@ async def create_voice(
                 output_wav=output_wav,
             )
             used_mode = "Kokoro Fallback (am_adam)"
-    else:
+    elif not used_mode:
         kokoro_voice = (
             voice
             if voice
@@ -1252,7 +1310,13 @@ async def create_voice(
     print(f"Mode: {used_mode}")
     print("Saved to:", output_mp3)
     print("TTS text saved to: output/tts_script.txt")
-    print()
+    dur_ms = (time.time() - t_start_voice) * 1000
+    try:
+        from providers.tracker import record_step_provider
+        is_fb = "fallback" in str(used_mode).lower() or "edge-tts" in str(used_mode).lower()
+        record_step_provider("voice", used_mode or "Voice Engine", duration_ms=dur_ms, is_fallback=is_fb)
+    except Exception:
+        pass
 
     return output_mp3
 

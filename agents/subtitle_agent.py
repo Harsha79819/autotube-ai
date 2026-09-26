@@ -955,9 +955,14 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             words = c_text.split()
             if not words:
                 continue
-            chunk_dur = max(0.2, c_end - c_start)
-            word_dur_cs = max(8, int(round((chunk_dur / len(words)) * 100)))
-            k_parts = [f"{{\\kf{word_dur_cs}}}{w} " for w in words]
+            k_parts = []
+            for w in words:
+                clean_w = w.replace("**", "").replace("*", "")
+                is_spec = "**" in w or bool(re.search(r"(\d+(?:mah|hz|gb|tb|w|mp)|₹\d+|\$\d+|ufs|s27|snapdragon)", clean_w, re.I))
+                if is_spec:
+                    k_parts.append(f"{{\\kf{word_dur_cs}\\c&H002CD4FF&\\b1\\fscx112\\fscy112}}{clean_w}{{\\r}} ")
+                else:
+                    k_parts.append(f"{{\\kf{word_dur_cs}}}{clean_w} ")
             k_text = "".join(k_parts).strip()
             start_str = format_ass_timestamp(c_start)
             end_str = format_ass_timestamp(c_end)
@@ -991,7 +996,9 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
             karaoke_parts = []
             for idx, word_obj in enumerate(chunk):
-                w_text = word_obj.get("text", "").strip()
+                w_raw = word_obj.get("text", "").strip()
+                w_clean = w_raw.replace("**", "").replace("*", "")
+                is_spec = "**" in w_raw or bool(re.search(r"(\d+(?:mah|hz|gb|tb|w|mp)|₹\d+|\$\d+|ufs|s27|snapdragon)", w_clean, re.I))
                 w_start = word_obj.get("start", c_start)
                 w_end = word_obj.get("end", c_end)
 
@@ -1007,7 +1014,10 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                     if inter_gap > 2:
                         karaoke_parts.append(f"{{\\kf{inter_gap}}}")
 
-                karaoke_parts.append(f"{{\\kf{dur_cs}}}{w_text} ")
+                if is_spec:
+                    karaoke_parts.append(f"{{\\kf{dur_cs}\\c&H002CD4FF&\\b1\\fscx112\\fscy112}}{w_clean}{{\\r}} ")
+                else:
+                    karaoke_parts.append(f"{{\\kf{dur_cs}}}{w_clean} ")
 
             k_text = "".join(karaoke_parts).strip()
             start_str = format_ass_timestamp(c_start)

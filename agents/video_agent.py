@@ -554,15 +554,7 @@ def ensure_visual_assets_exist(needed_count=None):
                     except Exception:
                         pass
             else:
-                try:
-                    from PIL import Image, ImageDraw
-                    img = Image.new("RGB", (1280, 720), color=(20, 25, 40))
-                    draw = ImageDraw.Draw(img)
-                    draw.text((640, 360), f"AutoTube AI Scene {i}", fill=(200, 220, 255), anchor="mm")
-                    img.save(target_jpg, "JPEG", quality=90)
-                    print(f"[Self-Healing] Generated placeholder visual for Scene {i} -> {i}.jpg")
-                except Exception as gen_err:
-                    print(f"[Self-Healing] Error generating placeholder {i}: {gen_err}")
+                raise RuntimeError(f"🚨 Visual asset {i} is missing and no existing assets or fallback assets are available.")
 
 
 def get_section_map():

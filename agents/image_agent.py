@@ -2124,6 +2124,7 @@ def download_images_from_visual_plan(
                         used_hashes.add(file_hash)
 
                 print(f"OK - Visual {visual_number} verified (SigLIP 2 score {score:.4f} >= {RELEVANCE_THRESHOLD}) saved as {visual_number}.jpg")
+                print(f"🎬 [Visual {visual_number}] ✅ Attached: Stock Image ({candidate.get('source', 'Stock')}: {candidate.get('title', '')[:35]}) -> assets/{visual_number}.jpg")
                 try:
                     from semantic_broll_mapper import mark_asset_used
                     if candidate.get("id"):
@@ -2132,25 +2133,54 @@ def download_images_from_visual_plan(
                     pass
                 break
 
+        # 2b. Broadened query retry if initial stock searches found 0 matches
+        if not destination.exists():
+            clean_broad = re.sub(r"^(?:\d+[\.\:\-]\s*|(?:visual|scene|shot)\s*\d*[\.\:\-]?\s*)", "", str(primary_q), flags=re.IGNORECASE).strip()
+            broad_words = [w for w in clean_broad.split() if len(w) > 2]
+            if len(broad_words) >= 2:
+                broad_q = " ".join(broad_words[:2])
+                print(f"🔄 [Visual {visual_number}] Broadening search query to: '{broad_q}'...")
+                b_candidates = collect_candidates([broad_q], orientation=orientation)
+                for b_cand in b_candidates:
+                    cand_url = b_cand.get("image_url")
+                    if not cand_url or cand_url in claimed_urls:
+                        continue
+                    with hash_lock:
+                        claimed_urls.add(cand_url)
+                    if download_image(b_cand, destination):
+                        file_hash = image_hash(destination)
+                        with hash_lock:
+                            if file_hash and file_hash not in used_hashes:
+                                used_hashes.add(file_hash)
+                                print(f"🎬 [Visual {visual_number}] ✅ Attached (Broadened Search): {b_cand.get('source', 'Stock')} -> assets/{visual_number}.jpg")
+                                break
+                            else:
+                                destination.unlink(missing_ok=True)
+                                claimed_urls.discard(cand_url)
+                    else:
+                        with hash_lock:
+                            claimed_urls.discard(cand_url)
+
         # 3. Pollinations.ai FLUX AI Generative Fallback (Tailored directly to the specific scene)
         if not destination.exists():
             try:
                 from providers.image import generate_pollinations_image
                 is_expl = generation_mode in ("explainer", "Explainer Style", "📊 Explainer Style")
                 flux_prompt = rewrite_query_for_flux(f"{primary_q} {assigned_narration[:80]}", is_explainer=is_expl)
-                print(f"✨ Sourcing Pollinations FLUX AI visual for Scene {visual_number}: '{flux_prompt[:70]}...'")
+                print(f"🎨 [Visual {visual_number}] Sourcing Pollinations FLUX AI visual: '{flux_prompt[:60]}...'")
                 if generate_pollinations_image(flux_prompt, destination, aspect_ratio=aspect_ratio):
                     file_hash = image_hash(destination)
                     with hash_lock:
                         if file_hash and file_hash not in used_hashes:
                             used_hashes.add(file_hash)
-                            print(f"✅ Generated Pollinations FLUX image accepted for Visual {visual_number}: assets/{visual_number}.jpg")
+                            print(f"🎨 [Visual {visual_number}] ✅ Attached: Pollinations FLUX AI -> assets/{visual_number}.jpg")
                         elif file_hash in used_hashes:
                             destination.unlink(missing_ok=True)
             except Exception as ai_err:
                 print(f"Pollinations AI fallback notice for Visual {visual_number}: {ai_err}")
 
         if has_video and video_dest.exists():
+            print(f"🎬 [Visual {visual_number}] ✅ Attached: Video Clip -> assets/{visual_number}.mp4")
             return visual_number, video_dest
         elif destination.exists():
             return visual_number, destination
@@ -2224,41 +2254,48 @@ def download_images_from_visual_plan(
                 if results_map:
                     first_valid = next(iter(results_map.values()))
                     if first_valid.suffix.lower() in (".mp4", ".mov", ".webm"):
-                        if not extract_video_frame(first_valid, dest):
-                            img = Image.new("RGB", (1280, 720), color=(25, 30, 45))
-                            img.save(dest, "JPEG", quality=90)
+                        extract_video_frame(first_valid, dest)
                     else:
                         shutil.copyfile(first_valid, dest)
+                    results_map[num] = dest
                 elif flyer_path and save_flyer_fallback(flyer_path, dest):
-                    pass
-                else:
-                    img = Image.new("RGB", (1280, 720), color=(25, 30, 45))
-                    img.save(dest, "JPEG", quality=90)
-                results_map[num] = dest
-
-    final_images = [results_map[num] for num in range(1, target_count + 1)]
-
+                    results_map[num] = dest
 
     # ========================================================
-    # FINAL VALIDATION
+    # HARD NON-EMPTY VERIFICATION CHECK (Section 10a)
     # ========================================================
-
+    valid_count = 0
+    missing_indices = []
     for number in range(1, target_count + 1):
-        path = ASSETS_DIR / f"{number}.jpg"
-        vid_path = ASSETS_DIR / f"{number}.mp4"
-        if not path.exists() or path.stat().st_size == 0:
-            if vid_path.exists():
-                extract_video_frame(vid_path, path)
-            if not path.exists() or path.stat().st_size == 0:
-                if fallback_pool_images:
-                    src_fallback = fallback_pool_images[(number - 1) % len(fallback_pool_images)]
-                    import shutil
-                    shutil.copyfile(src_fallback, path)
-                    print(f"[Self-Healing] Sourced missing {number}.jpg from fallback {get_image_filename(src_fallback)}")
-                else:
-                    img = Image.new("RGB", (1280, 720), color=(25, 30, 45))
-                    img.save(path, "JPEG", quality=90)
-                    print(f"[Self-Healing] Created placeholder for missing {number}.jpg")
+        jpg_file = ASSETS_DIR / f"{number}.jpg"
+        mp4_file = ASSETS_DIR / f"{number}.mp4"
+        is_valid = False
+        if mp4_file.exists() and mp4_file.stat().st_size > 10000:
+            is_valid = True
+            if not jpg_file.exists() or jpg_file.stat().st_size == 0:
+                extract_video_frame(mp4_file, jpg_file)
+        elif jpg_file.exists() and jpg_file.stat().st_size > 4000:
+            try:
+                with Image.open(jpg_file) as img_test:
+                    img_test.verify()
+                is_valid = True
+            except Exception:
+                is_valid = False
+
+        if is_valid:
+            valid_count += 1
+        else:
+            missing_indices.append(number)
+
+    print(f"📊 Visual Verification Audit: {valid_count}/{target_count} real visual assets verified.")
+    if valid_count == 0 or missing_indices:
+        err_msg = (
+            f"🚨 Visual asset generation failed: {len(missing_indices)} scene(s) {missing_indices} "
+            f"have no valid visual assets ({valid_count}/{target_count} valid). "
+            f"Video creation aborted to trigger supervisor topic retry."
+        )
+        print(err_msg)
+        raise RuntimeError(err_msg)
 
     final_images = [
         ASSETS_DIR / f"{number}.jpg"

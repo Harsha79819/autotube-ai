@@ -10,12 +10,14 @@ Supports:
 
 import os
 import re
+import time
 import html
 import json
 import urllib.parse
 import requests
 from pathlib import Path
 from PIL import Image
+from providers.tracker import record_call
 
 REQUEST_TIMEOUT = 7
 USER_AGENT = (
@@ -47,7 +49,7 @@ def search_pexels_photos(query, pexels_key=None, orientation="landscape", per_pa
         results = []
         for photo in data.get("photos", []):
             src = photo.get("src", {})
-            img_url = src.get("large2x") or src.get("large") or src.get("original")
+            img_url = src.get("large2x") or src.get("original") or src.get("large")
             if img_url:
                 results.append({
                     "title": photo.get("alt") or query,
@@ -341,14 +343,16 @@ def search_pixabay(query, orientation="horizontal", max_results=8):
         data = resp.json()
         results = []
         for hit in data.get("hits", []):
-            img_url = hit.get("largeImageURL") or hit.get("webformatURL")
+            img_url = hit.get("largeImageURL") or hit.get("fullHDURL") or hit.get("imageURL")
+            if not img_url and hit.get("imageWidth", 0) >= 1280:
+                img_url = hit.get("webformatURL")
             if img_url:
                 results.append({
                     "title": hit.get("tags") or query,
                     "image_url": img_url,
                     "source": "pixabay",
-                    "width": hit.get("imageWidth", 1280),
-                    "height": hit.get("imageHeight", 720),
+                    "width": hit.get("imageWidth", 1920),
+                    "height": hit.get("imageHeight", 1080),
                 })
         return results
     except Exception as err:
@@ -360,28 +364,33 @@ def search_pixabay(query, orientation="horizontal", max_results=8):
 # 5. POLLINATIONS.AI FLUX GENERATIVE FALLBACK (100% FREE AI)
 # ------------------------------------------------------------
 
-def generate_pollinations_image(prompt, destination_path, width=1080, height=1080, aspect_ratio="1:1"):
+def generate_pollinations_image(prompt, destination_path, width=1080, height=1080, aspect_ratio="9:16"):
     """
     Generate an ultra-photorealistic FLUX AI image via Pollinations.ai on-the-fly.
     Used when stock photo databases have 0 matches for abstract or rare topics.
     Zero API key required, 100% free.
+    Standardized resolutions: 768x1344 (9:16 portrait), 1344x768 (16:9 landscape), 1024x1024 (1:1 square).
     """
     if aspect_ratio == "9:16":
-        w, h = 720, 1280
+        w, h = 768, 1344
     elif aspect_ratio == "16:9":
-        w, h = 1280, 720
+        w, h = 1344, 768
+    elif aspect_ratio == "1:1":
+        w, h = 1024, 1024
     else:
         w, h = width, height
 
     clean_prompt = re.sub(r"[^a-zA-Z0-9\s,.-]", " ", prompt).strip()
     enhanced_prompt = f"{clean_prompt}, cinematic lighting, photorealistic, 8k, detailed documentary style, hyperrealistic"
     encoded = urllib.parse.quote(enhanced_prompt[:250])
-    
+
     url = f"https://image.pollinations.ai/prompt/{encoded}?width={w}&height={h}&nologo=true&model=flux"
-    
+
+    t0 = time.time()
     try:
-        print(f"🎨 Generating FLUX AI image via Pollinations for: '{prompt[:45]}...'")
-        resp = requests.get(url, timeout=16, headers={"User-Agent": USER_AGENT})
+        print(f"🎨 Generating FLUX AI image via Pollinations for: '{prompt[:45]}...' ({w}x{h})")
+        resp = requests.get(url, timeout=22, headers={"User-Agent": USER_AGENT})
+        dur_ms = (time.time() - t0) * 1000
         if resp.status_code == 200 and len(resp.content) > 5000:
             dest = Path(destination_path)
             dest.parent.mkdir(parents=True, exist_ok=True)
@@ -389,9 +398,14 @@ def generate_pollinations_image(prompt, destination_path, width=1080, height=108
             # Verify valid image with PIL
             with Image.open(dest) as img:
                 img.verify()
-            print(f"✅ Generated and verified Pollinations FLUX image: {destination_path}")
+            print(f"✅ Generated and verified Pollinations FLUX image in {dur_ms:.0f}ms: {destination_path}")
+            record_call("pollinations", True, duration_ms=dur_ms)
             return True
+        else:
+            record_call("pollinations", False, error=f"HTTP {resp.status_code}", duration_ms=dur_ms)
     except Exception as e:
+        dur_ms = (time.time() - t0) * 1000
+        record_call("pollinations", False, error=str(e), duration_ms=dur_ms)
         print(f"⚠️ Pollinations generative AI notice: {e}")
     return False
 

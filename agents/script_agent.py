@@ -846,7 +846,23 @@ SCRIPT & DURATION:
 
 {duration_guidelines}
 
-- Start with a strong professional hook.
+- CURIOSITY-GAP HOOK RULE (First 2-3 seconds):
+  The opening line (Beat 1) must NEVER be a flat statement like "Today we are talking about X" or "X just announced Y".
+  It MUST be an irresistible curiosity-gap question or shocking claim that stops the viewer from scrolling!
+  Few-Shot Hook Examples:
+  * "Did Samsung just fix the single biggest flaw in the new Galaxy S27?"
+  * "What if a budget phone packed the exact same flagship storage as a ₹1,00,000 Ultra?"
+  * "Is this massive 6000mAh battery about to make daily charging completely obsolete?"
+  Follow this exact high-retention hook style!
+
+- DYNAMIC KEY SPEC TAGGING:
+  Wrap standout specs, numbers, capacities, and model names in double asterisks so our video subtitle engine can dynamically highlight them on-screen with custom emphasis (e.g. **6000mAh**, **120Hz**, **UFS 5.1**, **Galaxy S27**, **₹19,999**, **12GB RAM**).
+
+- STRONG ACTIONABLE CTA (Final beat):
+  Do NOT end with generic pleasantries like "subscribe and comment below".
+  End with a concrete, answerable question tied directly to the topic!
+  Examples: "Would you upgrade for this camera, or is your current phone still good enough? Tell me below!" or "Is ₹25,000 worth it for this chip? Drop your thoughts!"
+
 - Explain the topic clearly.
 - Use natural spoken sentences.
 - Maintain logical flow.
@@ -854,7 +870,7 @@ SCRIPT & DURATION:
 - For education, explain concepts simply.
 - For entertainment, remain engaging and original.
 - End with a concise conclusion.
-- No markdown.
+- No markdown inside narration except for the **key spec** highlights.
 - No bullet points inside the narration.
 - No camera directions.
 - No sound effects.
@@ -938,6 +954,27 @@ SECTION N | VISUAL N
 VISUAL: <Primary Query> | <Alternative Query> | <Fallback B-Roll>
 NARRATION: <narration strictly discussing this visual>
 """
+
+    fallback_title = default_title
+    if not fallback_title and isinstance(topic, str) and len(topic.strip()) <= 120 and "\n" not in topic:
+        fallback_title = topic.strip()
+
+    # 1. Multi-Provider Cascade (Gemini -> Groq -> OpenRouter)
+    try:
+        from providers.llm import generate_text_cascade
+        raw_cascade_text = generate_text_cascade(prompt, step_name="script")
+        clean_cascade_text = clean_response(raw_cascade_text)
+        if len(clean_cascade_text) >= 300:
+            cascade_script = _parse_and_save_package(clean_cascade_text, default_title=fallback_title)
+            if cascade_script:
+                print()
+                print("=" * 60)
+                print("MULTI-PROVIDER SCRIPT GENERATION SUCCESSFUL")
+                print("=" * 60)
+                print()
+                return cascade_script
+    except Exception as cascade_err:
+        print(f"Multi-provider LLM cascade notice: {cascade_err}. Falling back to standard model loop...")
 
     model_errors = []
 

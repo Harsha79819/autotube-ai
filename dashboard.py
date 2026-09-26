@@ -39,17 +39,27 @@ UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 # ============================================================
 
 VOICE_IDS = {
-    "👨 Mohan (Telugu Male Anchor) - Edge-TTS": "te-IN-MohanNeural",
-    "👩 Shruti (Telugu Female Anchor) - Edge-TTS": "te-IN-ShrutiNeural",
+    "👨 Adam (Male Creator) - Fast, Crisp & Natural": "am_adam",
+    "👩 Heart (Female Creator) - Smooth & Conversational": "af_heart",
+    "👨 Michael (News Anchor) - Professional & Authoritative": "am_michael",
+    "👩 Bella (Warm Female) - Expressive & Storytelling": "af_bella",
+    "🎙️ OmniVoice Presenter (Zero-Shot AI Voice Design)": "omnivoice",
+    "🤖 Clone My Voice with AI (Local XTTS-v2 / OmniVoice)": "clone",
+    "🎙️ Use My Own Voice Recording (Upload Audio)": "own_recording",
+    "👨 Mohan (Telugu Male Anchor) - Edge-TTS (Fallback)": "te-IN-MohanNeural",
+    "👩 Shruti (Telugu Female Anchor) - Edge-TTS (Fallback)": "te-IN-ShrutiNeural",
+    "👨 Madhur (Hindi Male Anchor) - Edge-TTS (Fallback)": "hi-IN-MadhurNeural",
+    "👩 Swara (Hindi Female Anchor) - Edge-TTS (Fallback)": "hi-IN-SwaraNeural",
+    # Legacy/direct alias matches
     "👨 Adam (Male Creator) - Fast & Crisp": "am_adam",
     "👨 Michael (News Anchor) - Professional": "am_michael",
     "👩 Heart (Female Creator) - Smooth": "af_heart",
     "👩 Bella (Warm Female) - Storytelling": "af_bella",
+    "👨 Mohan (Telugu Male Anchor) - Edge-TTS": "te-IN-MohanNeural",
+    "👩 Shruti (Telugu Female Anchor) - Edge-TTS": "te-IN-ShrutiNeural",
     "👨 Madhur (Hindi Male Anchor) - Edge-TTS": "hi-IN-MadhurNeural",
     "👩 Swara (Hindi Female Anchor) - Edge-TTS": "hi-IN-SwaraNeural",
-    "🎙️ Use My Own Voice Recording (Upload Audio)": "own_recording",
-    "🤖 Clone My Voice with AI (Local XTTS-v2)": "clone",
-    # Direct alias matches
+    "omnivoice": "omnivoice",
     "te-in-mohanneural": "te-IN-MohanNeural",
     "te-in-shrutineural": "te-IN-ShrutiNeural",
     "hi-in-madhurneural": "hi-IN-MadhurNeural",
@@ -68,12 +78,18 @@ VOICE_IDS = {
     "am_michael": "am_michael",
     "af_heart": "af_heart",
     "af_bella": "af_bella",
-    # Legacy fallbacks
     "Creator Voice": "am_adam",
     "English Female": "af_heart",
 }
 
 VOICE_TUNING = {
+    "👨 Adam (Male Creator) - Fast, Crisp & Natural": ("-5%", "+0Hz"),
+    "👩 Heart (Female Creator) - Smooth & Conversational": ("-5%", "+0Hz"),
+    "👨 Michael (News Anchor) - Professional & Authoritative": ("-5%", "+0Hz"),
+    "👩 Bella (Warm Female) - Expressive & Storytelling": ("-5%", "+0Hz"),
+    "🎙️ OmniVoice Presenter (Zero-Shot AI Voice Design)": ("+0%", "+0Hz"),
+    "👨 Mohan (Telugu Male Anchor) - Edge-TTS (Fallback)": ("+0%", "+0Hz"),
+    "👩 Shruti (Telugu Female Anchor) - Edge-TTS (Fallback)": ("+0%", "+0Hz"),
     "👨 Mohan (Telugu Male Anchor) - Edge-TTS": ("+0%", "+0Hz"),
     "👩 Shruti (Telugu Female Anchor) - Edge-TTS": ("+0%", "+0Hz"),
     "👨 Adam (Male Creator) - Fast & Crisp": ("-5%", "+0Hz"),
@@ -326,23 +342,19 @@ def download_visuals(
     )
     from agents.video_agent import ensure_visual_assets_exist
 
-    try:
-        res = download_images_from_visual_plan(
-            visual_plan_file,
-            flyer_path=flyer_path,
-            feedback=feedback,
-            aspect_ratio=aspect_ratio,
-            generation_mode=generation_mode,
-            user_assets=user_assets,
-            *args,
-            **kwargs,
-        )
-    except Exception as err:
-        print(f"Visual plan download note: {err}. Triggering self-healing fallback...")
-        ensure_visual_assets_exist()
-        res = []
-
-    ensure_visual_assets_exist()
+    res = download_images_from_visual_plan(
+        visual_plan_file,
+        flyer_path=flyer_path,
+        feedback=feedback,
+        aspect_ratio=aspect_ratio,
+        generation_mode=generation_mode,
+        user_assets=user_assets,
+        *args,
+        **kwargs,
+    )
+    if not res:
+        raise RuntimeError("No visual assets were returned by image agent.")
+    ensure_visual_assets_exist(needed_count=len(res))
     return res
 
 
@@ -1736,229 +1748,10 @@ render_logout_button()
 # GLASS UI CSS
 # ============================================================
 
-st.markdown(
-    """
-<style>
+from liquid_ui import inject_hud_glass_css, render_provider_audit_card
 
-.stApp {
-    background:
-        radial-gradient(circle at 15% 10%, rgba(88, 70, 180, 0.18), transparent 30%),
-        radial-gradient(circle at 85% 15%, rgba(0, 180, 255, 0.12), transparent 28%),
-        #0B0F17;
-    color: #F5F7FA;
-}
+inject_hud_glass_css()
 
-.block-container {
-    max-width: 1450px;
-    padding-top: 2rem;
-    padding-bottom: 4rem;
-}
-
-header[data-testid="stHeader"] {
-    background: transparent;
-}
-
-section[data-testid="stSidebar"] {
-    background: rgba(11, 15, 23, 0.96);
-    border-right: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-/* Glass cards */
-
-.glass-card {
-    background: rgba(255,255,255,0.055);
-    border: 1px solid rgba(255,255,255,0.10);
-    border-radius: 18px;
-    padding: 24px;
-    backdrop-filter: blur(18px);
-    -webkit-backdrop-filter: blur(18px);
-    box-shadow:
-        0 20px 60px rgba(0,0,0,0.30),
-        inset 0 1px 0 rgba(255,255,255,0.06);
-    margin-bottom: 18px;
-}
-
-/* Header */
-
-.brand {
-    font-size: 30px;
-    font-weight: 800;
-    letter-spacing: -1px;
-}
-
-.brand span {
-    background: linear-gradient(90deg,#8B5CF6,#22D3EE);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-}
-
-.status {
-    display: inline-block;
-    padding: 7px 12px;
-    margin-left: 7px;
-    border-radius: 999px;
-    background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.10);
-    font-size: 12px;
-    color: #CBD5E1;
-}
-
-/* Hero */
-
-.hero-title {
-    font-size: 46px;
-    line-height: 1.05;
-    font-weight: 850;
-    letter-spacing: -2px;
-    margin-top: 20px;
-}
-
-.hero-gradient {
-    background: linear-gradient(
-        90deg,
-        #FFFFFF 0%,
-        #A78BFA 45%,
-        #22D3EE 100%
-    );
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-}
-
-.hero-subtitle {
-    color: #94A3B8;
-    font-size: 17px;
-    margin-top: 12px;
-    margin-bottom: 30px;
-}
-
-/* Section titles */
-
-.section-title {
-    font-size: 20px;
-    font-weight: 750;
-    margin-bottom: 5px;
-}
-
-.section-subtitle {
-    color: #94A3B8;
-    font-size: 13px;
-    margin-bottom: 18px;
-}
-
-/* Streamlit inputs */
-
-div[data-baseweb="input"] > div,
-div[data-baseweb="select"] > div,
-textarea {
-    background: rgba(255,255,255,0.045) !important;
-    border: 1px solid rgba(255,255,255,0.10) !important;
-    border-radius: 12px !important;
-    color: white !important;
-}
-
-label {
-    color: #CBD5E1 !important;
-}
-
-/* Buttons */
-
-.stButton > button {
-    width: 100%;
-    border-radius: 13px;
-    border: 1px solid rgba(139,92,246,0.55);
-    background: linear-gradient(
-        135deg,
-        rgba(139,92,246,0.90),
-        rgba(34,211,238,0.78)
-    );
-    color: white;
-    font-weight: 750;
-    min-height: 48px;
-    box-shadow: 0 10px 30px rgba(91,70,180,0.25);
-    transition: all 0.2s ease;
-}
-
-.stButton > button:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 15px 40px rgba(34,211,238,0.22);
-}
-
-/* Pipeline */
-
-.pipeline {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    margin-top: 15px;
-    overflow-x: auto;
-}
-
-.pipeline-step {
-    min-width: 105px;
-    text-align: center;
-    padding: 13px 10px;
-    border-radius: 14px;
-    background: rgba(255,255,255,0.045);
-    border: 1px solid rgba(255,255,255,0.08);
-}
-
-.pipeline-icon {
-    font-size: 21px;
-}
-
-.pipeline-name {
-    font-size: 11px;
-    color: #CBD5E1;
-    margin-top: 5px;
-}
-
-.pipeline-arrow {
-    color: #64748B;
-    font-size: 18px;
-}
-
-/* Chips */
-
-.chip {
-    display: inline-block;
-    padding: 7px 11px;
-    margin-right: 6px;
-    border-radius: 999px;
-    background: rgba(255,255,255,0.055);
-    border: 1px solid rgba(255,255,255,0.08);
-    color: #CBD5E1;
-    font-size: 12px;
-}
-
-/* Success */
-
-.success-box {
-    padding: 16px;
-    border-radius: 14px;
-    background: rgba(34,197,94,0.08);
-    border: 1px solid rgba(34,197,94,0.25);
-    color: #BBF7D0;
-}
-
-/* Responsive */
-
-@media (max-width: 900px) {
-
-    .hero-title {
-        font-size: 34px;
-    }
-
-    .pipeline {
-        justify-content: flex-start;
-    }
-
-}
-
-</style>
-""",
-    unsafe_allow_html=True,
-)
 
 
 # ============================================================
@@ -2359,16 +2152,17 @@ with tab_manual:
         voice_samples_dir.mkdir(parents=True, exist_ok=True)
 
         voice_options = [
-            "👨 Mohan (Telugu Male Anchor) - Edge-TTS",
-            "👩 Shruti (Telugu Female Anchor) - Edge-TTS",
-            "👨 Adam (Male Creator) - Fast & Crisp",
-            "👨 Michael (News Anchor) - Professional",
-            "👩 Heart (Female Creator) - Smooth",
-            "👩 Bella (Warm Female) - Storytelling",
-            "👨 Madhur (Hindi Male Anchor) - Edge-TTS",
-            "👩 Swara (Hindi Female Anchor) - Edge-TTS",
+            "👨 Adam (Male Creator) - Fast, Crisp & Natural",
+            "👩 Heart (Female Creator) - Smooth & Conversational",
+            "👨 Michael (News Anchor) - Professional & Authoritative",
+            "👩 Bella (Warm Female) - Expressive & Storytelling",
+            "🎙️ OmniVoice Presenter (Zero-Shot AI Voice Design)",
+            "🤖 Clone My Voice with AI (Local XTTS-v2 / OmniVoice)",
             "🎙️ Use My Own Voice Recording (Upload Audio)",
-            "🤖 Clone My Voice with AI (Local XTTS-v2)",
+            "👨 Mohan (Telugu Male Anchor) - Edge-TTS (Fallback)",
+            "👩 Shruti (Telugu Female Anchor) - Edge-TTS (Fallback)",
+            "👨 Madhur (Hindi Male Anchor) - Edge-TTS (Fallback)",
+            "👩 Swara (Hindi Female Anchor) - Edge-TTS (Fallback)",
         ]
 
         voice = st.selectbox(
@@ -3342,6 +3136,9 @@ with tab_manual:
                     st.caption(f"🎧 **Audio Audit Details:** {r_audio.get('feedback')}")
             except Exception:
                 pass
+
+        # Multi-Provider Execution Telemetry Audit
+        render_provider_audit_card()
 
         # ----------------------------------------------------
         # VISUAL SCENES & MANUAL OVERRIDE (SAFETY NET)
