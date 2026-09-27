@@ -421,9 +421,9 @@ def get_channel_credential_paths(channel="Channel 1 (Primary)"):
     if is_ch2:
         token_path = "token_channel2.json"
         candidate_secrets = [
-            "client_secret 2.json",
             "client_secret_channel2.json",
             "client_secret.json",
+            "client_secret 2.json",
         ]
     else:
         token_path = "token.json" if os.path.exists("token.json") or not os.path.exists("token_channel1.json") else "token_channel1.json"

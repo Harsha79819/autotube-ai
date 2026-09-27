@@ -26,10 +26,9 @@ def reauth(channel=1):
     if is_ch2:
         token_path = Path("token_channel2.json")
         candidate_secrets = [
-            Path("client_secret 2.json"),
             Path("client_secret_channel2.json"),
             Path("client_secret.json"),
-            Path(__file__).parent.parent / "client_secret 2.json",
+            Path("client_secret 2.json"),
             Path(__file__).parent.parent / "client_secret.json",
         ]
     else:
