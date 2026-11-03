@@ -1,0 +1,1099 @@
+{
+  "entities": [
+    {
+      "id": "apoorva_tungaturthy",
+      "canonical_name": "Apoorva",
+      "category": "entertainment",
+      "aliases": [
+        "Apoorva",
+        "అపూర్వ",
+        "Apoorva Tungaturthy",
+        "Apoorva Tungaturi",
+        "Anchor Apoorva",
+        "Apoorva Bigg Boss"
+      ],
+      "wikidata_id": null,
+      "search_terms": [
+        "Apoorva Bigg Boss Telugu",
+        "Apoorva Tungaturthy",
+        "Apoorva Tungaturi",
+        "Anchor Apoorva"
+      ]
+    },
+    {
+      "id": "shiv_contestant",
+      "canonical_name": "Shiv",
+      "category": "entertainment",
+      "aliases": [
+        "Shiv",
+        "శివ్",
+        "Shiva",
+        "శివ",
+        "Anchor Shiva"
+      ],
+      "wikidata_id": null,
+      "search_terms": [
+        "Shiv Bigg Boss Telugu",
+        "Shiv contestant",
+        "Anchor Shiva"
+      ]
+    },
+    {
+      "id": "thrigun_adith",
+      "canonical_name": "Thrigun",
+      "category": "entertainment",
+      "aliases": [
+        "Thrigun",
+        "Trigun",
+        "త్రిగుణ్",
+        "త్రిగన్",
+        "Adith Arun",
+        "Adith Eswaran",
+        "Actor Thrigun"
+      ],
+      "wikidata_id": null,
+      "search_terms": [
+        "Thrigun Telugu actor",
+        "Adith Arun actor",
+        "Thrigun Bigg Boss Telugu"
+      ]
+    },
+    {
+      "id": "aman_masud",
+      "canonical_name": "Aman",
+      "category": "entertainment",
+      "aliases": [
+        "Aman",
+        "ఆమన్",
+        "అమన్",
+        "Aman Masud",
+        "Aman Deep"
+      ],
+      "wikidata_id": null,
+      "search_terms": [
+        "Aman Masud Bigg Boss Telugu",
+        "Aman Masud model",
+        "Aman Bigg Boss"
+      ]
+    },
+    {
+      "id": "gundeboina_jhansi",
+      "canonical_name": "Gundeboina Jhansi",
+      "category": "entertainment",
+      "aliases": [
+        "Singer Jhansi",
+        "గూడెంబోయిన ఝాన్సీ",
+        "Gundeboina Jhansi",
+        "గాయని ఝాన్సీ",
+        "Jhansi",
+        "ఝాన్సీ"
+      ],
+      "wikidata_id": null,
+      "search_terms": [
+        "Gundeboina Jhansi Singer",
+        "Singer Jhansi Bigg Boss Telugu 10",
+        "Gundeboina Jhansi"
+      ],
+      "clash_terms": [
+        "anchor jhansi",
+        "ఝాన్సీ యాంకర్",
+        "jhansi fort",
+        "rani lakshmibai"
+      ]
+    },
+    {
+      "id": "varshini_sounderajan",
+      "canonical_name": "Varshini",
+      "category": "entertainment",
+      "aliases": [
+        "Varshini",
+        "వర్షిణి",
+        "Varshini Sounderajan",
+        "Anchor Varshini"
+      ],
+      "wikidata_id": null,
+      "search_terms": [
+        "Varshini Sounderajan",
+        "Varshini Bigg Boss Telugu"
+      ]
+    },
+    {
+      "id": "mukesh_gowda",
+      "canonical_name": "Mukesh",
+      "category": "entertainment",
+      "aliases": [
+        "Mukesh",
+        "ముకేష్",
+        "Mukesh Gowda"
+      ],
+      "wikidata_id": null,
+      "search_terms": [
+        "Mukesh Gowda actor",
+        "Mukesh Bigg Boss Telugu"
+      ]
+    },
+    {
+      "id": "shalini_contestant",
+      "canonical_name": "Shalini Patel",
+      "category": "entertainment",
+      "aliases": [
+        "Shalini Patel",
+        "Shalini",
+        "శాలిని పటేల్",
+        "శాలిని",
+        "Shalini Contestant",
+        "Shalini Damera"
+      ],
+      "wikidata_id": null,
+      "search_terms": [
+        "Shalini Patel bigg boss",
+        "Shalini Patel",
+        "Shalini Bigg Boss Telugu 10",
+        "Shalini contestant"
+      ]
+    },
+    {
+      "id": "temper_vamsi",
+      "canonical_name": "Temper Vamsi",
+      "category": "entertainment",
+      "aliases": [
+        "Temper Vamsi",
+        "టెంపర్ వంశీ",
+        "Vamsi",
+        "Temper Vamsi actor"
+      ],
+      "wikidata_id": null,
+      "search_terms": [
+        "Temper Vamsi actor",
+        "Temper Vamsi bigg boss",
+        "Temper Vamsi"
+      ]
+    },
+    {
+      "id": "nagarjuna_akkineni",
+      "canonical_name": "Nagarjuna Akkineni",
+      "category": "entertainment",
+      "aliases": [
+        "Nagarjuna",
+        "King Nagarjuna",
+        "నాగార్జున",
+        "అక్కినేని నాగార్జున",
+        "Bigg Boss Host"
+      ],
+      "wikidata_id": "Q3345031",
+      "search_terms": [
+        "Nagarjuna Akkineni",
+        "Nagarjuna Bigg Boss Telugu",
+        "Akkineni Nagarjuna actor"
+      ],
+      "wiki_title": "Nagarjuna_(actor)",
+      "page_image_free": "Nagarjuna_Akkineni_at_ANR_Awards.jpg"
+    },
+    {
+      "id": "bigg_boss_telugu",
+      "canonical_name": "Bigg Boss Telugu",
+      "category": "entertainment",
+      "aliases": [
+        "Bigg Boss",
+        "Bigg Boss 10",
+        "Bigg Boss Telugu 10",
+        "బిగ్ బాస్",
+        "బిగ్‌బాస్",
+        "బిగ్బాస్",
+        "బిగ్ బాస్ తెలుగు",
+        "బిగ్ బాస్ 10",
+        "BB Telugu"
+      ],
+      "wikidata_id": "Q55719851",
+      "search_terms": [
+        "Bigg Boss Telugu stage logo",
+        "Bigg Boss Telugu eye logo",
+        "Bigg Boss Telugu set"
+      ],
+      "wiki_title": "Bigg_Boss_(Telugu_TV_series)",
+      "page_image_free": null
+    },
+    {
+      "id": "nikhil_maliyakkal",
+      "canonical_name": "Nikhil Maliyakkal",
+      "category": "entertainment",
+      "aliases": [
+        "Nikhil",
+        "నిఖిల్",
+        "Nikhil Bigg Boss",
+        "నిఖిల్ మలియక్కల్"
+      ],
+      "wikidata_id": null,
+      "search_terms": [
+        "Nikhil Maliyakkal Bigg Boss Telugu",
+        "Nikhil contestant Bigg Boss"
+      ]
+    },
+    {
+      "id": "prerana_kambam",
+      "canonical_name": "Prerana Kambam",
+      "category": "entertainment",
+      "aliases": [
+        "Prerana",
+        "ప్రేరణ",
+        "Prerana Bigg Boss",
+        "ప్రేరణ కంబం"
+      ],
+      "wikidata_id": null,
+      "search_terms": [
+        "Prerana Kambam Bigg Boss Telugu",
+        "Prerana contestant"
+      ]
+    },
+    {
+      "id": "yashmi_gowda",
+      "canonical_name": "Yashmi Gowda",
+      "category": "entertainment",
+      "aliases": [
+        "Yashmi",
+        "యష్మి",
+        "Yashmi Bigg Boss",
+        "యష్మి గౌడ"
+      ],
+      "wikidata_id": null,
+      "search_terms": [
+        "Yashmi Gowda Bigg Boss Telugu",
+        "Yashmi contestant"
+      ]
+    },
+    {
+      "id": "gautham_krishna",
+      "canonical_name": "Gautham Krishna",
+      "category": "entertainment",
+      "aliases": [
+        "Gautham",
+        "గౌతమ్",
+        "Dr Gautham",
+        "డాక్టర్ గౌతమ్",
+        "Gautham Bigg Boss"
+      ],
+      "wikidata_id": null,
+      "search_terms": [
+        "Gautham Krishna Bigg Boss Telugu",
+        "Gautham actor Bigg Boss"
+      ]
+    },
+    {
+      "id": "vishnu_priya",
+      "canonical_name": "Vishnu Priya Bhimeneni",
+      "category": "entertainment",
+      "aliases": [
+        "Vishnu Priya",
+        "విష్ణు ప్రియ",
+        "Anchor Vishnu Priya",
+        "విష్ణుప్రియ"
+      ],
+      "wikidata_id": null,
+      "search_terms": [
+        "Vishnu Priya anchor Bigg Boss Telugu",
+        "Vishnu Priya Bhimeneni"
+      ]
+    },
+    {
+      "id": "nabeel_afridi",
+      "canonical_name": "Nabeel Afridi",
+      "category": "entertainment",
+      "aliases": [
+        "Nabeel",
+        "నబీల్",
+        "Nabeel Bigg Boss",
+        "నబీల్ అఫ్రిది"
+      ],
+      "wikidata_id": null,
+      "search_terms": [
+        "Nabeel Afridi Bigg Boss Telugu",
+        "Nabeel contestant"
+      ]
+    },
+    {
+      "id": "avunash_rohini",
+      "canonical_name": "Mukku Avinash",
+      "category": "entertainment",
+      "aliases": [
+        "Avinash",
+        "అవినాష్",
+        "ముక్కు అవినాష్",
+        "Jabardasth Avinash"
+      ],
+      "wikidata_id": null,
+      "search_terms": [
+        "Mukku Avinash Bigg Boss Telugu",
+        "Avinash comedian"
+      ]
+    },
+    {
+      "id": "rohini_noni",
+      "canonical_name": "Rohini Noni",
+      "category": "entertainment",
+      "aliases": [
+        "Rohini",
+        "రోహిణి",
+        "రోహిణి నోని",
+        "Jabardasth Rohini"
+      ],
+      "wikidata_id": null,
+      "search_terms": [
+        "Rohini Noni Bigg Boss Telugu",
+        "Rohini comedian"
+      ]
+    },
+    {
+      "id": "mukesh_gowda",
+      "canonical_name": "Mukesh Gowda",
+      "category": "entertainment",
+      "aliases": [
+        "Mukesh Gowda",
+        "Mukesh",
+        "ముకేష్",
+        "ముకేష్ గౌడ",
+        "Mukesh BB",
+        "Mukesh Bigg Boss",
+        "MukShini"
+      ],
+      "wikidata_id": null,
+      "search_terms": [
+        "Mukesh Gowda Bigg Boss Telugu",
+        "Mukesh Gowda actor"
+      ]
+    },
+    {
+      "id": "varshini_sounderajan",
+      "canonical_name": "Varshini Sounderajan",
+      "category": "entertainment",
+      "aliases": [
+        "Varshini Sounderajan",
+        "Varshini",
+        "వర్షిణి",
+        "వర్షిణి సౌందరరాజన్",
+        "Anchor Varshini",
+        "Varshini Bigg Boss",
+        "MukShini"
+      ],
+      "wikidata_id": null,
+      "search_terms": [
+        "Varshini Sounderajan Bigg Boss Telugu",
+        "Anchor Varshini Bigg Boss",
+        "Varshini Sounderajan actress"
+      ]
+    },
+    {
+      "id": "rohit_patnam",
+      "canonical_name": "Rohit Patnam",
+      "category": "entertainment",
+      "aliases": [
+        "Rohit",
+        "రోహిత్",
+        "Rohit Patnam",
+        "Rohit Naidu",
+        "రోహిత్ పట్నం",
+        "రోహిత్ నాయుడు",
+        "Rohit Naidu Patnam",
+        "Rohit Bigg Boss"
+      ],
+      "wikidata_id": null,
+      "search_terms": [
+        "Rohit Patnam Bigg Boss Telugu 10",
+        "Rohit Naidu Bigg Boss Telugu 10",
+        "Rohit Patnam actor"
+      ],
+      "clash_terms": [
+        "rohit sahni",
+        "rohit sharma",
+        "cricket",
+        "hitman"
+      ]
+    },
+    {
+      "id": "sudheer_reddy",
+      "canonical_name": "Sudheer Reddy",
+      "category": "entertainment",
+      "aliases": [
+        "Sudheer",
+        "సుధీర్",
+        "Sudheer Reddy",
+        "Sudheer Talks",
+        "సుధీర్ రెడ్డి",
+        "సుధీర్ టాక్స్"
+      ],
+      "wikidata_id": null,
+      "search_terms": [
+        "Sudheer Reddy Sudheer Talks",
+        "Sudheer Talks Bigg Boss Telugu 10",
+        "Sudheer Reddy YouTuber"
+      ],
+      "clash_terms": [
+        "sudigali",
+        "సుడిగాలి",
+        "sudheer anand"
+      ]
+    },
+    {
+      "id": "sudigali_sudheer",
+      "canonical_name": "Sudigali Sudheer",
+      "category": "entertainment",
+      "aliases": [
+        "Sudigali Sudheer",
+        "సుడిగాలి సుధీర్"
+      ],
+      "wikidata_id": null,
+      "search_terms": [
+        "Sudigali Sudheer",
+        "Sudheer Telugu anchor comedy",
+        "Sudigali Sudheer actor"
+      ]
+    },
+    {
+      "id": "charan_bb",
+      "canonical_name": "Charan Mahadev",
+      "category": "entertainment",
+      "aliases": [
+        "Charan",
+        "చరణ్",
+        "Charan Mahadev",
+        "చరణ్ మహాదేవ్",
+        "Charan Bigg Boss",
+        "BB10 Charan"
+      ],
+      "wikidata_id": null,
+      "search_terms": [
+        "Charan Mahadev Bigg Boss Telugu 10",
+        "Charan Mahadev actor",
+        "Charan Telugu contestant"
+      ],
+      "clash_terms": [
+        "ram charan",
+        "ramcharan",
+        "konidela",
+        "rrr",
+        "game changer",
+        "gamechanger",
+        "sree vishnu",
+        "vishnu"
+      ]
+    },
+    {
+      "id": "prithviraj_shetty",
+      "canonical_name": "Prithviraj Shetty",
+      "category": "entertainment",
+      "aliases": [
+        "Prithviraj",
+        "Prithvi",
+        "పృథ్వి",
+        "పృథ్విరాజ్",
+        "Prithvi Bigg Boss"
+      ],
+      "wikidata_id": null,
+      "search_terms": [
+        "Prithvi Bigg Boss Telugu",
+        "Prithviraj Shetty actor"
+      ]
+    },
+    {
+      "id": "soniya_akula",
+      "canonical_name": "Soniya Akula",
+      "category": "entertainment",
+      "aliases": [
+        "Soniya Akula",
+        "Soniya",
+        "సోనియా",
+        "సోనియా ఆకుల",
+        "Soniya Bigg Boss"
+      ],
+      "wikidata_id": null,
+      "search_terms": [
+        "Soniya Akula Bigg Boss Telugu",
+        "Soniya contestant"
+      ]
+    },
+    {
+      "id": "kirrak_seetha",
+      "canonical_name": "Kirrak Seetha",
+      "category": "entertainment",
+      "aliases": [
+        "Kirrak Seetha",
+        "Seetha",
+        "సీత",
+        "కిర్రాక్ సీత",
+        "Seetha Bigg Boss"
+      ],
+      "wikidata_id": null,
+      "search_terms": [
+        "Kirrak Seetha Bigg Boss Telugu",
+        "Seetha actress Bigg Boss"
+      ]
+    },
+    {
+      "id": "bebakka_madhavi",
+      "canonical_name": "Bebakka",
+      "category": "entertainment",
+      "aliases": [
+        "Bebakka",
+        "బెబక్క",
+        "Madhavi Bebakka",
+        "Bebakka Bigg Boss"
+      ],
+      "wikidata_id": null,
+      "search_terms": [
+        "Bebakka Bigg Boss Telugu",
+        "Madhavi Bebakka"
+      ]
+    },
+    {
+      "id": "shekhar_basha",
+      "canonical_name": "Shekhar Basha",
+      "category": "entertainment",
+      "aliases": [
+        "Shekhar Basha",
+        "శేఖర్ బాషా",
+        "RJ Shekhar",
+        "Shekhar Bigg Boss"
+      ],
+      "wikidata_id": null,
+      "search_terms": [
+        "Shekhar Basha Bigg Boss Telugu",
+        "RJ Shekhar Basha"
+      ]
+    },
+    {
+      "id": "nainika_anashwara",
+      "canonical_name": "Nainika",
+      "category": "entertainment",
+      "aliases": [
+        "Nainika",
+        "నైనిక",
+        "Dancer Nainika",
+        "Nainika Bigg Boss"
+      ],
+      "wikidata_id": null,
+      "search_terms": [
+        "Nainika Bigg Boss Telugu",
+        "Nainika dancer"
+      ]
+    },
+    {
+      "id": "manikanta_dancer",
+      "canonical_name": "Manikanta",
+      "category": "entertainment",
+      "aliases": [
+        "Manikanta",
+        "మణికంఠ",
+        "Manikanta Bigg Boss"
+      ],
+      "wikidata_id": null,
+      "search_terms": [
+        "Manikanta Bigg Boss Telugu",
+        "Manikanta contestant"
+      ]
+    },
+    {
+      "id": "hari_teja",
+      "canonical_name": "Hari Teja",
+      "category": "entertainment",
+      "aliases": [
+        "Hari Teja",
+        "హరితేజ",
+        "Hari Teja Bigg Boss"
+      ],
+      "wikidata_id": null,
+      "search_terms": [
+        "Hari Teja Bigg Boss Telugu",
+        "Hari Teja actress"
+      ]
+    },
+    {
+      "id": "gangavva",
+      "canonical_name": "Gangavva",
+      "category": "entertainment",
+      "aliases": [
+        "Gangavva",
+        "గంగవ్వ",
+        "Gangavva Bigg Boss"
+      ],
+      "wikidata_id": null,
+      "search_terms": [
+        "Gangavva Bigg Boss Telugu",
+        "Gangavva My Village Show"
+      ]
+    },
+    {
+      "id": "tasty_teja",
+      "canonical_name": "Tasty Teja",
+      "category": "entertainment",
+      "aliases": [
+        "Tasty Teja",
+        "టేస్టీ తేజ",
+        "Teja Bigg Boss"
+      ],
+      "wikidata_id": null,
+      "search_terms": [
+        "Tasty Teja Bigg Boss Telugu",
+        "Tasty Teja food vlogger"
+      ]
+    },
+    {
+      "id": "nayini_pavani",
+      "canonical_name": "Nayini Pavani",
+      "category": "entertainment",
+      "aliases": [
+        "Nayini Pavani",
+        "నాయని పావని",
+        "Pavani Bigg Boss"
+      ],
+      "wikidata_id": null,
+      "search_terms": [
+        "Nayini Pavani Bigg Boss Telugu",
+        "Nayini Pavani actress"
+      ]
+    },
+    {
+      "id": "mehboob_dilse",
+      "canonical_name": "Mehboob Dilse",
+      "category": "entertainment",
+      "aliases": [
+        "Mehboob",
+        "మెహబూబ్",
+        "Mehboob Dilse",
+        "Mehboob Bigg Boss"
+      ],
+      "wikidata_id": null,
+      "search_terms": [
+        "Mehboob Dilse Bigg Boss Telugu",
+        "Mehboob dancer Bigg Boss"
+      ]
+    },
+    {
+      "id": "jr_ntr",
+      "canonical_name": "N. T. Rama Rao Jr.",
+      "category": "cinema",
+      "aliases": [
+        "Jr NTR",
+        "Tarak",
+        "ఎన్టీఆర్",
+        "తారక్",
+        "జూనియర్ ఎన్టీఆర్",
+        "NTR Jr",
+        "Young Tiger NTR"
+      ],
+      "wikidata_id": "Q3498996",
+      "search_terms": [
+        "N. T. Rama Rao Jr.",
+        "Jr NTR Devara actor",
+        "Tarak Telugu cinema"
+      ],
+      "wiki_title": "N._T._Rama_Rao_Jr.",
+      "page_image_free": "NTR_Jr._(2026).jpg"
+    },
+    {
+      "id": "prabhas",
+      "canonical_name": "Prabhas",
+      "category": "cinema",
+      "aliases": [
+        "Prabhas Raju",
+        "ప్రభాస్",
+        "రెబల్ స్టార్",
+        "Rebel Star Prabhas",
+        "Kalki Prabhas"
+      ],
+      "wikidata_id": "Q3136554",
+      "search_terms": [
+        "Prabhas actor Telugu cinema",
+        "Prabhas Kalki 2898 AD",
+        "Prabhas portrait"
+      ],
+      "wiki_title": "Prabhas",
+      "page_image_free": "Prabhas_by_Gage_Skidmore.jpg"
+    },
+    {
+      "id": "allu_arjun",
+      "canonical_name": "Allu Arjun",
+      "category": "cinema",
+      "aliases": [
+        "Allu Arjun",
+        "Bunny",
+        "అల్లు అర్జున్",
+        "బన్నీ",
+        "పుష్ప రాజ్",
+        "Pushpa Raj",
+        "Icon Star"
+      ],
+      "wikidata_id": "Q642827",
+      "search_terms": [
+        "Allu Arjun actor",
+        "Allu Arjun Pushpa",
+        "Allu Arjun portrait"
+      ],
+      "wiki_title": "Allu_Arjun",
+      "page_image_free": "Allu_Arjun_at_Pushpa_2_The_Rule_meet.jpg"
+    },
+    {
+      "id": "mahesh_babu",
+      "canonical_name": "Mahesh Babu",
+      "category": "cinema",
+      "aliases": [
+        "Mahesh Babu",
+        "Superstar Mahesh",
+        "మహేష్ బాబు",
+        "సూపర్ స్టార్ మహేష్"
+      ],
+      "wikidata_id": "Q2087610",
+      "search_terms": [
+        "Mahesh Babu actor",
+        "Mahesh Babu portrait Telugu cinema"
+      ],
+      "wiki_title": "Mahesh_Babu",
+      "page_image_free": "Mahesh_Babu_in_Spyder_(cropped).jpg"
+    },
+    {
+      "id": "ram_charan",
+      "canonical_name": "Ram Charan",
+      "category": "cinema",
+      "aliases": [
+        "Ram Charan",
+        "Mega Power Star",
+        "రామ్ చరణ్",
+        "గేమ్ ఛేంజర్ రామ్ చరణ్"
+      ],
+      "wikidata_id": "Q3765047",
+      "search_terms": [
+        "Ram Charan actor",
+        "Ram Charan Game Changer",
+        "Ram Charan portrait"
+      ],
+      "wiki_title": "Ram_Charan",
+      "page_image_free": "Ram_Charan_at_Game_Changer_trailer_launch.jpg"
+    },
+    {
+      "id": "ss_rajamouli",
+      "canonical_name": "S. S. Rajamouli",
+      "category": "cinema",
+      "aliases": [
+        "SS Rajamouli",
+        "Rajamouli",
+        "రాజమౌళి",
+        "ఎస్ ఎస్ రాజమౌళి",
+        "Jakkanna",
+        "జక్కన్న"
+      ],
+      "wikidata_id": "Q3521531",
+      "search_terms": [
+        "S. S. Rajamouli director",
+        "Rajamouli Telugu cinema"
+      ],
+      "wiki_title": "S._S._Rajamouli",
+      "page_image_free": "SS_Rajamouli,_2021.jpg"
+    },
+    {
+      "id": "devara_movie",
+      "canonical_name": "Devara: Part 1",
+      "category": "cinema",
+      "aliases": [
+        "Devara",
+        "దేవర",
+        "Devara Part 1",
+        "దేవర సినిమా",
+        "Devara Box Office"
+      ],
+      "disallow_terms": [
+        "deverakonda",
+        "devarakonda",
+        "దేవరకొండ",
+        "vijay devarakonda",
+        "vijay deverakonda",
+        "విజయ్ దేవరకొండ"
+      ],
+      "wikidata_id": "Q118502010",
+      "search_terms": [
+        "Devara film poster",
+        "Devara movie still Jr NTR",
+        "Devara Part 1"
+      ],
+      "wiki_title": "Devara:_Part_1",
+      "page_image_free": null
+    },
+    {
+      "id": "pushpa_2_movie",
+      "canonical_name": "Pushpa 2: The Rule",
+      "category": "cinema",
+      "aliases": [
+        "Pushpa 2",
+        "పుష్ప 2",
+        "Pushpa The Rule",
+        "పుష్ప ది రూల్"
+      ],
+      "wikidata_id": "Q112083510",
+      "search_terms": [
+        "Pushpa 2 The Rule film",
+        "Pushpa 2 poster Allu Arjun"
+      ],
+      "wiki_title": "Pushpa_2:_The_Rule",
+      "page_image_free": null
+    },
+    {
+      "id": "kalki_2898_ad_movie",
+      "canonical_name": "Kalki 2898 AD",
+      "category": "cinema",
+      "aliases": [
+        "Kalki 2898 AD",
+        "కల్కి 2898 AD",
+        "Kalki",
+        "కల్కి",
+        "Project K"
+      ],
+      "wikidata_id": "Q112430183",
+      "search_terms": [
+        "Kalki 2898 AD movie still",
+        "Kalki 2898 AD poster Prabhas"
+      ],
+      "wiki_title": "Kalki_2898_AD",
+      "page_image_free": null
+    },
+    {
+      "id": "iqoo_13",
+      "canonical_name": "iQOO 13",
+      "category": "tech",
+      "aliases": [
+        "iQOO 13",
+        "iqoo13",
+        "ఐకూ 13",
+        "iQOO 13 5G",
+        "iQOO Flagship"
+      ],
+      "wikidata_id": null,
+      "search_terms": [
+        "iQOO 13 smartphone",
+        "iQOO 13 design back panel",
+        "iQOO phone"
+      ]
+    },
+    {
+      "id": "vivo_x200",
+      "canonical_name": "Vivo X200 Pro",
+      "category": "tech",
+      "aliases": [
+        "Vivo X200",
+        "Vivo X200 Pro",
+        "వివో X200",
+        "Vivo flagship"
+      ],
+      "wikidata_id": null,
+      "search_terms": [
+        "Vivo X200 Pro smartphone camera",
+        "Vivo X200 design"
+      ]
+    },
+    {
+      "id": "oneplus_13",
+      "canonical_name": "OnePlus 13",
+      "category": "tech",
+      "aliases": [
+        "OnePlus 13",
+        "వన్ ప్లస్ 13",
+        "OnePlus flagship",
+        "1+ 13"
+      ],
+      "wikidata_id": null,
+      "search_terms": [
+        "OnePlus 13 smartphone design",
+        "OnePlus 13 back camera"
+      ]
+    },
+    {
+      "id": "snapdragon_8_elite",
+      "canonical_name": "Snapdragon 8 Elite",
+      "category": "tech",
+      "aliases": [
+        "Snapdragon 8 Elite",
+        "స్నాప్‌డ్రాగన్ 8 ఎలైట్",
+        "SD 8 Elite",
+        "Snapdragon 8 Gen 4"
+      ],
+      "wikidata_id": null,
+      "search_terms": [
+        "Qualcomm Snapdragon 8 Elite chip logo",
+        "Snapdragon processor"
+      ]
+    },
+    {
+      "id": "vijay_deverakonda",
+      "canonical_name": "Vijay Deverakonda",
+      "category": "cinema",
+      "aliases": [
+        "Vijay Deverakonda",
+        "Vijay Devarakonda",
+        "విజయ్ దేవరకొండ",
+        "దేవరకొండ",
+        "Deverakonda",
+        "Devarakonda"
+      ],
+      "wikidata_id": "Q20685244",
+      "search_terms": [
+        "Vijay Deverakonda actor",
+        "Vijay Deverakonda photo HD",
+        "Vijay Devarakonda stills"
+      ],
+      "wiki_title": "Vijay_Deverakonda",
+      "page_image_free": null
+    },
+    {
+      "id": "rashmika_mandanna",
+      "canonical_name": "Rashmika Mandanna",
+      "category": "cinema",
+      "aliases": [
+        "Rashmika Mandanna",
+        "Rashmika",
+        "రష్మిక మందన్న",
+        "రష్మిక"
+      ],
+      "wikidata_id": "Q23762763",
+      "search_terms": [
+        "Rashmika Mandanna actress",
+        "Rashmika Mandanna photo HD",
+        "Rashmika Mandanna stills"
+      ],
+      "wiki_title": "Rashmika_Mandanna",
+      "page_image_free": null
+    },
+    {
+      "id": "dil_raju",
+      "canonical_name": "Dil Raju",
+      "category": "cinema",
+      "aliases": [
+        "Dil Raju",
+        "Dill Raju",
+        "దిల్ రాజు",
+        "దిల్రాజు",
+        "Producer Dil Raju",
+        "V. Venkata Ramana Reddy"
+      ],
+      "wikidata_id": "Q5276634",
+      "search_terms": [
+        "Dil Raju producer photo HD",
+        "Dil Raju press meet",
+        "Dil Raju speech Tollywood"
+      ],
+      "wiki_title": "Dil_Raju",
+      "page_image_free": null
+    },
+    {
+      "id": "ss_rajamouli",
+      "canonical_name": "S. S. Rajamouli",
+      "category": "cinema",
+      "aliases": [
+        "Rajamouli",
+        "రాజమౌళి",
+        "S. S. Rajamouli",
+        "SS Rajamouli",
+        "Director Rajamouli"
+      ],
+      "wikidata_id": "Q7387707",
+      "search_terms": [
+        "S. S. Rajamouli director photo HD",
+        "Rajamouli interview"
+      ],
+      "wiki_title": "S._S._Rajamouli",
+      "page_image_free": null
+    },
+    {
+      "id": "foxconn",
+      "canonical_name": "Foxconn",
+      "category": "business",
+      "aliases": [
+        "Foxconn",
+        "ఫాక్స్‌కాన్",
+        "Hon Hai Precision Industry",
+        "Foxconn factory",
+        "Foxconn India"
+      ],
+      "wikidata_id": "Q217112",
+      "search_terms": [
+        "Foxconn modern manufacturing factory floor",
+        "Foxconn semiconductor plant"
+      ],
+      "wiki_title": "Foxconn",
+      "page_image_free": null
+    },
+    {
+      "id": "haier",
+      "canonical_name": "Haier",
+      "category": "business",
+      "aliases": [
+        "Haier",
+        "హైయర్",
+        "Haier appliances",
+        "Haier factory",
+        "Haier India"
+      ],
+      "wikidata_id": "Q850127",
+      "search_terms": [
+        "Haier modern appliance factory floor",
+        "Haier headquarters high quality"
+      ],
+      "wiki_title": "Haier",
+      "page_image_free": null
+    },
+    {
+      "id": "tesla",
+      "canonical_name": "Tesla",
+      "category": "tech",
+      "aliases": [
+        "Tesla",
+        "టెస్లా",
+        "Tesla Motors",
+        "Tesla Gigafactory",
+        "Elon Musk Tesla"
+      ],
+      "wikidata_id": "Q478214",
+      "search_terms": [
+        "Tesla Gigafactory modern production line",
+        "Tesla electric vehicle manufacturing"
+      ],
+      "wiki_title": "Tesla,_Inc.",
+      "page_image_free": null
+    },
+    {
+      "id": "revanth_reddy",
+      "canonical_name": "Revanth Reddy",
+      "category": "politics",
+      "aliases": [
+        "Revanth Reddy",
+        "రేవంత్ రెడ్డి",
+        "A. Revanth Reddy",
+        "CM Revanth Reddy",
+        "Telangana CM Revanth"
+      ],
+      "wikidata_id": "Q7317765",
+      "search_terms": [
+        "Revanth Reddy speech face photo",
+        "CM Revanth Reddy press meet"
+      ],
+      "wiki_title": "Revanth_Reddy",
+      "page_image_free": null
+    },
+    {
+      "id": "chandrababu_naidu",
+      "canonical_name": "Chandrababu Naidu",
+      "category": "politics",
+      "aliases": [
+        "Chandrababu Naidu",
+        "Chandrababu",
+        "చంద్రబాబు",
+        "చంద్రబాబు నాయుడు",
+        "N. Chandrababu Naidu",
+        "CBN",
+        "AP CM Chandrababu Naidu"
+      ],
+      "wikidata_id": "Q466358",
+      "search_terms": [
+        "Chandrababu Naidu speech face photo",
+        "CM Chandrababu Naidu press conference"
+      ],
+      "wiki_title": "N._Chandrababu_Naidu",
+      "page_image_free": null
+    }
+  ]
+}

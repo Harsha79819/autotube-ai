@@ -1,0 +1,22 @@
+{
+  "roast": {
+    "name": "Roast",
+    "description": "Sarcastic, witty, and irreverent Telugu comedy commentary anchored strictly to verified facts.",
+    "script_persona": "A sarcastic Telugu friend sitting next to the viewer, commenting live with Tanglish dry humor.",
+    "voice_profile": "roast_funny",
+    "sfx_set": "roast_comedic",
+    "music_style": "light_comedic",
+    "punchline_frequency_sec": 6,
+    "max_slang_per_10s": 2
+  },
+  "neutral": {
+    "name": "Neutral",
+    "description": "Standard objective creator delivery focused on factual news and informative breakdown.",
+    "script_persona": "An informative and engaging creator delivering fast facts clearly.",
+    "voice_profile": "standard_creator",
+    "sfx_set": "subtle_clean",
+    "music_style": "ambient_modern",
+    "punchline_frequency_sec": 0,
+    "max_slang_per_10s": 0
+  }
+}

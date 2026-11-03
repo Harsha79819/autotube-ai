@@ -1,0 +1,39 @@
+{
+  "SHORTS_TARGET_SEC": 38,
+  "SHORTS_MIN_SEC": 30,
+  "SHORTS_MAX_SEC": 48,
+  "TONE_DEFAULT": "roast",
+  "SHOW_CONTEXT": "Bigboss 10",
+  "CURRENT_SHOW_HASHTAGS": [
+    "#BiggBossTelugu10",
+    "#BB10Telugu",
+    "#BiggBossTelugu"
+  ],
+  "GOOGLE_IMAGES_MODE": "tier_b",
+  "ALLOW_TIER_B": true,
+  "TIER_B_MAX_SHARE": 0.3,
+  "GOOGLE_QUERIES_PER_DAY": 90,
+  "FACE_CONSENSUS": true,
+  "ROAST_SFX_MAX": 3,
+  "HUMOR_MIN_SCORE": 7,
+  "BROLL_VIDEO_SHARE": 0.35,
+  "ON_SCREEN_TEXT": true,
+  "DELIVERY_MARKUP": true,
+  "ENTITY_LIBRARY": true,
+  "QUOTA_GUARD": true,
+  "USE_SOCIAL_VISUALS": false,
+  "APIFY_SEARCH_LIMIT": 35,
+  "CLIP_SIMILARITY_THRESHOLD": 0.25,
+  "ENTITY_CAPTION_BOOST": 0.15,
+  "ENABLE_CONTENT_INTELLIGENCE": false,
+  "ENABLE_HOOK_OPTIMIZER": false,
+  "ENABLE_PACKAGING_INTELLIGENCE": false,
+  "ENABLE_FACT_CHECK_REVIEW": false,
+  "ENABLE_EXPERIMENT_LOGGING": false,
+  "STRICT_FACT_CHECK_ENFORCEMENT": false,
+  "CONTENT_PILLARS": [
+    "tollywood_celebrity",
+    "behind_the_scenes",
+    "viral_entertainment_explainers"
+  ]
+}

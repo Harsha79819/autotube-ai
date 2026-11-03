@@ -1,0 +1,109 @@
+{
+  "metaphors": [
+    {
+      "phrases": [
+        "bp shoot up",
+        "బీపీ షూటప్",
+        "bp high",
+        "blood pressure",
+        "high tension",
+        "టెన్షన్",
+        "fire",
+        "మంటలు",
+        "mind block",
+        "మైండ్ బ్లాక్"
+      ],
+      "visual_intent": "reaction",
+      "visual_translation": "intense housemate confrontation, heated fight, angry facial expression of contestant, dramatic argument",
+      "negative_terms": [
+        "blood pressure",
+        "doctor",
+        "hospital",
+        "sphygmomanometer",
+        "stethoscope",
+        "medical monitor",
+        "nurse",
+        "clinic"
+      ]
+    },
+    {
+      "phrases": [
+        "graph",
+        "గ్రాఫ్",
+        "peaks",
+        "పీక్స్",
+        "rocket",
+        "రాకెట్",
+        "doosuku",
+        "దూసుకుపోయింది",
+        "surge",
+        "రచ్చ"
+      ],
+      "visual_intent": "data_graphic",
+      "visual_translation": "voting poll results graphic, fan celebration, voting leaderboard, contestant victory celebration",
+      "negative_terms": [
+        "stock market",
+        "wall street",
+        "financial chart",
+        "space rocket",
+        "nasdaq",
+        "crypto trading",
+        "forex"
+      ]
+    },
+    {
+      "phrases": [
+        "pokiri",
+        "పోకిరి",
+        "range twist",
+        "ట్విస్ట్"
+      ],
+      "visual_intent": "text_card",
+      "visual_translation": "dramatic plot twist card, unexpected turning point, elimination twist",
+      "negative_terms": [
+        "mahesh babu",
+        "pokiri movie poster",
+        "pokiri still"
+      ]
+    },
+    {
+      "phrases": [
+        "heart attack",
+        "గుండె ఆగిపోయింది",
+        "shock",
+        "షాక్",
+        "stunned",
+        "అవాక్కయ్యారు"
+      ],
+      "visual_intent": "reaction",
+      "visual_translation": "shocked contestant reaction closeup, wide eyed gasp, dramatic stage elimination reveal",
+      "negative_terms": [
+        "cardiogram",
+        "ecg",
+        "ambulance",
+        "hospital bed",
+        "cardiac",
+        "patient"
+      ]
+    },
+    {
+      "phrases": [
+        "mass",
+        "మాస్",
+        "billa",
+        "డాన్",
+        "don",
+        "king",
+        "రారాజు"
+      ],
+      "visual_intent": "literal_entity",
+      "visual_translation": "charismatic confident entry, heroic look, crowd applause, stage lighting",
+      "negative_terms": [
+        "criminal mugshot",
+        "police arrest",
+        "jail cell",
+        "handcuffs"
+      ]
+    }
+  ]
+}
