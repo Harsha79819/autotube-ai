@@ -9,7 +9,13 @@ Orchestrates prioritized text generation across free provider chain:
 import os
 import time
 import requests
+import concurrent.futures
+import certifi
 from dotenv import load_dotenv
+
+os.environ.setdefault("SSL_CERT_FILE", certifi.where())
+os.environ.setdefault("REQUESTS_CA_BUNDLE", certifi.where())
+
 from google import genai
 from providers.tracker import record_call, record_step_provider
 
@@ -25,11 +31,16 @@ except ImportError:
             return os.getenv("GEMINI_API_KEY", "")
 
 ACTIVE_MODELS = [
-    "gemini-2.5-flash",
-    "gemini-2.0-flash",
-    "gemini-1.5-flash",
-    "gemini-2.0-flash-lite",
     "gemini-flash-lite-latest",
+    "gemini-3.1-flash-lite",
+    "gemini-flash-latest",
+    "gemini-3.5-flash",
+    "gemini-3.6-flash",
+]
+
+OPENAI_MODELS = [
+    "gpt-4o-mini",
+    "gpt-4o",
 ]
 
 GROQ_MODELS = [
@@ -48,7 +59,7 @@ OPENROUTER_MODELS = [
 
 
 def call_gemini(prompt: str, api_key: str = None) -> tuple[str, str]:
-    """Call Google Gemini API across configured flash models."""
+    """Call Google Gemini API across configured flash models with per-model timeout to avoid hangs."""
     key = api_key or get_gemini_api_key()
     if not key:
         raise ValueError("GEMINI_API_KEY is not configured.")
@@ -59,17 +70,31 @@ def call_gemini(prompt: str, api_key: str = None) -> tuple[str, str]:
     for model_name in ACTIVE_MODELS:
         t0 = time.time()
         try:
-            resp = client.models.generate_content(
-                model=model_name,
-                contents=prompt,
-            )
-            text = getattr(resp, "text", "")
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+                fut = ex.submit(client.models.generate_content, model=model_name, contents=prompt)
+                resp = fut.result(timeout=15.0)
+
+            text = ""
+            try:
+                text = getattr(resp, "text", "") or ""
+            except Exception:
+                text = ""
+
+            if not text and hasattr(resp, "candidates") and resp.candidates:
+                parts = getattr(resp.candidates[0].content, "parts", [])
+                text = "".join(getattr(p, "text", "") for p in parts if getattr(p, "text", None))
+
             dur_ms = (time.time() - t0) * 1000
             if text and text.strip():
                 record_call("gemini", True, duration_ms=dur_ms)
                 return text.strip(), f"Gemini ({model_name})"
         except Exception as err:
             dur_ms = (time.time() - t0) * 1000
+            err_str = str(err)
+            if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                print(f"⚠️ Gemini model {model_name} rate limit (429), failing over immediately ({dur_ms:.0f}ms)...")
+            else:
+                print(f"⚠️ Gemini model {model_name} notice ({err_str[:80]}), trying next model...")
             last_err = err
             continue
 
@@ -156,39 +181,160 @@ def call_openrouter(prompt: str, api_key: str = None) -> tuple[str, str]:
     raise RuntimeError(f"OpenRouter API failed: {last_err}")
 
 
-def generate_text_cascade(prompt: str, api_key: str = None, step_name: str = "script") -> str:
+def call_openai(prompt: str, api_key: str = None) -> tuple[str, str]:
+    """Call OpenAI API using configured OPENAI_API_KEY (gpt-4o-mini / gpt-4o)."""
+    key = api_key or os.getenv("OPENAI_API_KEY", "").strip()
+    if not key:
+        raise ValueError("OPENAI_API_KEY is not configured.")
+
+    from openai import OpenAI
+    client = OpenAI(api_key=key)
+    last_err = None
+
+    for model in OPENAI_MODELS:
+        t0 = time.time()
+        try:
+            resp = client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7,
+                max_tokens=2500,
+            )
+            content = resp.choices[0].message.content or ""
+            dur_ms = (time.time() - t0) * 1000
+            if content.strip():
+                record_call("openai", True, duration_ms=dur_ms)
+                return content.strip(), f"OpenAI ({model})"
+        except Exception as err:
+            dur_ms = (time.time() - t0) * 1000
+            last_err = err
+            continue
+
+    record_call("openai", False, error=str(last_err))
+    raise RuntimeError(f"OpenAI API failed: {last_err}")
+
+
+def call_pollinations(prompt: str) -> tuple[str, str]:
+    """Call Pollinations free text API (100% free, 0 keys needed, multi-model)."""
+    t0 = time.time()
+    try:
+        url = "https://text.pollinations.ai/"
+        payload = {
+            "messages": [{"role": "user", "content": prompt}],
+            "model": "openai-fast",
+            "seed": int(time.time()),
+        }
+        resp = requests.post(url, json=payload, timeout=25)
+        if resp.status_code == 200:
+            text = resp.text.strip()
+            try:
+                j = resp.json()
+                if "choices" in j and j["choices"]:
+                    text = j["choices"][0].get("message", {}).get("content", text)
+            except Exception:
+                pass
+            dur_ms = (time.time() - t0) * 1000
+            if text and text.strip():
+                record_call("pollinations", True, duration_ms=dur_ms)
+                return text.strip(), "Pollinations (Free AI)"
+        raise ValueError(f"HTTP {resp.status_code}: {resp.text[:120]}")
+    except Exception as err:
+        dur_ms = (time.time() - t0) * 1000
+        record_call("pollinations", False, error=str(err))
+        raise RuntimeError(f"Pollinations AI failed: {err}")
+
+
+def call_ollama(prompt: str, model: str = None) -> tuple[str, str]:
+    """Call local Ollama instance (http://localhost:11434). 100% free, unlimited, zero cloud API fees."""
+    t0 = time.time()
+    ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
+    chosen_model = model or os.getenv("OLLAMA_MODEL", "llama3")
+
+    try:
+        url = f"{ollama_host}/api/generate"
+        payload = {
+            "model": chosen_model,
+            "prompt": prompt,
+            "stream": False,
+        }
+        resp = requests.post(url, json=payload, timeout=25)
+        dur_ms = (time.time() - t0) * 1000
+        if resp.status_code == 200:
+            data = resp.json()
+            text = (data.get("response") or "").strip()
+            if text:
+                record_call("ollama", True, duration_ms=dur_ms)
+                return text, f"Ollama ({chosen_model})"
+        record_call("ollama", False, error=f"HTTP {resp.status_code}: {resp.text[:80]}", duration_ms=dur_ms)
+        raise RuntimeError(f"Ollama returned HTTP {resp.status_code}")
+    except Exception as err:
+        dur_ms = (time.time() - t0) * 1000
+        record_call("ollama", False, error=str(err), duration_ms=dur_ms)
+        raise RuntimeError(f"Ollama local connection failed: {err}")
+
+
+def generate_text_cascade(prompt: str, api_key: str = None, step_name: str = "script", per_provider_timeout: float = 35.0) -> str:
     """
     Executes free LLM provider chain based on LLM_PROVIDER_ORDER.
-    Default order: gemini -> groq -> openrouter.
+    Default order: gemini -> groq -> ollama -> pollinations -> openrouter.
+    Enforces per-provider timeout (~35s) so a stalled provider fails over quickly
+    rather than consuming the entire stage budget.
     """
-    configured_order = os.getenv("LLM_PROVIDER_ORDER", "gemini,groq,openrouter")
+    configured_order = os.getenv("LLM_PROVIDER_ORDER", "gemini,groq,ollama,pollinations,openrouter")
     providers = [p.strip().lower() for p in configured_order.split(",") if p.strip()]
 
     provider_map = {
         "gemini": lambda: call_gemini(prompt, api_key=api_key),
         "groq": lambda: call_groq(prompt),
+        "ollama": lambda: call_ollama(prompt),
+        "openai": lambda: call_openai(prompt),
+        "pollinations": lambda: call_pollinations(prompt),
         "openrouter": lambda: call_openrouter(prompt),
     }
 
     errors = []
     attempt = 0
 
+    effective_timeout = min(float(per_provider_timeout), 25.0)
+
     for prov in providers:
         if prov not in provider_map:
             continue
+        # Fast skip if credentials are not configured
+        if prov == "gemini" and not (api_key or get_gemini_api_key()):
+            continue
+        if prov == "groq" and not os.getenv("GROQ_API_KEY", "").strip():
+            continue
+        if prov == "openai" and not os.getenv("OPENAI_API_KEY", "").strip():
+            continue
+        if prov == "openrouter" and not os.getenv("OPENROUTER_API_KEY", "").strip():
+            continue
+
         attempt += 1
         is_fallback = (attempt > 1)
         t_start = time.time()
         try:
-            print(f"🤖 Calling LLM Provider: {prov.upper()}{' (FALLBACK)' if is_fallback else ''}...")
-            result, label = provider_map[prov]()
+            print(f"🤖 Calling LLM Provider: {prov.upper()}{' (FALLBACK)' if is_fallback else ''} (timeout={effective_timeout:.0f}s)...")
+            executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+            try:
+                future = executor.submit(provider_map[prov])
+                result, label = future.result(timeout=effective_timeout)
+            finally:
+                executor.shutdown(wait=False)
             dur_ms = (time.time() - t_start) * 1000
             record_step_provider(step_name, label, duration_ms=dur_ms, is_fallback=is_fallback)
             print(f"✅ {label} succeeded in {dur_ms:.0f}ms")
             return result
+        except concurrent.futures.TimeoutError:
+            dur_ms = (time.time() - t_start) * 1000
+            err_msg = f"{prov.upper()} timed out after {per_provider_timeout:.0f}s"
+            print(f"⚠️ {err_msg}. Trying next fallback in chain...")
+            record_call(prov, False, error=err_msg, duration_ms=dur_ms)
+            errors.append(err_msg)
         except Exception as err:
             dur_ms = (time.time() - t_start) * 1000
             print(f"⚠️ {prov.upper()} notice ({err}). Trying next fallback in chain...")
+            record_call(prov, False, error=str(err), duration_ms=dur_ms)
             errors.append(f"{prov}: {err}")
 
     raise RuntimeError(f"All LLM providers in cascade failed: {'; '.join(errors)}")

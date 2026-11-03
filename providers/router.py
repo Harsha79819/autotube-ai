@@ -7,6 +7,7 @@ Orchestrates prioritized execution across free provider chains with automatic fa
 
 import os
 import time
+import concurrent.futures
 from typing import Callable, Any
 from providers.image import (
     search_pexels_photos,
@@ -19,10 +20,11 @@ from providers.image import (
 from providers.tracker import record_call, record_step_provider
 
 
-def try_providers(step_name: str, providers: list, *args, **kwargs) -> Any:
+def try_providers(step_name: str, providers: list, *args, per_provider_timeout: float = 25.0, **kwargs) -> Any:
     """
     Executes a chain of providers in prioritized sequence for a given step.
     Falls back automatically on exception, timeout, empty/invalid response, or rate limit.
+    Enforces per-provider timeout (~25s) so a stalled provider fails over quickly.
 
     providers can be:
       - list of (name, callable) tuples
@@ -48,8 +50,13 @@ def try_providers(step_name: str, providers: list, *args, **kwargs) -> Any:
 
         t0 = time.time()
         try:
-            print(f"🔄 [{step_name.upper()}] Trying provider: {name}{' (FALLBACK)' if is_fallback else ''}...")
-            result = fn(*args, **kwargs)
+            print(f"🔄 [{step_name.upper()}] Trying provider: {name}{' (FALLBACK)' if is_fallback else ''} (timeout={per_provider_timeout:.0f}s)...")
+            executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+            try:
+                future = executor.submit(fn, *args, **kwargs)
+                result = future.result(timeout=per_provider_timeout)
+            finally:
+                executor.shutdown(wait=False)
             dur_ms = (time.time() - t0) * 1000
 
             # Validate non-empty response
@@ -62,6 +69,12 @@ def try_providers(step_name: str, providers: list, *args, **kwargs) -> Any:
             record_step_provider(step_name, name, duration_ms=dur_ms, is_fallback=is_fallback)
             print(f"✅ [{step_name.upper()}] {name} succeeded in {dur_ms:.0f}ms")
             return result
+        except concurrent.futures.TimeoutError:
+            dur_ms = (time.time() - t0) * 1000
+            err_msg = f"{name} timed out after {per_provider_timeout:.0f}s"
+            record_call(name, False, error=err_msg, duration_ms=dur_ms)
+            print(f"⚠️ [{step_name.upper()}] Provider {err_msg}. Trying next fallback...")
+            last_errors.append(f"{name}: {err_msg}")
         except Exception as err:
             dur_ms = (time.time() - t0) * 1000
             record_call(name, False, error=str(err), duration_ms=dur_ms)
