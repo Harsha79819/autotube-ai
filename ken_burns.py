@@ -2,6 +2,7 @@ import os
 import random
 import shutil
 import subprocess
+import uuid
 from pathlib import Path
 
 # Available ffmpeg xfade transitions (smooth, cinematic, no glitchy pixelize)
@@ -28,7 +29,7 @@ def get_clip_duration(clip_path):
             "-of", "default=noprint_wrappers=1:nokey=1",
             str(clip_path),
         ]
-        res = subprocess.run(cmd, capture_output=True, text=True)
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
         val = float(res.stdout.strip())
         if val > 0:
             return val
@@ -111,8 +112,8 @@ def build_ken_burns_clip(
         available_dirs = [d for d in DIRECTIONS if d != "hook_snap_zoom"]
         direction = random.choice(available_dirs)
 
-    upscale_w = int(width * 2)
-    upscale_h = int(height * 2)
+    upscale_w = int(width * 1.2)
+    upscale_h = int(height * 1.2)
 
     zp = _zoompan_expr(
         direction=direction,
@@ -136,6 +137,7 @@ def build_ken_burns_clip(
 
     cmd = [
         "ffmpeg", "-y",
+        "-threads", "4",
         "-loop", "1",
         "-i", str(image_path),
         "-vf", vf,
@@ -147,7 +149,7 @@ def build_ken_burns_clip(
         str(output_path),
     ]
 
-    r = subprocess.run(cmd, capture_output=True, text=True)
+    r = subprocess.run(cmd, capture_output=True, text=True, timeout=45)
     if r.returncode != 0 or not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
         raise RuntimeError(f"Ken Burns rendering failed: {r.stderr or 'No output produced'}")
 
@@ -198,7 +200,7 @@ def prepare_scene_clip(
             "-pix_fmt", "yuv420p",
             str(output_path),
         ]
-        r = subprocess.run(cmd, capture_output=True, text=True)
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=45)
         if r.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 0:
             return str(output_path)
         # Fallback to Ken Burns if video processing encounters issue
@@ -229,8 +231,23 @@ def assemble_with_transitions(
     offsets are calculated so that total assembled video duration equals sum(scene_durations)
     without timing drift.
     """
+    # Strictly validate that all clips exist on disk before passing to ffmpeg
+    valid_clips = []
+    valid_durations = []
+    for idx, c in enumerate(scene_clips):
+        p = Path(c)
+        if p.exists() and p.stat().st_size > 1000:
+            valid_clips.append(str(p.resolve()))
+            if scene_durations and len(scene_durations) > idx:
+                valid_durations.append(scene_durations[idx])
+        else:
+            print(f"⚠️ Warning: Dropping non-existent clip from assemble_with_transitions: {c}")
+
+    scene_clips = valid_clips
+    scene_durations = valid_durations
+
     if not scene_clips:
-        raise ValueError("No scene clips provided to assemble_with_transitions")
+        raise ValueError("No valid scene clips exist on disk to assemble_with_transitions")
 
     if len(scene_clips) == 1:
         shutil.copyfile(scene_clips[0], output_path)
@@ -275,12 +292,54 @@ def assemble_with_transitions(
         "-preset", "fast",
         "-crf", "21",
         "-pix_fmt", "yuv420p",
+        "-colorspace", "bt709",
+        "-color_primaries", "bt709",
+        "-color_trc", "bt709",
+        "-color_range", "tv",
         "-movflags", "+faststart",
         str(output_path),
     ]
 
-    r = subprocess.run(cmd, capture_output=True, text=True)
-    if r.returncode != 0 or not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
-        raise RuntimeError(f"assemble_with_transitions failed: {r.stderr or 'No output produced'}")
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=max(180, len(scene_clips) * 12))
+        if r.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+            return str(output_path)
+        err_msg = r.stderr or "xfade transition assembly failed"
+        print(f"⚠️ Warning: xfade assembly failed ({err_msg[:200]}...). Falling back to concat demuxer.")
+    except Exception as e:
+        print(f"⚠️ Warning: Exception during xfade assembly: {e}. Falling back to concat demuxer.")
 
-    return str(output_path)
+    # Concat demuxer fallback (bulletproof for arbitrary clip counts)
+    concat_list_path = Path(output_path).parent / f"concat_list_{uuid.uuid4().hex[:8]}.txt"
+    try:
+        with open(concat_list_path, "w", encoding="utf-8") as f:
+            for clip in scene_clips:
+                escaped = str(Path(clip).resolve()).replace("'", "'\\''")
+                f.write(f"file '{escaped}'\n")
+
+        concat_cmd = [
+            "ffmpeg", "-y",
+            "-f", "concat",
+            "-safe", "0",
+            "-i", str(concat_list_path),
+            "-c:v", "libx264",
+            "-preset", "fast",
+            "-crf", "21",
+            "-pix_fmt", "yuv420p",
+            "-colorspace", "bt709",
+            "-color_primaries", "bt709",
+            "-color_trc", "bt709",
+            "-color_range", "tv",
+            "-movflags", "+faststart",
+            str(output_path),
+        ]
+        r_concat = subprocess.run(concat_cmd, capture_output=True, text=True, timeout=max(180, len(scene_clips) * 10))
+        if r_concat.returncode != 0 or not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
+            raise RuntimeError(f"Both xfade and concat assembly failed: {r_concat.stderr or 'No output produced'}")
+        return str(output_path)
+    finally:
+        if concat_list_path.exists():
+            try:
+                concat_list_path.unlink()
+            except Exception:
+                pass

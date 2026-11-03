@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import re
@@ -6,10 +7,7 @@ import subprocess
 from pathlib import Path
 
 import random
-try:
-    import whisper
-except ImportError:
-    whisper = None
+whisper = None
 from PIL import Image, ImageFilter, ImageEnhance
 from moviepy import AudioFileClip, ImageClip, VideoFileClip, concatenate_videoclips, vfx
 from supervisor import autonomous_recover
@@ -45,6 +43,29 @@ except ImportError:
     )
 
 
+def _render_scene_clip_process(task_dict: dict) -> dict:
+    """Top-level picklable worker for ProcessPoolExecutor scene clip rendering."""
+    clip_path = Path(task_dict["clip_path"])
+    if clip_path.exists() and clip_path.stat().st_size > 5000:
+        return task_dict
+
+    try:
+        from ken_burns import prepare_scene_clip
+        prepare_scene_clip(
+            media_path=Path(task_dict["media_input"]),
+            output_path=clip_path,
+            duration_seconds=float(task_dict["render_dur"]),
+            direction=str(task_dict["direction"]),
+            width=int(task_dict["width"]),
+            height=int(task_dict["height"]),
+            fps=int(task_dict["fps"]),
+            is_hook=bool(task_dict["is_hook"]),
+        )
+    except Exception as err:
+        print(f"⚠️ Error rendering scene clip {clip_path.name}: {err}")
+    return task_dict
+
+
 def append_outro(main_video_path, outro_clip_path="assets/outro/like_share_subscribe.mp4", output_path=None):
     """Concatenate a pre-made 'Like/Share/Subscribe' outro clip
     to the end of every generated video, matching aspect ratio and audio flawlessly."""
@@ -77,14 +98,38 @@ def append_outro(main_video_path, outro_clip_path="assets/outro/like_share_subsc
     concat_list = "output/concat_list.txt"
     os.makedirs(os.path.dirname(concat_list), exist_ok=True)
 
-    # Fast direct copy only when dimensions match identically
-    if (w, h) == (w2, h2):
+    def _probe_stream_params(fpath):
+        try:
+            import json
+            cmd_v = ["ffprobe", "-v", "error", "-select_streams", "v:0",
+                     "-show_entries", "stream=width,height,codec_name", "-of", "json", str(fpath)]
+            v_info = json.loads(subprocess.run(cmd_v, capture_output=True, text=True).stdout or "{}")
+            cmd_a = ["ffprobe", "-v", "error", "-select_streams", "a:0",
+                     "-show_entries", "stream=channels,sample_rate,codec_name", "-of", "json", str(fpath)]
+            a_info = json.loads(subprocess.run(cmd_a, capture_output=True, text=True).stdout or "{}")
+            v_s = v_info.get("streams", [{}])[0] if v_info.get("streams") else {}
+            a_s = a_info.get("streams", [{}])[0] if a_info.get("streams") else {}
+            return (
+                int(v_s.get("width", 0)), int(v_s.get("height", 0)),
+                str(v_s.get("codec_name", "")),
+                str(a_s.get("codec_name", "")),
+                int(a_s.get("channels", 0)),
+                int(a_s.get("sample_rate", 0))
+            )
+        except Exception:
+            return (0, 0, "", "", 0, 0)
+
+    p1 = _probe_stream_params(main_video_path)
+    p2 = _probe_stream_params(outro_clip_path)
+
+    # Fast direct copy only when video AND audio specs match identically
+    if p1[0] > 0 and p1 == p2:
         with open(concat_list, "w") as f:
             f.write(f"file '{os.path.abspath(main_video_path)}'\n")
             f.write(f"file '{os.path.abspath(outro_clip_path)}'\n")
 
         cmd = ["ffmpeg", "-y", "-f", "concat", "-safe", "0",
-               "-i", concat_list, "-c", "copy", temp_out]
+               "-i", concat_list, "-c", "copy", "-movflags", "+faststart", temp_out]
         r = subprocess.run(cmd, capture_output=True, text=True)
         if r.returncode == 0 and os.path.exists(temp_out) and os.path.getsize(temp_out) > 0:
             if os.path.exists(output_path):
@@ -119,7 +164,7 @@ def append_outro(main_video_path, outro_clip_path="assets/outro/like_share_subsc
             f"[1:v]scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30,format=yuv420p[v1];"
             f"[0:v]setsar=1,fps=30,format=yuv420p[v0];"
             f"[0:a]aformat=sample_rates=48000:channel_layouts=stereo[a0];"
-            f"aevalsrc=0:d=2.0:s=48000[a1];"
+            f"aevalsrc=0:d=5.0:s=48000:c=stereo[a1];"
             f"[v0][a0][v1][a1]concat=n=2:v=1:a=1[v][a]"
         )
         map_args = ["-map", "[v]", "-map", "[a]", "-c:a", "aac", "-b:a", "192k"]
@@ -133,7 +178,9 @@ def append_outro(main_video_path, outro_clip_path="assets/outro/like_share_subsc
 
     cmd_fc = ["ffmpeg", "-y", "-i", str(main_video_path), "-i", str(outro_clip_path),
               "-filter_complex", fc] + map_args + [
-              "-c:v", "libx264", "-preset", "ultrafast", temp_out]
+              "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
+              "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-color_range", "tv",
+              "-shortest", "-movflags", "+faststart", temp_out]
     r_fc = subprocess.run(cmd_fc, capture_output=True, text=True)
     if r_fc.returncode == 0 and os.path.exists(temp_out) and os.path.getsize(temp_out) > 0:
         if os.path.exists(output_path):
@@ -307,15 +354,30 @@ def mix_audio_with_ducking(voice_path, bgm_path=None, output_audio_path=None):
     - Output is normalized to YouTube broadcast standard (-14 LUFS) with loudnorm.
     """
     voice_p = Path(voice_path)
-    if not voice_p.exists():
+    if not voice_p.exists() or voice_p.stat().st_size == 0:
         return False
+
+    # Probe voice duration to strictly bound -stream_loop -1
+    voice_dur = 0.0
+    try:
+        p_dur = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", str(voice_p)],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=8
+        )
+        voice_dur = float(p_dur.stdout.strip())
+    except Exception:
+        pass
+
+    if voice_dur <= 0.1:
+        print(f"⚠️ Voice file duration undefined or zero: {voice_p}")
+        return str(voice_p)
 
     if bgm_path is None:
         bgm_path = BGM_DIR / "neutral.wav"
     bgm_p = Path(bgm_path)
 
-    if not bgm_p.exists():
-        return False
+    if not bgm_p.exists() or bgm_p.stat().st_size == 0:
+        return str(voice_p)
 
     output_p = Path(output_audio_path or (OUTPUT_DIR / "mixed_audio.wav"))
     output_p.parent.mkdir(parents=True, exist_ok=True)
@@ -333,8 +395,10 @@ def mix_audio_with_ducking(voice_path, bgm_path=None, output_audio_path=None):
         "-i", str(bgm_p),
         "-filter_complex", duck_filter,
         "-map", "[aout]",
+        "-t", f"{voice_dur:.2f}",
         "-c:a", "pcm_s16le",
-        "-ar", "24000",
+        "-ar", "48000",
+        "-ac", "2",
         str(output_p),
     ]
 
@@ -563,29 +627,48 @@ def ensure_visual_assets_exist(needed_count=None):
                 if num not in existing_images:
                     existing_images[num] = path
 
-    # Populate any missing numbers from 1 to needed_count
+    # Populate any missing numbers from 1 to needed_count with strict size validation
     for i in range(1, needed_count + 1):
-        target_jpg = ASSETS_DIR / f"{i}.jpg"
-        target_mp4 = ASSETS_DIR / f"{i}.mp4"
-        if not target_jpg.exists() and not target_mp4.exists():
+        target_jpg = (ASSETS_DIR / f"{i}.jpg").resolve()
+        target_mp4 = (ASSETS_DIR / f"{i}.mp4").resolve()
+        jpg_ok = target_jpg.exists() and target_jpg.stat().st_size > 1000
+        mp4_ok = target_mp4.exists() and target_mp4.stat().st_size > 5000
+
+        # If mp4 exists without jpg, extract frame 0 via ffmpeg
+        if mp4_ok and not jpg_ok:
+            try:
+                subprocess.run(
+                    ["ffmpeg", "-y", "-ss", "00:00:00.100", "-i", str(target_mp4), "-vframes", "1", "-q:v", "2", str(target_jpg)],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False, timeout=8
+                )
+                jpg_ok = target_jpg.exists() and target_jpg.stat().st_size > 1000
+                if jpg_ok:
+                    print(f"🎬 [Self-Healing] Extracted frame 0 from {target_mp4.name} -> {target_jpg.name}")
+            except Exception:
+                pass
+
+        if not jpg_ok and not mp4_ok:
             if fallback_pool:
                 src_fallback = fallback_pool[(i - 1) % len(fallback_pool)]
                 shutil.copyfile(src_fallback, target_jpg)
                 print(f"[Self-Healing] Populated missing Visual {i} from fallback: {src_fallback.name} -> {i}.jpg")
-            elif existing_images:
-                first_asset = next(iter(existing_images.values()))
-                if first_asset.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp"):
-                    shutil.copyfile(first_asset, target_jpg)
-                else:
-                    try:
-                        subprocess.run(
-                            ["ffmpeg", "-y", "-ss", "00:00:01", "-i", str(first_asset), "-vframes", "1", "-q:v", "2", str(target_jpg)],
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False, timeout=8
-                        )
-                    except Exception:
-                        pass
             else:
-                raise RuntimeError(f"🚨 Visual asset {i} is missing and no existing assets or fallback assets are available.")
+                # Emergency generation of typography card or solid placeholder canvas
+                try:
+                    from agents.typography_card import generate_typography_card
+                    generate_typography_card(
+                        headline_text=f"Scene {i} Key Concept",
+                        output_path=str(target_jpg),
+                        topic_category="general",
+                        subtext=f"Scene {i}",
+                    )
+                    print(f"[Self-Healing] Synthesized distinct typography card -> {i}.jpg")
+                except Exception:
+                    from PIL import Image
+                    img = Image.new("RGB", (1080, 1920), color=(15, 23, 42))
+                    target_jpg.parent.mkdir(parents=True, exist_ok=True)
+                    img.save(target_jpg, "JPEG")
+                print(f"[Self-Healing] Generated fallback slate for Visual {i} -> {i}.jpg")
 
 
 def get_section_map():
@@ -755,11 +838,26 @@ def validate_mapping(
         f"Sections     : {len(sections)}"
     )
 
+    # Auto-expand visual_plan if sections has more items
+    if len(visual_plan) < len(sections):
+        print(f"⚠️ Auto-expanding visual_plan from {len(visual_plan)} to {len(sections)} items using section text...")
+        for idx in range(len(visual_plan) + 1, len(sections) + 1):
+            sec_narration = sections[idx - 1].get("narration", "")
+            words = sec_narration.split()[:8]
+            visual_plan.append(f"Scene {idx}: " + (" ".join(words) if words else f"Visual {idx}"))
+
+    # Auto-populate images if fewer than sections
+    if len(images) < len(sections):
+        print(f"⚠️ Auto-populating missing visual assets from {len(images)} to {len(sections)}...")
+        ensure_visual_assets_exist(needed_count=len(sections))
+        images.clear()
+        images.extend(get_images())
+
     min_count = min(len(images), len(visual_plan), len(sections))
-    if min_count < 4:
+    if min_count < 2:
         raise RuntimeError(
             f"Too few elements to generate video: "
-            f"images={len(images)}, visual_plan={len(visual_plan)}, sections={len(sections)} (minimum 4 required)."
+            f"images={len(images)}, visual_plan={len(visual_plan)}, sections={len(sections)} (minimum 2 required)."
         )
 
     if len(images) != min_count or len(visual_plan) != min_count or len(sections) != min_count:
@@ -1599,8 +1697,6 @@ def create_video(aspect_ratio="9:16"):
     # --------------------------------------------------------
 
     scene_clips_dir = OUTPUT_DIR / "scene_clips"
-    if scene_clips_dir.exists():
-        shutil.rmtree(scene_clips_dir, ignore_errors=True)
     scene_clips_dir.mkdir(parents=True, exist_ok=True)
 
     print()
@@ -1608,107 +1704,248 @@ def create_video(aspect_ratio="9:16"):
     print("BUILDING KEN BURNS & TRANSITION SCENE CLIPS")
     print("=" * 60)
 
-    motion_directions = [
-        "zoom_in", "slow_cinematic_push", "pan_left", "zoom_in_tilt_up",
-        "zoom_out", "pan_right", "zoom_in_tilt_down"
-    ]
-    dir_idx = 0
-    scene_clips = []
-    scene_durations = []
-
-    # Flatten timed_sections into max 3.5s shots so no shot ever holds static or runs > 3.5s
-    scene_jobs = []
-    for item in timed_sections:
-        sec_num = item["section"]
-        vis_num = item["visual"]
-        start = item["start"]
-        end = item["end"]
-        duration = max(0.5, end - start)
-        img_idx = vis_num - 1
-
-        if img_idx < 0 or img_idx >= len(images):
-            audio.close()
-            raise RuntimeError(
-                f"Visual {vis_num} does not have a corresponding image."
-            )
-
-        img_path = images[img_idx]
-
-        # If duration > 3.5s, split into sub-shots
-        if duration > 3.5:
-            num_sub = max(2, int(round(duration / 2.5)))
-            sub_len = duration / num_sub
-            for s_i in range(num_sub):
-                scene_jobs.append({
-                    "section": sec_num,
-                    "visual": vis_num,
-                    "image_path": img_path,
-                    "duration": sub_len,
-                    "narration": item.get("narration", ""),
-                    "sub_idx": s_i + 1
-                })
-        else:
-            scene_jobs.append({
-                "section": sec_num,
-                "visual": vis_num,
-                "image_path": img_path,
-                "duration": duration,
-                "narration": item.get("narration", ""),
-                "sub_idx": 1
-            })
-
     transition_dur = 0.35
 
-    for idx, job in enumerate(scene_jobs):
-        is_last = (idx == len(scene_jobs) - 1)
-        job_dur = job["duration"]
-        # Render extra overlap frames for smooth xfade transition if not the last clip
-        render_dur = job_dur + transition_dur if not is_last else job_dur
+    # --------------------------------------------------------
+    # Creator Canvas Engine (8-10 layered scenes) vs legacy per-sentence slideshow.
+    # Auto-on when data/entities/ has curated cutouts; AUTOTUBE_CANVAS=1/0 forces it.
+    # --------------------------------------------------------
+    use_canvas = False
+    try:
+        from agents.canvas_ladder import canvas_enabled, build_scene_clips
+        use_canvas = canvas_enabled()
+    except Exception as canvas_import_err:
+        print(f"Creator Canvas unavailable, using legacy visuals: {canvas_import_err}")
 
-        is_hook = (idx == 0)
-        direction = "hook_snap_zoom" if is_hook else motion_directions[dir_idx % len(motion_directions)]
-        if not is_hook:
-            dir_idx += 1
-
-        media_input = job["image_path"]
-        if media_input.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp"):
-            try:
-                with Image.open(media_input) as img_inspect:
-                    w, h = img_inspect.size
-                    orig_aspect = w / max(1, h)
-                    tgt_aspect = target_w / max(1, target_h)
-                    # If aspect ratio mismatch is noticeable (> 0.35 difference)
-                    # Use Smart Canvas to avoid aggressive 70% cropping and provide blurred background
-                    if abs(orig_aspect - tgt_aspect) > 0.35:
-                        media_input = Path(render_smart_canvas_image(
-                            media_input,
-                            target_width=target_w,
-                            target_height=target_h
-                        ))
-            except Exception as canvas_err:
-                print(f"Smart canvas check notice for {media_input.name}: {canvas_err}")
-
-        clip_filename = f"scene_{idx:03d}_sec{job['section']}_vis{job['visual']}_{direction}.mp4"
-        clip_path = scene_clips_dir / clip_filename
-
-        print(
-            f"[{idx+1}/{len(scene_jobs)}] Section {job['section']} | Visual {job['visual']} | "
-            f"{media_input.name} -> {direction}{' ⚡ [VIRAL HOOK PUNCH-IN & FLASH]' if is_hook else ''} | {job_dur:.2f}s (render: {render_dur:.2f}s)"
-        )
-
-        prepare_scene_clip(
-            media_path=media_input,
-            output_path=clip_path,
-            duration_seconds=render_dur,
-            direction=direction,
+    if use_canvas:
+        print("Creator Canvas Engine: ON (scene consolidation + emotion cutouts + layered 9:16 compositing)")
+        scene_clips, scene_durations, _planned_scenes = build_scene_clips(
+            timed_sections=timed_sections,
+            images=images,
+            scene_clips_dir=scene_clips_dir,
             width=target_w,
             height=target_h,
             fps=FPS,
-            is_hook=is_hook,
+            transition_dur=transition_dur,
+            assets_dir=ASSETS_DIR,
+            overrides_path=OUTPUT_DIR / "scene_overrides.json",
         )
+    else:
+        motion_directions = [
+            "zoom_in", "slow_cinematic_push", "pan_left", "zoom_in_tilt_up",
+            "zoom_out", "pan_right", "zoom_in_tilt_down"
+        ]
+        dir_idx = 0
+        scene_clips = []
+        scene_durations = []
 
-        scene_clips.append(str(clip_path))
-        scene_durations.append(job_dur)
+        # Long-Form Chapter Bumpers Integration (16:9)
+        chapter_bumpers_map = {}
+        if aspect_ratio == "16:9" and (OUTPUT_DIR / "chapters.json").exists():
+            try:
+                import json
+                from agents.chapter_engine import render_chapter_bumper
+                ch_list = json.loads((OUTPUT_DIR / "chapters.json").read_text(encoding="utf-8"))
+                for ch in ch_list:
+                    c_num = int(ch.get("chapter", 1))
+                    c_title = str(ch.get("title", ""))
+                    s_target = int(ch.get("section_index", 0)) + 1
+                    bmp_p = render_chapter_bumper(
+                        chapter_num=c_num,
+                        title=c_title,
+                        width=target_w,
+                        height=target_h,
+                    )
+                    chapter_bumpers_map[s_target] = Path(bmp_p)
+                print(f"🎬 [16:9 Director] Prepared {len(chapter_bumpers_map)} chapter title slates.")
+            except Exception as ch_bmp_err:
+                print(f"⚠️ Chapter bumper preparation notice: {ch_bmp_err}")
+
+        # Flatten timed_sections into calibrated shots
+        scene_jobs = []
+        for item in timed_sections:
+            sec_num = item["section"]
+            vis_num = item["visual"]
+            start = item["start"]
+            end = item["end"]
+            duration = max(0.5, end - start)
+            img_idx = vis_num - 1
+
+            if img_idx < 0 or img_idx >= len(images):
+                audio.close()
+                raise RuntimeError(
+                    f"Visual {vis_num} does not have a corresponding image."
+                )
+
+            img_path = images[img_idx]
+
+            # Pacing Calibration: 1.8-2.2s for 9:16 Shorts, 5.0-6.5s for 16:9 Long-Form
+            if aspect_ratio == "16:9":
+                max_shot_len = 6.5
+                target_sub_len = 5.0
+            else:
+                max_shot_len = 2.2
+                target_sub_len = 1.8
+
+            # Check if this section begins a new chapter
+            has_bumper = (sec_num in chapter_bumpers_map)
+            bumper_img = chapter_bumpers_map.get(sec_num)
+
+            if duration > max_shot_len or (has_bumper and duration >= 4.0):
+                num_sub = max(2, int(round(duration / target_sub_len)))
+                sub_len = duration / num_sub
+                for s_i in range(num_sub):
+                    # Opening sub-shot of a chapter gets the chapter bumper slate!
+                    effective_img = (bumper_img if (s_i == 0 and has_bumper) else img_path)
+                    scene_jobs.append({
+                        "section": sec_num,
+                        "visual": vis_num,
+                        "image_path": effective_img,
+                        "duration": sub_len,
+                        "narration": item.get("narration", ""),
+                        "sub_idx": s_i + 1,
+                        "is_chapter_bumper": (s_i == 0 and has_bumper),
+                    })
+            else:
+                effective_img = bumper_img if has_bumper else img_path
+                scene_jobs.append({
+                    "section": sec_num,
+                    "visual": vis_num,
+                    "image_path": effective_img,
+                    "duration": duration,
+                    "narration": item.get("narration", ""),
+                    "sub_idx": 1,
+                    "is_chapter_bumper": has_bumper,
+                })
+
+        transition_dur = 0.35
+
+        render_tasks = []
+        for idx, job in enumerate(scene_jobs):
+            is_last = (idx == len(scene_jobs) - 1)
+            job_dur = job["duration"]
+            # Render extra overlap frames for smooth xfade transition if not the last clip
+            render_dur = job_dur + transition_dur if not is_last else job_dur
+
+            is_hook = (idx == 0) and (aspect_ratio == "9:16")
+            if job.get("is_chapter_bumper"):
+                direction = "slow_cinematic_push"
+            elif is_hook:
+                direction = "hook_snap_zoom"
+            else:
+                direction = motion_directions[dir_idx % len(motion_directions)]
+                dir_idx += 1
+
+            media_input = job["image_path"]
+            if media_input.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp"):
+                try:
+                    with Image.open(media_input) as img_inspect:
+                        w, h = img_inspect.size
+                        orig_aspect = w / max(1, h)
+                        tgt_aspect = target_w / max(1, target_h)
+                        # If aspect ratio mismatch is noticeable (> 0.35 difference)
+                        # Use Smart Canvas to avoid aggressive 70% cropping and provide blurred background
+                        if abs(orig_aspect - tgt_aspect) > 0.35:
+                            media_input = Path(render_smart_canvas_image(
+                                media_input,
+                                target_width=target_w,
+                                target_height=target_h
+                            ))
+                except Exception as canvas_err:
+                    print(f"Smart canvas check notice for {media_input.name}: {canvas_err}")
+
+            try:
+                mtime = media_input.stat().st_mtime
+                fsize = media_input.stat().st_size
+            except Exception:
+                mtime = 0
+                fsize = 0
+            fingerprint = hashlib.md5(f"{media_input.name}_{mtime}_{fsize}_{render_dur:.2f}_{direction}_{target_w}_{target_h}_{is_hook}".encode("utf-8")).hexdigest()[:10]
+            clip_filename = f"scene_{idx:03d}_sec{job['section']}_vis{job['visual']}_{direction}_{fingerprint}.mp4"
+            clip_path = scene_clips_dir / clip_filename
+
+            render_tasks.append({
+                "idx": idx,
+                "media_input": str(media_input.resolve()),
+                "clip_path": str(clip_path.resolve()),
+                "render_dur": float(render_dur),
+                "job_dur": float(job_dur),
+                "direction": str(direction),
+                "is_hook": bool(is_hook),
+                "section": int(job["section"]),
+                "visual": int(job["visual"]),
+                "width": int(target_w),
+                "height": int(target_h),
+                "fps": int(FPS),
+                "media_name": media_input.name,
+            })
+
+        # Hook ensure_visual_assets_exist immediately BEFORE FFmpeg Ken Burns rendering loop
+        ensure_visual_assets_exist(needed_count)
+
+        # Verify each task input exists before launching Ken Burns workers
+        for t in render_tasks:
+            m_path = Path(t["media_input"])
+            if not m_path.exists() or m_path.stat().st_size <= 1000:
+                primary_asset = ASSETS_DIR / "1.jpg"
+                if primary_asset.exists() and primary_asset.stat().st_size > 1000:
+                    t["media_input"] = str(primary_asset.resolve())
+                else:
+                    fb_pool = sorted((ASSETS_DIR / "fallback").glob("*.jpg"))
+                    if fb_pool:
+                        t["media_input"] = str(fb_pool[0].resolve())
+
+        tasks_to_render = []
+        for t in render_tasks:
+            cp = Path(t["clip_path"])
+            if cp.exists() and cp.stat().st_size > 5000:
+                print(f"⚡ [Scene Clip Cache Hit] Reusing cached scene clip for section {t['section']} visual {t['visual']}: {cp.name}")
+            else:
+                tasks_to_render.append(t)
+
+        if tasks_to_render:
+            import concurrent.futures
+            max_workers = min(4, os.cpu_count() or 4, len(tasks_to_render))
+            print(f"⚡ [Video Multiprocessing] Concurrently rendering {len(tasks_to_render)}/{len(render_tasks)} scene clips ({max_workers} processes)...")
+            with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as ex:
+                list(ex.map(_render_scene_clip_process, tasks_to_render))
+        else:
+            print(f"⚡ [Video Acceleration] All {len(render_tasks)} scene clips found in disk cache! Zero rendering needed.")
+
+        # Maintain strictly ordered sequence with verified disk validation
+        for t in sorted(render_tasks, key=lambda x: x["idx"]):
+            cp = Path(t["clip_path"])
+            if not cp.exists() or cp.stat().st_size <= 1000:
+                print(f"⚠️ [Scene Clip Recovery] Scene clip {cp.name} is missing or empty. Running immediate self-healing render...")
+                media_p = Path(t["media_input"])
+                if not media_p.exists() or media_p.stat().st_size <= 1000:
+                    fb_pool = sorted((ASSETS_DIR / "fallback").glob("*.jpg"))
+                    media_p = fb_pool[0] if fb_pool else (ASSETS_DIR / "1.jpg")
+                try:
+                    from ken_burns import prepare_scene_clip
+                    prepare_scene_clip(
+                        media_path=media_p,
+                        output_path=cp,
+                        duration_seconds=float(t["render_dur"]),
+                        direction=str(t["direction"]),
+                        width=int(t["width"]),
+                        height=int(t["height"]),
+                        fps=int(t["fps"]),
+                        is_hook=bool(t["is_hook"]),
+                    )
+                except Exception as rec_err:
+                    print(f"⚠️ Recovery render error for {cp.name}: {rec_err}")
+                    valid_clips = [Path(ot["clip_path"]) for ot in render_tasks if Path(ot["clip_path"]).exists() and Path(ot["clip_path"]).stat().st_size > 5000]
+                    if valid_clips:
+                        shutil.copyfile(valid_clips[0], cp)
+
+            if cp.exists() and cp.stat().st_size > 1000:
+                scene_clips.append(str(cp.resolve()))
+                scene_durations.append(t["job_dur"])
+                print(
+                    f"[{t['idx']+1}/{len(render_tasks)}] Section {t['section']} | Visual {t['visual']} | "
+                    f"{t['media_name']} -> {t['direction']}{' ⚡ [VIRAL HOOK PUNCH-IN & FLASH]' if t['is_hook'] else ''} | {t['job_dur']:.2f}s (render: {t['render_dur']:.2f}s)"
+                )
 
     if not scene_clips:
         audio.close()
@@ -1731,21 +1968,38 @@ def create_video(aspect_ratio="9:16"):
     )
 
     # --------------------------------------------------------
-    # BGM Engine with Automated Audio Ducking
+    # BGM Engine with Automated Audio Ducking & Adaptive Mixing
     # --------------------------------------------------------
-    bgm_mood = detect_bgm_mood(script=script)
-    bgm_track = BGM_DIR / f"{bgm_mood}.wav"
     mixed_audio_file = OUTPUT_DIR / "mixed_audio.wav"
-
     final_audio_path = VOICE_FILE
-    if bgm_track.exists():
-        mixed_res = mix_audio_with_ducking(
-            voice_path=str(VOICE_FILE),
-            bgm_path=str(bgm_track),
-            output_audio_path=str(mixed_audio_file),
-        )
-        if mixed_res and os.path.exists(mixed_res):
+    try:
+        import audio_mixer
+        ch_data = None
+        if (OUTPUT_DIR / "chapters.json").exists():
+            try:
+                import json
+                ch_data = json.loads((OUTPUT_DIR / "chapters.json").read_text(encoding="utf-8"))
+            except Exception:
+                pass
+
+        if aspect_ratio == "16:9" or audio_duration >= 90.0:
+            print("🎵 [Audio Mixer] Using chapter-aware multi-track long-form BGM progression...")
+            mixed_res = audio_mixer.mix_longform_background_music(
+                voice_path=str(VOICE_FILE),
+                output_path=str(mixed_audio_file),
+                chapters_data=ch_data,
+            )
+        else:
+            mood_track = audio_mixer.select_mood_music()
+            mixed_res = audio_mixer.mix_with_background_music(
+                voice_path=str(VOICE_FILE),
+                music_path=mood_track,
+                output_path=str(mixed_audio_file),
+            )
+        if mixed_res and os.path.exists(mixed_res) and os.path.getsize(mixed_res) > 1024:
             final_audio_path = Path(mixed_res)
+    except Exception as bgm_err:
+        print(f"⚠️ Audio mixer notice: {bgm_err}. Using voiceover directly.")
 
     # --------------------------------------------------------
     # Multiplex Audio & Video
@@ -1762,11 +2016,13 @@ def create_video(aspect_ratio="9:16"):
         "-c:v", "copy",
         "-c:a", "aac",
         "-b:a", "192k",
+        "-ar", "48000",
+        "-ac", "2",
         "-shortest",
         "-movflags", "+faststart",
         str(VIDEO_FILE),
     ]
-    r_mux = subprocess.run(mux_cmd, capture_output=True, text=True)
+    r_mux = subprocess.run(mux_cmd, capture_output=True, text=True, timeout=90)
     if r_mux.returncode != 0 or not VIDEO_FILE.exists() or VIDEO_FILE.stat().st_size == 0:
         raise RuntimeError(f"Audio/video multiplexing failed: {r_mux.stderr or 'No output file'}")
 

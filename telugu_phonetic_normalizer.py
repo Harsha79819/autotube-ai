@@ -104,6 +104,24 @@ def number_to_english_phonetic_telugu(n: Union[int, str]) -> str:
             return f"{th_str} {h_str}"
         return f"{th_str} {h_str} {number_to_english_phonetic_telugu(r2)}"
 
+    if val < 100000000:
+        # Indian Lakhs (1 lakh = 100,000)
+        lakh, r = divmod(val, 100000)
+        if lakh > 0:
+            lakh_str = number_to_english_phonetic_telugu(lakh) + " లాక్"
+            if r == 0:
+                return lakh_str
+            return f"{lakh_str} {number_to_english_phonetic_telugu(r)}"
+
+    if val < 10000000000:
+        # Indian Crores (1 crore = 10,000,000)
+        cr, r = divmod(val, 10000000)
+        if cr > 0:
+            cr_str = number_to_english_phonetic_telugu(cr) + " క్రోర్"
+            if r == 0:
+                return cr_str
+            return f"{cr_str} {number_to_english_phonetic_telugu(r)}"
+
     return str(val)
 
 
@@ -137,6 +155,8 @@ BRAND_DICTIONARY = {
     "mini": "మినీ",
     "Max": "మ్యాక్స్",
     "max": "మ్యాక్స్",
+    "Series": "సిరీస్",
+    "series": "సిరీస్",
 
     # Samsung & Android brands
     "Samsung Galaxy": "సామ్సంగ్ గెలాక్సీ",
@@ -530,11 +550,32 @@ def normalize_smartphones_and_models(text: str) -> str:
 
     text = re.sub(r"(?i)\b(?:S|ఎస్)\s*(\d{2})\b", replace_s_series, text)
 
-    # 3. Other major brands followed by numbers
+    # 3. Series models with letter prefixes (e.g. Oppo F35, Vivo V40, Vivo T3, Galaxy M35, Galaxy A55, Realme GT 6)
+    def replace_series_letter_number(m):
+        brand = m.group(1) or ""
+        series_letter = m.group(2).upper()
+        letter_tel = {
+            "F": "ఎఫ్", "V": "వి", "T": "టి", "M": "ఎం", "A": "ఏ",
+            "G": "జి", "GT": "జిటి", "RENO": "రెనో", "NORD": "నార్డ్"
+        }.get(series_letter, series_letter)
+        num = int(m.group(3))
+        brand_tel = BRAND_DICTIONARY.get(brand, brand) if brand else ""
+        num_tel = number_to_english_phonetic_telugu(num)
+        parts = [p for p in [brand_tel, letter_tel, num_tel] if p]
+        return " ".join(parts)
+
+    series_letter_pattern = (
+        r"(?i)\b(?:(Oppo|ఒప్పో|Vivo|వివో|Samsung|సామ్సంగ్|గెలాక్సీ|Realme|రియల్‌మీ|OnePlus|వన్‌ప్లస్|Moto|మోటో)\s*)?"
+        r"(F|V|T|M|A|GT|Reno|Nord)\s*(\d{1,2})\b"
+    )
+    text = re.sub(series_letter_pattern, replace_series_letter_number, text)
+
+    # 4. Other major brands followed directly by numbers
     def replace_brand_number(m):
         brand = m.group(1)
+        brand_tel = BRAND_DICTIONARY.get(brand, brand)
         num = int(m.group(2))
-        return f"{brand} {number_to_english_phonetic_telugu(num)}"
+        return f"{brand_tel} {number_to_english_phonetic_telugu(num)}"
 
     brands_pattern = (
         r"(?i)\b(OnePlus|వన్‌ప్లస్|Pixel|పిక్సెల్|Realme|రియల్‌మీ|Redmi\s*Note|రెడ్‌మీ\s*నోట్|"
@@ -835,6 +876,53 @@ def normalize_telugu_tech_script(script_text: str) -> str:
 
     # 5. Tech specifications and hardware units (48MP, 2TB, 120Hz, 5G, 45W)
     text = normalize_specs_and_units(text)
+
+    # 5b. Prices and Currencies (₹89,999, Rs. 89,999, ₹1,50,000)
+    def replace_telugu_currency(m):
+        raw_num = m.group(1).replace(",", "")
+        try:
+            val = int(raw_num)
+            spoken = number_to_english_phonetic_telugu(val)
+            return f"{spoken} రూపాయలు"
+        except Exception:
+            return m.group(0)
+
+    text = re.sub(
+        r"(?:₹|Rs\.?|రూ\.?|రూపాయలు)\s*(\d{1,3}(?:,\d{2,3})*|\d+)(?:/-)?",
+        replace_telugu_currency,
+        text,
+        flags=re.IGNORECASE
+    )
+
+    # 5c. Comma-separated numbers in Telugu text (e.g. 89,999 or 1,50,000)
+    def replace_telugu_comma_nums(m):
+        raw_num = m.group(0).replace(",", "")
+        try:
+            val = int(raw_num)
+            return number_to_english_phonetic_telugu(val)
+        except Exception:
+            return m.group(0)
+
+    text = re.sub(
+        r"\b\d{1,3}(?:,\d{2,3})+\b",
+        replace_telugu_comma_nums,
+        text
+    )
+
+    # 5d. Decimal numbers in Telugu text (e.g. 4.5 -> ఫోర్ పాయింట్ ఫైవ్)
+    def replace_telugu_decimals(m):
+        try:
+            whole = number_to_english_phonetic_telugu(int(m.group(1)))
+            dec = " ".join(number_to_english_phonetic_telugu(int(d)) for d in m.group(2))
+            return f"{whole} పాయింట్ {dec}"
+        except Exception:
+            return m.group(0)
+
+    text = re.sub(
+        r"\b(\d+)\.(\d+)\b",
+        replace_telugu_decimals,
+        text
+    )
 
     # 6. Clean extra spaces
     text = re.sub(r"\s+", " ", text).strip()

@@ -10,7 +10,7 @@ ASSETS_DIR = ROOT / "assets"
 OUTPUT_DIR = ROOT / "output"
 
 
-def _find_best_background(aspect_ratio="16:9"):
+def _find_best_background(aspect_ratio="16:9", assets_dir=None):
     """
     Select the best image from assets matching the desired aspect ratio.
 
@@ -24,8 +24,10 @@ def _find_best_background(aspect_ratio="16:9"):
     """
 
     candidates = []
-
-    if not ASSETS_DIR.exists():
+    scan_dir = Path(assets_dir) if assets_dir else ASSETS_DIR
+    if not scan_dir.exists():
+        scan_dir = ASSETS_DIR
+    if not scan_dir.exists():
         return None
 
     target_ratio = (
@@ -33,55 +35,161 @@ def _find_best_background(aspect_ratio="16:9"):
         else (1.0 if aspect_ratio == "1:1" else 16 / 9)
     )
 
-    for path in ASSETS_DIR.iterdir():
+    # Pass 1: Pre-fetch ledger URLs in 1 query instead of looping on DB per image
+    ledger_urls = {}
+    if not assets_dir or Path(assets_dir).resolve() == ASSETS_DIR.resolve():
+        db_p = ROOT / "data" / "autotube.db"
+        if db_p.exists():
+            try:
+                import sqlite3
+                with sqlite3.connect(str(db_p), timeout=5.0) as conn:
+                    rows = conn.execute("SELECT asset_path, source_url FROM asset_ledger ORDER BY id DESC").fetchall()
+                    for ap, su in rows:
+                        if ap and su:
+                            ledger_urls[Path(ap).name] = su
+            except Exception:
+                pass
 
-        if path.name.lower() in {
-            "contact_sheet.jpg",
-            "contact_sheet.jpeg",
-            "contact_sheet.png",
-        }:
+    try:
+        from utils.season_guard import is_conflicting_season_candidate, is_bigg_boss_topic
+        title_file = OUTPUT_DIR / "title.txt"
+        title_txt = title_file.read_text(encoding="utf-8").strip() if title_file.exists() else ""
+        is_bb = is_bigg_boss_topic(title_txt)
+    except Exception:
+        is_bb = False
+
+    raw_candidates = []
+
+    for path in scan_dir.iterdir():
+        if path.name.lower().startswith("contact_sheet"):
             continue
 
-        if path.suffix.lower() not in {
-            ".jpg",
-            ".jpeg",
-            ".png",
-            ".webp",
-        }:
+        if path.suffix.lower() not in {".jpg", ".jpeg", ".png", ".webp"}:
+            continue
+
+        # Fast meme name filter
+        if any(m in path.name.lower() for m in ("meme", "brahmi", "sunil", "ali", "posani", "kota", "babu_mohan", "dharmavarapu", "venky", "venu_madhav", "jayaprakash")):
             continue
 
         try:
             with Image.open(path) as img:
-
                 width, height = img.size
 
                 if width < 300 or height < 300:
                     continue
 
                 aspect = width / height
-
-                # Prefer images close to requested aspect ratio
                 ratio_difference = abs(aspect - target_ratio)
                 ratio_score = max(0, 60 - (ratio_difference * 35))
+                resolution_score = min((width * height) / 1_000_000, 20)
 
-                resolution_score = min(
-                    (width * height) / 1_000_000,
-                    20,
-                )
+                source_url = ledger_urls.get(path.name, "")
 
-                score = ratio_score + resolution_score
+                if source_url and is_conflicting_season_candidate(source_url, is_bb_context=is_bb):
+                    continue
 
-                candidates.append(
-                    (score, path)
-                )
+                if source_url and ("meme" in source_url.lower() or "reaction" in source_url.lower()):
+                    continue
+
+                # Primary subject bonus
+                subject_bonus = 0
+                if source_url and "contestant_gallery" in source_url:
+                    subject_bonus += 20
+                if path.name in ("1.jpg", "1.jpeg", "1.png"):
+                    subject_bonus += 5
+                elif path.name in ("2.jpg", "2.jpeg", "2.png"):
+                    subject_bonus += 5
+
+                score = ratio_score + resolution_score + subject_bonus
+                raw_candidates.append((score, path, source_url))
 
         except Exception as exc:
-            print(
-                f"⚠️ Could not inspect {path.name}: {exc}"
-            )
+            print(f"⚠️ Could not inspect {path.name}: {exc}")
+
+    if not raw_candidates:
+        candidates = []
+    else:
+        # Sort raw candidates by score descending
+        raw_candidates.sort(key=lambda item: item[0], reverse=True)
+
+        # Pass 2: Deep validation (meme hash & OCR) on top candidates ONLY (max 4)
+        top_candidates = raw_candidates[:4]
+        meme_hashes = []
+        meme_dir = ROOT / "reference_assets" / "memes"
+        if meme_dir.exists():
+            try:
+                from agents.image_agent import image_dhash
+                for mf in meme_dir.glob("*.jpg"):
+                    mdh = image_dhash(mf)
+                    if mdh:
+                        meme_hashes.append((mf.name, mdh))
+            except Exception:
+                pass
+
+        # Filter out perceptual meme matches among top candidates
+        filtered_top = []
+        try:
+            from agents.image_agent import image_dhash, is_perceptual_duplicate
+            for score, p, s_url in top_candidates:
+                p_dh = image_dhash(p)
+                is_known_meme = False
+                if p_dh and meme_hashes:
+                    for m_name, mf_dh in meme_hashes:
+                        if is_perceptual_duplicate(p_dh, [mf_dh], max_dist=5):
+                            print(f"⚠️ [Thumbnail] Skipping {p.name}: perceptual match with known meme in library ({m_name})")
+                            is_known_meme = True
+                            break
+                if not is_known_meme:
+                    filtered_top.append((score, p, s_url))
+        except Exception:
+            filtered_top = top_candidates
+
+        # Batch OCR scanning on remaining top candidates (at most 3)
+        to_ocr_paths = [p for _, p, _ in filtered_top[:3]]
+        ocr_results = {}
+        if to_ocr_paths:
+            try:
+                from tools.ocr_guard import scan_images_ocr
+                ocr_results = scan_images_ocr(to_ocr_paths)
+            except Exception:
+                pass
+
+        candidates = []
+        for score, p, s_url in filtered_top:
+            ocr_txt = ocr_results.get(str(p), "").lower()
+            if any(b in ocr_txt for b in ("kulfy", "housepulse", "biggboss.world", "coming soon", "agnipariksha", "tell to", "shutterstock", "getty")):
+                print(f"⚠️ [Thumbnail] Skipping {p.name}: contains watermark/disqualified text ({ocr_txt[:30]})")
+                continue
+            candidates.append((score, p))
+            # First clean high-scoring candidate is sufficient
+            if len(candidates) >= 2:
+                break
 
     if not candidates:
-        return None
+        fallback_pool = list((ROOT / "assets" / "fallback").glob("*.jpg")) + list((ROOT / "assets" / "entities").glob("**/*.jpg"))
+        for fb_path in fallback_pool:
+            try:
+                with Image.open(fb_path) as img:
+                    w, h = img.size
+                    if w >= 300 and h >= 300:
+                        candidates.append((10, fb_path))
+            except Exception:
+                pass
+
+    if not candidates:
+        # Guarantee background is NEVER None: Generate branded high-contrast slate image
+        slate_path = (ASSETS_DIR / "thumbnail_slate.jpg")
+        try:
+            ASSETS_DIR.mkdir(parents=True, exist_ok=True)
+            slate_w, slate_h = (1080, 1920) if aspect_ratio == "9:16" else (1280, 720)
+            slate_img = Image.new("RGB", (slate_w, slate_h), color=(15, 23, 42))
+            draw = ImageDraw.Draw(slate_img)
+            draw.rectangle((0, int(slate_h * 0.35), slate_w, int(slate_h * 0.65)), fill=(30, 41, 59))
+            slate_img.save(slate_path, "JPEG", quality=90)
+            print(f"🖼️ Thumbnail background: Generated branded high-contrast slate ({aspect_ratio})")
+            return slate_path
+        except Exception:
+            return None
 
     candidates.sort(
         key=lambda item: item[0],
@@ -133,36 +241,67 @@ def _load_font(size, is_telugu=False):
 
 def _clean_title(title):
     """
-    Convert a long video title into a short
-    thumbnail-friendly phrase.
+    Converts a video title into a high-CTR, 3-4 word curiosity-gap phrase.
+    Limits text strictly to 3-4 words to maximize mobile thumbnail click-through rates.
     """
-
     if not title:
-        return "LATEST NEWS"
+        return "SHOCKING TWIST?!"
 
-    title = str(title).strip()
+    t = str(title).strip()
 
-    # Remove common punctuation noise.
-    title = re.sub(
-        r"\s+",
-        " ",
-        title,
-    )
+    # Strip common channel prefixes or suffixes
+    t = re.sub(r"^(roasting the drama|roasting|breaking|honest review|review):\s*", "", t, flags=re.IGNORECASE)
+    t = re.sub(r"\s*-\s*(reuters|youtube|shorts|viral).*$", "", t, flags=re.IGNORECASE)
+    t = re.sub(r"[#@][\w]+", "", t).strip()
 
-    title = title.strip(
-        " .,!?:;-_"
-    )
+    t_low = t.lower()
 
-    # Keep the strongest first part.
-    words = title.split()
+    # Check for direct curiosity question in the title (e.g. "NAGARJUNA ROHIT NI TARGET CHESARA?")
+    if "?" in t:
+        q_part = [p.strip() for p in t.split("?") if p.strip()]
+        if q_part:
+            words = q_part[0].split()
+            if len(words) <= 4:
+                return (q_part[0] + "?").upper()
+            else:
+                return (" ".join(words[-4:]) + "?").upper()
 
-    # Thumbnail text should stay short.
-    if len(words) > 8:
-        words = words[:8]
+    # If colon, pipe, or hyphen separates a punchy statement, take the punchiest part
+    parts = [p.strip() for p in re.split(r"[:|!-]", t) if p.strip()]
+    if len(parts) > 1:
+        # Check if the second part is shorter and punchy
+        cand = parts[1] if 2 <= len(parts[1].split()) <= 4 else parts[0]
+        words = cand.split()
+        if 2 <= len(words) <= 4:
+            return " ".join(words[:4]).upper()
 
-    result = " ".join(words)
+    # Topic-specific curiosity trigger mappings if title is very long
+    if any(k in t_low for k in ["elimination", "eviction"]):
+        return "SHOCKING ELIMINATION?!"
+    elif any(k in t_low for k in ["nomination"]):
+        return "NOMINATION TWIST?!"
+    elif any(k in t_low for k in ["wild card", "wildcard"]):
+        return "WILDCARD ENTRY BOMBSHELL!"
+    elif any(k in t_low for k in ["nagarjuna"]):
+        return "NAGARJUNA SHOCKING VERDICT!"
+    elif any(k in t_low for k in ["secret room"]):
+        return "SECRET ROOM DRAMA!"
 
-    return result.upper()
+    # Extract words (Telugu and alphanumeric)
+    words = re.findall(r"[\w\u0C00-\u0C7F]+", t)
+
+    # Filter out boring stop words to keep punchy curiosity words
+    stop_words = {"the", "a", "an", "is", "in", "and", "or", "of", "to", "for", "with", "this", "that", "telugu", "full", "story", "analysis"}
+    punchy_words = [w for w in words if w.lower() not in stop_words]
+
+    if len(punchy_words) >= 3:
+        return " ".join(punchy_words[:4]).upper()
+    elif len(words) >= 3:
+        return " ".join(words[:4]).upper()
+    elif words:
+        return " ".join(words).upper()
+
+    return "SHOCKING TWIST?!"
 
 
 def _fit_to_aspect_ratio(image, aspect_ratio="16:9"):
@@ -222,8 +361,13 @@ def _fit_to_aspect_ratio(image, aspect_ratio="16:9"):
         return bg
 
 
-def create_thumbnail(title, aspect_ratio="16:9"):
+def create_thumbnail(title, aspect_ratio="16:9", assets_dir=None, output_dir=None):
 
+    out_dir = Path(output_dir) if output_dir else OUTPUT_DIR
+    out_dir.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
     OUTPUT_DIR.mkdir(
         parents=True,
         exist_ok=True,
@@ -234,29 +378,24 @@ def create_thumbnail(title, aspect_ratio="16:9"):
     print(f"THUMBNAIL GENERATION ({aspect_ratio})")
     print("=" * 60)
 
-    background_path = _find_best_background(aspect_ratio=aspect_ratio)
+    background_path = _find_best_background(aspect_ratio=aspect_ratio, assets_dir=assets_dir)
 
-    if background_path is None:
+    image = None
+    if background_path and Path(background_path).exists():
+        try:
+            image = Image.open(background_path).convert("RGB")
+            background_name = Path(background_path).name
+        except Exception as exc:
+            print(f"⚠️ Failed to open background: {exc}")
 
-        print(
-            "❌ No suitable background image found"
-        )
-
-        return None
-
-    try:
-
-        image = Image.open(
-            background_path
-        ).convert("RGB")
-
-    except Exception as exc:
-
-        print(
-            f"❌ Failed to open background: {exc}"
-        )
-
-        return None
+    if image is None:
+        print("ℹ️ Synthesizing branded high-contrast slate background for thumbnail...")
+        canvas_w = 1080 if aspect_ratio == "9:16" else 1280
+        canvas_h = 1920 if aspect_ratio == "9:16" else 720
+        image = Image.new("RGB", (canvas_w, canvas_h), color=(15, 23, 42))
+        slate_draw = ImageDraw.Draw(image)
+        slate_draw.rectangle((0, int(canvas_h * 0.35), canvas_w, int(canvas_h * 0.65)), fill=(30, 41, 59))
+        background_name = "branded_slate.jpg"
 
     # --------------------------------------------------------
     # FIT / RESIZE ACCORDING TO ASPECT RATIO
@@ -298,43 +437,43 @@ def create_thumbnail(title, aspect_ratio="16:9"):
     )
 
     if aspect_ratio == "9:16":
-        # Subtle gradient/soft darkening banner for vertical shorts (avoids looking like a black caption bar)
+        # Subtle gradient/soft darkening banner for vertical shorts
         overlay_draw.rectangle(
             (0, 920, canvas_w, 1380),
-            fill=(0, 0, 0, 85),
+            fill=(0, 0, 0, 95),
         )
         overlay_draw.rectangle(
             (0, 0, canvas_w, 120),
             fill=(0, 0, 0, 30),
         )
-        font_size = 64
-        line_height = 78
+        font_size = 78
+        line_height = 92
         target_center_y = 1140
         max_text_width = canvas_w - 140
     elif aspect_ratio == "1:1":
         overlay_draw.rectangle(
             (0, 720, canvas_w, canvas_h),
-            fill=(0, 0, 0, 85),
+            fill=(0, 0, 0, 95),
         )
         overlay_draw.rectangle(
             (0, 0, canvas_w, 90),
             fill=(0, 0, 0, 30),
         )
-        font_size = 58
-        line_height = 72
+        font_size = 66
+        line_height = 80
         target_center_y = 880
         max_text_width = canvas_w - 120
     else:  # 16:9
         overlay_draw.rectangle(
-            (0, 440, canvas_w, canvas_h),
-            fill=(0, 0, 0, 85),
+            (0, 420, canvas_w, canvas_h),
+            fill=(0, 0, 0, 95),
         )
         overlay_draw.rectangle(
             (0, 0, canvas_w, 90),
             fill=(0, 0, 0, 30),
         )
-        font_size = 56
-        line_height = 66
+        font_size = 68
+        line_height = 80
         target_center_y = 560
         max_text_width = canvas_w - 160
 
@@ -346,7 +485,7 @@ def create_thumbnail(title, aspect_ratio="16:9"):
     draw = ImageDraw.Draw(image)
 
     # --------------------------------------------------------
-    # TITLE
+    # TITLE (3-4 Word High-CTR Curiosity Phrase)
     # --------------------------------------------------------
 
     thumbnail_title = _clean_title(
@@ -356,15 +495,13 @@ def create_thumbnail(title, aspect_ratio="16:9"):
     is_telugu_title = bool(re.search(r"[\u0C00-\u0C7F]", thumbnail_title))
     font = _load_font(font_size, is_telugu=is_telugu_title)
 
-    # Wrap based on pixel width rather than
-    # blindly using a fixed word count.
+    # Wrap based on pixel width rather than blindly using a fixed word count.
     words = thumbnail_title.split()
 
     lines = []
     current = ""
 
     for word in words:
-
         test = (
             f"{current} {word}"
             if current
@@ -384,23 +521,21 @@ def create_thumbnail(title, aspect_ratio="16:9"):
 
         if (
             text_width <= max_text_width
-            and len(lines) < 3
+            and len(lines) < 2
         ):
             current = test
         else:
-
             if current:
                 lines.append(current)
-
             current = word
 
     if current:
         lines.append(current)
 
-    lines = lines[:3]
+    lines = lines[:2]  # Keep strictly 1-2 lines for 3-4 words
 
     # --------------------------------------------------------
-    # CENTER TITLE VERTICALLY IN TARGET ZONE
+    # CENTER TITLE VERTICALLY IN TARGET ZONE WITH HIGH-CONTRAST POP
     # --------------------------------------------------------
 
     total_height = (
@@ -411,13 +546,12 @@ def create_thumbnail(title, aspect_ratio="16:9"):
         total_height // 2
     )
 
-    for line in lines:
-
+    for idx, line in enumerate(lines):
         bbox = draw.textbbox(
             (0, 0),
             line,
             font=font,
-            stroke_width=2,
+            stroke_width=4,
         )
 
         text_width = (
@@ -428,23 +562,26 @@ def create_thumbnail(title, aspect_ratio="16:9"):
             canvas_w - text_width
         ) // 2
 
-        # Strong shadow
+        # Vibrant high-CTR color: Golden yellow for first line, crisp white for second
+        text_color = "#FFE600" if idx == 0 else "#FFFFFF"
+
+        # Deep shadow
         draw.text(
             (x + 5, y + 5),
             line,
             font=font,
-            fill=(0, 0, 0, 220),
-            stroke_width=3,
-            stroke_fill=(0, 0, 0, 220),
+            fill=(0, 0, 0, 240),
+            stroke_width=5,
+            stroke_fill=(0, 0, 0, 240),
         )
 
-        # Main white text
+        # High-contrast text with thick black outline
         draw.text(
             (x, y),
             line,
             font=font,
-            fill="white",
-            stroke_width=2,
+            fill=text_color,
+            stroke_width=4,
             stroke_fill="black",
         )
 
@@ -455,19 +592,39 @@ def create_thumbnail(title, aspect_ratio="16:9"):
     # --------------------------------------------------------
 
     output = (
+        out_dir /
+        "thumbnail.jpg"
+    )
+    global_output = (
         OUTPUT_DIR /
         "thumbnail.jpg"
     )
 
-    image.convert("RGB").save(
+    image_rgb = image.convert("RGB")
+    image_rgb.save(
         output,
         "JPEG",
         quality=95,
         optimize=True,
     )
 
+    if output.resolve() != global_output.resolve():
+        try:
+            image_rgb.save(
+                global_output,
+                "JPEG",
+                quality=95,
+                optimize=True,
+            )
+        except Exception:
+            try:
+                import shutil
+                shutil.copyfile(output, global_output)
+            except Exception:
+                pass
+
     print(
-        f"✅ Thumbnail created ({canvas_w}x{canvas_h}): {output}"
+        f"✅ Thumbnail created ({canvas_w}x{canvas_h}): {output} (and {global_output})"
     )
 
     print(
@@ -477,7 +634,7 @@ def create_thumbnail(title, aspect_ratio="16:9"):
 
     print(
         f"🖼️ Background: "
-        f"{background_path.name}"
+        f"{background_name}"
     )
 
     print("=" * 60)
@@ -503,11 +660,17 @@ def generate_thumbnail_prompts(topic_data: dict, gemini_call_fn=None) -> list[st
             from agents.script_agent import get_client
             client = get_client()
             def _call_gem(prompt):
-                resp = client.models.generate_content(
-                    model="gemini-2.5-flash",
-                    contents=prompt,
-                )
-                return resp.text
+                for m in ["gemini-flash-lite-latest", "gemini-flash-latest", "gemini-3.5-flash-lite", "gemini-3.8-flash"]:
+                    try:
+                        resp = client.models.generate_content(
+                            model=m,
+                            contents=prompt,
+                        )
+                        if getattr(resp, "text", ""):
+                            return resp.text
+                    except Exception:
+                        continue
+                return ""
             gemini_call_fn = _call_gem
         except Exception:
             return default_prompts
@@ -554,11 +717,17 @@ def rank_thumbnails_by_gemini(candidates, topic_data, gemini_call_fn=None):
             from agents.script_agent import get_client
             client = get_client()
             def _call_gem(prompt):
-                resp = client.models.generate_content(
-                    model="gemini-2.5-flash",
-                    contents=prompt,
-                )
-                return resp.text
+                for m in ["gemini-flash-lite-latest", "gemini-flash-latest", "gemini-3.5-flash-lite", "gemini-3.8-flash"]:
+                    try:
+                        resp = client.models.generate_content(
+                            model=m,
+                            contents=prompt,
+                        )
+                        if getattr(resp, "text", ""):
+                            return resp.text
+                    except Exception:
+                        continue
+                return ""
             gemini_call_fn = _call_gem
         except Exception:
             return candidates

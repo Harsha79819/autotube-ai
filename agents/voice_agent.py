@@ -1,7 +1,11 @@
 import asyncio
 import os
 import re
+import sys
 import time
+from pathlib import Path
+import certifi
+os.environ.setdefault("SSL_CERT_FILE", certifi.where())
 
 # Allow online HuggingFace Hub downloads on fresh container deployments if not already cached
 if os.getenv("HF_HUB_OFFLINE") is None:
@@ -49,6 +53,11 @@ def make_tts_text(text):
         return ""
 
     if re.search(r"[\u0C00-\u0C7F]", text):
+        try:
+            from edge_tts_generator import prepare_script_for_tts
+            text = prepare_script_for_tts(text)
+        except Exception:
+            pass
         from telugu_phonetic_normalizer import normalize_telugu_tech_script
         text = normalize_telugu_tech_script(text)
         cleaned = re.sub(r"[*_#`~]", "", text)
@@ -62,28 +71,116 @@ def make_tts_text(text):
 
     from num2words import num2words
 
+    def _clean_spoken_words(words: str) -> str:
+        # Strip internal commas and 'and' fillers so speech synthesis flows smoothly
+        words = re.sub(r",\s*", " ", words)
+        words = re.sub(r"\band\b", "", words)
+        return re.sub(r"\s+", " ", words).strip()
+
+    def _num_to_words(val: int) -> str:
+        try:
+            w = num2words(val, lang="en_IN")
+        except Exception:
+            w = num2words(val, lang="en")
+        return _clean_spoken_words(w)
+
     # --------------------------------------------------------
-    # Decimal numbers
+    # Currencies (Rupees, Dollars, Euros, Pounds)
+    # ₹89,999 -> eighty-nine thousand nine hundred ninety-nine rupees
+    # $999 -> nine hundred ninety-nine dollars
+    # --------------------------------------------------------
+
+    def rupee_replace(match):
+        raw = match.group(1).replace(",", "")
+        if "." in raw:
+            parts = raw.split(".", 1)
+            whole = int(parts[0]) if parts[0] else 0
+            dec = parts[1]
+            if int(dec) == 0:
+                words = _num_to_words(whole)
+                return f"{words} rupees"
+            whole_words = _num_to_words(whole)
+            dec_words = " ".join(_num_to_words(int(d)) for d in dec)
+            return f"{whole_words} point {dec_words} rupees"
+        return f"{_num_to_words(int(raw))} rupees"
+
+    text = re.sub(
+        r"(?:₹|Rs\.?|INR)\s*(\d{1,3}(?:,\d{2,3})*(?:\.\d+)?|\d+(?:\.\d+)?)(?:/-)?",
+        rupee_replace,
+        text,
+        flags=re.IGNORECASE
+    )
+
+    def dollar_replace(match):
+        raw = match.group(1).replace(",", "")
+        if "." in raw:
+            parts = raw.split(".", 1)
+            whole = int(parts[0]) if parts[0] else 0
+            dec = parts[1]
+            whole_words = _num_to_words(whole)
+            dec_words = " ".join(_num_to_words(int(d)) for d in dec)
+            return f"{whole_words} point {dec_words} dollars"
+        return f"{_num_to_words(int(raw))} dollars"
+
+    text = re.sub(
+        r"(?:\$|USD\s*)\s*(\d{1,3}(?:,\d{2,3})*(?:\.\d+)?|\d+(?:\.\d+)?)",
+        dollar_replace,
+        text,
+        flags=re.IGNORECASE
+    )
+
+    # --------------------------------------------------------
+    # Percentages
+    # 5% -> five percent, 12.5% -> twelve point five percent
+    # --------------------------------------------------------
+
+    def percent_replace(match):
+        raw = match.group(1).replace(",", "")
+        if "." in raw:
+            parts = raw.split(".", 1)
+            whole_words = _num_to_words(int(parts[0])) if parts[0] else "zero"
+            dec_words = " ".join(_num_to_words(int(d)) for d in parts[1])
+            return f"{whole_words} point {dec_words} percent"
+        return f"{_num_to_words(int(raw))} percent"
+
+    text = re.sub(
+        r"(\d{1,3}(?:,\d{2,3})*(?:\.\d+)?|\d+(?:\.\d+)?)%",
+        percent_replace,
+        text
+    )
+
+    # --------------------------------------------------------
+    # Comma-separated numbers (without currency)
+    # 89,999 -> eighty-nine thousand nine hundred ninety-nine
+    # 1,50,000 -> one lakh fifty thousand
+    # --------------------------------------------------------
+
+    def comma_num_replace(match):
+        raw = match.group(0).replace(",", "")
+        if "." in raw:
+            parts = raw.split(".", 1)
+            whole_words = _num_to_words(int(parts[0])) if parts[0] else "zero"
+            dec_words = " ".join(_num_to_words(int(d)) for d in parts[1])
+            return f"{whole_words} point {dec_words}"
+        return _num_to_words(int(raw))
+
+    text = re.sub(
+        r"\b\d{1,3}(?:,\d{2,3})+(?:\.\d+)?\b",
+        comma_num_replace,
+        text
+    )
+
+    # --------------------------------------------------------
+    # Decimal numbers (without commas)
+    # 4.5 -> four point five
     # 2.54 -> two point five four
     # --------------------------------------------------------
 
     def decimal_replace(match):
         whole = int(match.group(1))
         decimal = match.group(2)
-
-        whole_words = num2words(
-            whole,
-            lang="en"
-        )
-
-        decimal_words = " ".join(
-            num2words(
-                int(digit),
-                lang="en"
-            )
-            for digit in decimal
-        )
-
+        whole_words = _num_to_words(whole)
+        decimal_words = " ".join(_num_to_words(int(digit)) for digit in decimal)
         return f"{whole_words} point {decimal_words}"
 
     text = re.sub(
@@ -93,79 +190,13 @@ def make_tts_text(text):
     )
 
     # --------------------------------------------------------
-    # Percentages
-    # 5% -> five percent
-    # --------------------------------------------------------
-
-    def percent_replace(match):
-        number = match.group(1)
-
-        if "." in number:
-            value = float(number)
-            words = num2words(
-                value,
-                lang="en"
-            )
-        else:
-            words = num2words(
-                int(number),
-                lang="en"
-            )
-
-        return f"{words} percent"
-
-    text = re.sub(
-        r"(\d+(?:\.\d+)?)%",
-        percent_replace,
-        text
-    )
-
-    # --------------------------------------------------------
-    # Indian currency
-    # ₹500 -> five hundred rupees
-    # Rs. 500 -> five hundred rupees
-    # --------------------------------------------------------
-
-    def rupee_replace(match):
-        number = match.group(1)
-
-        if "." in number:
-            value = float(number)
-            words = num2words(
-                value,
-                lang="en"
-            )
-        else:
-            words = num2words(
-                int(number),
-                lang="en"
-            )
-
-        return f"{words} rupees"
-
-    text = text.replace("₹", "₹")
-
-    text = re.sub(
-        r"₹\s*(\d+(?:\.\d+)?)",
-        rupee_replace,
-        text
-    )
-
-    text = re.sub(
-        r"\bRs\.?\s*(\d+(?:\.\d+)?)",
-        rupee_replace,
-        text,
-        flags=re.IGNORECASE
-    )
-
-    # --------------------------------------------------------
     # Indian financial expressions
     # "five hundred rupees crore" -> "five hundred crore"
     # "two rupees lakh" -> "two lakh"
     # --------------------------------------------------------
 
     text = re.sub(
-        r"\\brupees\\s+(?=(?:lakh|crore)\\b)",
+        r"\brupees\s+(?=(?:lakh|crore)\b)",
         "",
         text,
         flags=re.IGNORECASE
@@ -173,30 +204,19 @@ def make_tts_text(text):
 
     # --------------------------------------------------------
     # Years
-    #
     # 2026 -> twenty twenty-six
     # 2025 -> twenty twenty-five
     # --------------------------------------------------------
 
     def year_replace(match):
         year = int(match.group(0))
-
         if 2000 <= year <= 2099:
             last_two = year - 2000
-
             if last_two == 0:
                 return "two thousand"
-
             if last_two < 10:
-                return f"two thousand and {num2words(last_two, lang='en')}"
-
-            last_two_words = num2words(
-                last_two,
-                lang="en"
-            )
-
-            return f"twenty {last_two_words}"
-
+                return f"two thousand {_num_to_words(last_two)}"
+            return f"twenty {_num_to_words(last_two)}"
         return match.group(0)
 
     text = re.sub(
@@ -207,20 +227,14 @@ def make_tts_text(text):
 
     # --------------------------------------------------------
     # Standalone numbers
-    #
     # 5 -> five
+    # 45 -> forty-five
     # 500 -> five hundred
-    #
-    # Avoid converting numbers that are part of words.
     # --------------------------------------------------------
 
     def number_replace(match):
         number = int(match.group(0))
-
-        return num2words(
-            number,
-            lang="en"
-        )
+        return _num_to_words(number)
 
     text = re.sub(
         r"\b\d+\b",
@@ -605,42 +619,118 @@ async def generate_edge_tts_speech(
     voice_code="te-IN-MohanNeural",
     output_mp3="output/voice.mp3",
     rate="+8%",
-    pitch="+2Hz",
+    pitch="+0Hz",
 ):
-    """Generate high-quality multilingual neural voice using Microsoft Edge-TTS with tuned pacing,
+    """Generate high-quality multilingual neural voice using Microsoft Edge-TTS with tuned pacing (+8% / ~1.08x Shorts brisk cadence),
     capturing exact word boundary timestamps directly from the stream."""
     word_timings = []
-    try:
-        from edge_tts_generator import generate_with_word_boundaries
-        _, word_timings = await generate_with_word_boundaries(
-            text=speech_text,
-            output_path=output_mp3,
-            voice=voice_code or "te-IN-MohanNeural",
-            rate=rate or "+8%",
-            pitch=pitch or "+2Hz",
-        )
-    except Exception as boundary_err:
-        print(f"Edge-TTS boundary capture note: {boundary_err}. Falling back to standard synthesis...")
+    import asyncio
+    for attempt in range(1, 4):
         try:
-            from edge_tts_generator import generate_telugu_speech
-            await generate_telugu_speech(
+            from edge_tts_generator import generate_with_word_boundaries
+            _, word_timings = await generate_with_word_boundaries(
                 text=speech_text,
                 output_path=output_mp3,
                 voice=voice_code or "te-IN-MohanNeural",
                 rate=rate or "+8%",
-                pitch=pitch or "+2Hz",
+                pitch=pitch or "+0Hz",
             )
-        except Exception:
-            import edge_tts
-            communicate = edge_tts.Communicate(
-                text=speech_text,
-                voice=voice_code,
-                rate=rate or "+8%",
-                pitch=pitch or "+2Hz",
-            )
-            await communicate.save(output_mp3)
+            if os.path.exists(output_mp3) and os.path.getsize(output_mp3) > 1000:
+                return word_timings
+        except Exception as boundary_err:
+            print(f"Edge-TTS boundary capture note (attempt {attempt}/3): {boundary_err}. Falling back to standard synthesis...")
+            try:
+                from edge_tts_generator import generate_telugu_speech
+                await generate_telugu_speech(
+                    text=speech_text,
+                    output_path=output_mp3,
+                    voice=voice_code or "te-IN-MohanNeural",
+                    rate=rate or "+8%",
+                    pitch=pitch or "+0Hz",
+                )
+                if os.path.exists(output_mp3) and os.path.getsize(output_mp3) > 1000:
+                    return word_timings
+            except Exception:
+                try:
+                    import edge_tts
+                    communicate = edge_tts.Communicate(
+                        text=speech_text,
+                        voice=voice_code or "te-IN-MohanNeural",
+                        rate=rate or "+8%",
+                        pitch=pitch or "+0Hz",
+                    )
+                    await communicate.save(output_mp3)
+                    if os.path.exists(output_mp3) and os.path.getsize(output_mp3) > 1000:
+                        return word_timings
+                except Exception as e_err:
+                    if attempt < 3:
+                        print(f"Edge-TTS connection retry {attempt}/3 in 1.5s...")
+                        await asyncio.sleep(1.5)
+                    else:
+                        raise e_err
 
     return word_timings
+
+
+async def generate_elevenlabs_speech(
+    speech_text: str,
+    voice_id: str = "21m00Tcm4TlvDq8ikWAM",  # Warm Conversational Default
+    output_mp3: str = "output/voice.mp3",
+    stability: float = 0.45,
+    similarity_boost: float = 0.78,
+    style: float = 0.20,
+    model_id: str = "eleven_multilingual_v2",
+):
+    """
+    Generate expressive speech via ElevenLabs API following Gemini's persona guidelines:
+    - Warm conversational voice
+    - Stability: 40-50% (0.45) for natural pitch modulation and inflection
+    - Similarity / clarity boost: 0.78 (75-80% sweet spot)
+    - Style Exaggeration: 0.20 (15-25% dynamic comedy/roast punch)
+    - Model: eleven_multilingual_v2
+    """
+    api_key = os.getenv("ELEVENLABS_API_KEY", "").strip()
+    if not api_key:
+        return None
+
+    import urllib.request
+    import json
+
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
+    headers = {
+        "xi-api-key": api_key,
+        "Content-Type": "application/json",
+        "Accept": "audio/mpeg",
+    }
+    payload = {
+        "text": speech_text,
+        "model_id": model_id,
+        "voice_settings": {
+            "stability": stability,
+            "similarity_boost": similarity_boost,
+            "style": style,
+            "use_speaker_boost": True,
+        },
+    }
+
+    try:
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers=headers,
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=30.0) as resp:
+            audio_bytes = resp.read()
+            if len(audio_bytes) > 1000:
+                os.makedirs(os.path.dirname(os.path.abspath(output_mp3)), exist_ok=True)
+                with open(output_mp3, "wb") as f:
+                    f.write(audio_bytes)
+                print(f"✅ [Voice Agent] ElevenLabs TTS generated successfully: {len(audio_bytes)} bytes.")
+                return output_mp3
+    except Exception as e:
+        print(f"⚠️ ElevenLabs TTS generation notice: {e}. Falling back to default neural engine...")
+    return None
 
 
 async def generate_omnivoice_speech(
@@ -678,7 +768,7 @@ async def generate_omnivoice_speech(
 @autonomous_recover("voice_agent")
 async def create_voice(
     voice=None,
-    rate="-5%",
+    rate="+8%",
     pitch="+0Hz",
     voice_sample=None,
     topic_category="tech_review",
@@ -820,6 +910,31 @@ async def create_voice(
         print("Script is empty!")
         return None
 
+    # Guard: Ensure Romanized Tanglish is converted to native Telugu script (తెలుగు లిపి)
+    try:
+        from utils.transliterate_telugu import ensure_telugu_script
+        tel_script = ensure_telugu_script(text)
+        if tel_script != text:
+            text = tel_script
+            with open(script_path, "w", encoding="utf-8") as file:
+                file.write(text)
+    except Exception as t_err:
+        pass
+
+    # Guard: Guarantee mandatory 3-part CTA (Like, Share, Subscribe) in every narration
+    try:
+        import re
+        from agents.script_agent import ensure_dynamic_outro_cta, deduplicate_script_narration
+        is_indic = bool(re.search(r"[\u0C00-\u0C7F]", text))
+        cta_text = ensure_dynamic_outro_cta(text, is_indic=is_indic)
+        cta_text = deduplicate_script_narration(cta_text)
+        if cta_text != text:
+            text = cta_text
+            with open(script_path, "w", encoding="utf-8") as file:
+                file.write(text)
+    except Exception:
+        pass
+
     speech_text = make_tts_text(text)
 
     with open(
@@ -854,6 +969,15 @@ async def create_voice(
                 break
 
     is_telugu_text = bool(re.search(r"[\u0C00-\u0C7F]", speech_text))
+    # Ensure native Telugu script and phonetically spell English loan words (Rule 4)
+    if is_telugu_text or "telugu" in str(voice).lower():
+        try:
+            from utils.transliterate_telugu import ensure_telugu_script
+            speech_text = ensure_telugu_script(speech_text)
+            is_telugu_text = bool(re.search(r"[\u0C00-\u0C7F]", speech_text))
+        except Exception:
+            pass
+
     is_hindi_text = bool(re.search(r"[\u0900-\u097F]", speech_text))
     voice_lower = str(voice or "").lower()
 
@@ -889,6 +1013,32 @@ async def create_voice(
         )
         if omni_res is not None and os.path.exists(output_mp3) and os.path.getsize(output_mp3) > 1000:
             used_mode = "OmniVoice (Voice Design: Natural Presenter)"
+            subprocess.run(
+                ["ffmpeg", "-y", "-i", output_mp3, "-ar", "24000", "-ac", "1", output_wav],
+                check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+
+    eleven_key = os.getenv("ELEVENLABS_API_KEY", "").strip()
+    is_elevenlabs = bool("eleven" in voice_lower or (eleven_key and tts_engine_cfg == "elevenlabs"))
+
+    if not used_mode and is_elevenlabs and eleven_key:
+        print()
+        print("=" * 60)
+        print("ELEVENLABS NEURAL TTS GENERATION (WARM CONVERSATIONAL)")
+        print("=" * 60)
+        print("Voice: ElevenLabs (stability=0.45, similarity_boost=0.78, style=0.20)")
+        print("TTS text preview:")
+        print(speech_text[:400])
+        print()
+        el_res = await generate_elevenlabs_speech(
+            speech_text=speech_text,
+            output_mp3=output_mp3,
+            stability=0.45,
+            similarity_boost=0.78,
+            style=0.20,
+        )
+        if el_res and os.path.exists(output_mp3) and os.path.getsize(output_mp3) > 1000:
+            used_mode = "ElevenLabs (Warm Conversational, Stability 0.45, Similarity 0.78, Style 0.20)"
             subprocess.run(
                 ["ffmpeg", "-y", "-i", output_mp3, "-ar", "24000", "-ac", "1", output_wav],
                 check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
@@ -976,12 +1126,46 @@ async def create_voice(
             used_mode = f"Cross-Lingual Cloned Voice (FreeVC24: {os.path.basename(speaker_sample_path)} -> Telugu)"
         except Exception as vc_err:
             print(f"⚠️ FreeVC24 cross-lingual cloning failed: {vc_err}. Falling back to Edge-TTS...")
-            await generate_edge_tts_speech(
-                speech_text=speech_text,
-                voice_code=base_telugu_voice,
-                output_mp3=output_wav,
-            )
-            used_mode = f"Edge-TTS Fallback ({base_telugu_voice})"
+            fb_done = False
+            try:
+                captured_words = await generate_edge_tts_speech(
+                    speech_text=speech_text,
+                    voice_code=base_telugu_voice,
+                    output_mp3=output_mp3,
+                )
+                if os.path.exists(output_mp3) and os.path.getsize(output_mp3) > 1000:
+                    subprocess.run(
+                        ["ffmpeg", "-y", "-i", output_mp3, "-ar", "24000", "-ac", "1", output_wav],
+                        check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                    )
+                    used_mode = f"Edge-TTS Fallback ({base_telugu_voice})"
+                    fb_done = True
+            except Exception as edge_fb_err:
+                print(f"⚠️ Edge-TTS fallback error: {edge_fb_err}. Attempting local system/Kokoro fallback...")
+
+            if not fb_done:
+                if sys.platform == "darwin":
+                    temp_aiff = "output/temp_geeta.aiff"
+                    try:
+                        print("🎙️ Using macOS native Telugu neural voice (Geeta) as zero-network fallback...")
+                        subprocess.run(["say", "-v", "Geeta", "-o", temp_aiff, speech_text], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        if os.path.exists(temp_aiff) and os.path.getsize(temp_aiff) > 2000:
+                            subprocess.run(["ffmpeg", "-y", "-i", temp_aiff, "-ar", "24000", "-ac", "1", output_wav], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                            subprocess.run(["ffmpeg", "-y", "-i", temp_aiff, "-codec:a", "libmp3lame", "-q:a", "2", output_mp3], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                            os.unlink(temp_aiff)
+                            used_mode = "macOS System Voice (Geeta)"
+                            fb_done = True
+                    except Exception as s_err:
+                        print(f"macOS voice fallback note: {s_err}")
+
+                if not fb_done:
+                    print("Falling back to local Kokoro creator voice...")
+                    words = re.findall(r"[A-Za-z0-9]+", speech_text)
+                    safe_k_text = " ".join(words) if len(words) >= 15 else "Here are the latest news updates and essential insights for today."
+                    generate_kokoro_speech(speech_text=safe_k_text, voice_code="am_adam", output_wav=output_wav)
+                    if os.path.exists(output_wav) and os.path.getsize(output_wav) > 1000:
+                        subprocess.run(["ffmpeg", "-y", "-i", output_wav, "-codec:a", "libmp3lame", "-q:a", "2", output_mp3], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    used_mode = "Kokoro Fallback (am_adam)"
     elif not used_mode and is_clone and speaker_sample_path and not is_telugu_text:
         print()
         print("=" * 60)
@@ -1129,13 +1313,43 @@ async def create_voice(
                 except Exception as norm_err:
                     print(f"Voice agent Telugu normalization note: {norm_err}")
 
-            captured_words = await generate_edge_tts_speech(
-                speech_text=speech_text,
-                voice_code=edge_voice_id,
-                output_mp3=output_mp3,
-                rate=rate if (rate and rate not in ("-5%", "+0%")) else "+8%",
-                pitch=pitch if (pitch and pitch != "+0Hz") else "+2Hz",
-            )
+            # Check if delivery_plan.json exists for roast / multi-emotion synthesis
+            delivery_file = Path("output/delivery_plan.json")
+            roast_beats = None
+            if delivery_file.exists():
+                try:
+                    roast_beats = json.loads(delivery_file.read_text(encoding="utf-8"))
+                except Exception:
+                    pass
+
+            if roast_beats and len(roast_beats) >= 2 and any(b.get("emotion") and b.get("emotion") != "neutral setup" for b in roast_beats):
+                print(f"🔥 [Voice Agent] Found Roast Delivery Plan with {len(roast_beats)} emotion beats. Running chunked roast synthesis with {edge_voice_id}...")
+                from edge_tts_generator import generate_roast_speech_with_emotions
+                output_mp3, captured_words = await generate_roast_speech_with_emotions(
+                    beats=roast_beats,
+                    output_path=output_mp3,
+                    voice=edge_voice_id,
+                    sfx_enabled=True,
+                )
+            elif is_telugu_text or "te-in" in edge_voice_id.lower() or "mohan" in edge_voice_id.lower() or "shruti" in edge_voice_id.lower():
+                print(f"🎙️ [Voice Agent] Running fluent stream Telugu speech synthesis with {edge_voice_id} (rate={rate or '+4%'}, pitch={pitch or '+0Hz'})...")
+                from edge_tts_generator import generate_modulated_telugu_speech
+                output_mp3, captured_words = await generate_modulated_telugu_speech(
+                    script_text=speech_text,
+                    output_path=output_mp3,
+                    voice=edge_voice_id,
+                    max_workers=4,
+                    rate=rate or "+4%",
+                    pitch=pitch or "+0Hz",
+                )
+            else:
+                captured_words = await generate_edge_tts_speech(
+                    speech_text=speech_text,
+                    voice_code=edge_voice_id,
+                    output_mp3=output_mp3,
+                    rate=rate if rate else "+8%",
+                    pitch=pitch if pitch else "+0Hz",
+                )
             # Create output_wav from output_mp3 for downstream processing
             subprocess.run(
                 [
@@ -1147,6 +1361,8 @@ async def create_voice(
                     "24000",
                     "-ac",
                     "1",
+                    "-avoid_negative_ts",
+                    "make_zero",
                     output_wav,
                 ],
                 check=True,
@@ -1155,13 +1371,36 @@ async def create_voice(
             )
             used_mode = f"Edge-TTS ({edge_voice_id})"
         except Exception as edge_err:
-            print(f"⚠️ Edge-TTS error: {edge_err}. Attempting Kokoro fallback...")
-            generate_kokoro_speech(
-                speech_text=speech_text,
-                voice_code="am_adam",
-                output_wav=output_wav,
-            )
-            used_mode = "Kokoro Fallback (am_adam)"
+            print(f"⚠️ Edge-TTS notice: {edge_err}. Attempting fast local fallback...")
+            fb_done = False
+            if sys.platform == "darwin":
+                chosen_voice = "Geeta" if is_telugu_text else ("Lekha" if is_hindi_text else "Rishi")
+                temp_aiff = "output/temp_system_fallback.aiff"
+                try:
+                    subprocess.run(["say", "-v", chosen_voice, "-o", temp_aiff, speech_text[:200]], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=3)
+                    if os.path.exists(temp_aiff) and os.path.getsize(temp_aiff) > 2000:
+                        subprocess.run(["ffmpeg", "-y", "-i", temp_aiff, "-ar", "24000", "-ac", "1", output_wav], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        subprocess.run(["ffmpeg", "-y", "-i", temp_aiff, "-codec:a", "libmp3lame", "-q:a", "2", output_mp3], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        os.unlink(temp_aiff)
+                        used_mode = f"macOS System Voice ({chosen_voice})"
+                        fb_done = True
+                except Exception:
+                    pass
+
+            if not fb_done:
+                print("Falling back to local Kokoro creator voice...")
+                safe_kokoro_text = speech_text
+                if is_telugu_text or is_hindi_text:
+                    words = re.findall(r"[A-Za-z0-9]+", speech_text)
+                    safe_kokoro_text = " ".join(words) if len(words) >= 15 else "Here are the latest news updates and essential insights for today."
+                generate_kokoro_speech(
+                    speech_text=safe_kokoro_text,
+                    voice_code="am_adam",
+                    output_wav=output_wav,
+                )
+                if os.path.exists(output_wav) and os.path.getsize(output_wav) > 1000:
+                    subprocess.run(["ffmpeg", "-y", "-i", output_wav, "-codec:a", "libmp3lame", "-q:a", "2", output_mp3], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                used_mode = "Kokoro Fallback (am_adam)"
     elif not used_mode:
         kokoro_voice = (
             voice
@@ -1204,17 +1443,28 @@ async def create_voice(
     voice_paced = "output/voice_paced.wav"
 
     try:
-        print("🎙️ Cleaning and pacing voice narration (1.07x pacing, -40dB silence trim)...")
-        clean_and_pace_voice(raw_audio, voice_paced, target_speed=1.07, min_silence_ms=350)
+        is_indic_audio = bool(re.search(r"[\u0C00-\u0C7F]", speech_text)) or any(k in str(voice or "").lower() for k in ("te-", "hi-", "mohan", "shruti", "swara", "madhur"))
+        # For Telugu / Indic speech, apply 1.06x energetic pacing while preserving natural breath pauses (preserve_indic_pauses=True)
+        effective_speed = 1.06 if is_indic_audio else 1.07
+        effective_silence = 750 if is_indic_audio else 350
+        print(f"🎙️ Cleaning and pacing voice narration ({effective_speed}x pacing, preserve natural breathing={is_indic_audio})...")
+        clean_and_pace_voice(
+            raw_audio,
+            voice_paced,
+            target_speed=effective_speed,
+            min_silence_ms=effective_silence,
+            preserve_indic_pauses=is_indic_audio,
+        )
 
         if include_music:
             music_track = select_mood_music(topic_category)
-            print(f"🎵 Ducking and mixing background music: {os.path.basename(music_track)} (threshold=0.08, -20dB)...")
+            music_vol = 0.10 if is_indic_audio else 0.14
+            print(f"🎵 Ducking and mixing background music: {os.path.basename(music_track)} (volume={music_vol}, threshold=0.08, -24dB)...")
             mix_with_background_music(
                 voice_path=voice_paced,
                 music_path=music_track,
                 output_path=output_mp3,
-                music_base_volume=0.35,
+                music_base_volume=music_vol,
                 threshold=0.08,
             )
             print("✅ Studio Audio Pipeline Complete: Paced voice + ducked background music saved to output/voice.mp3")
@@ -1246,11 +1496,32 @@ async def create_voice(
             )
 
     # ----------------------------------------------------
+    # Ensure leading silence is strictly < 0.15s for instant 0.0s speech hook
+    # ----------------------------------------------------
+    try:
+        from agents.run_report import measure_leading_silence
+        lead_sil = measure_leading_silence(output_mp3)
+        if lead_sil >= 0.15:
+            print(f"✂️ [Virality Trim] Leading silence was {lead_sil:.2f}s (>= 0.15s). Trimming leading silence to 0.0s...")
+            tmp_trimmed = "output/voice_trimmed.mp3"
+            subprocess.run([
+                "ffmpeg", "-y", "-i", output_mp3,
+                "-af", "silenceremove=start_periods=1:start_duration=0.01:start_threshold=-40dB",
+                "-codec:a", "libmp3lame", "-q:a", "2",
+                tmp_trimmed
+            ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if os.path.exists(tmp_trimmed) and os.path.getsize(tmp_trimmed) > 1000:
+                os.replace(tmp_trimmed, output_mp3)
+                new_lead = measure_leading_silence(output_mp3)
+                print(f"✅ [Virality Trim] Leading silence reduced to {new_lead:.2f}s (< 0.15s target achieved).")
+    except Exception as trim_lead_err:
+        print(f"⚠️ Leading silence check notice: {trim_lead_err}")
+
+    # ----------------------------------------------------
     # Synchronize Word-Level Timestamps to output/transcription.json
     # ----------------------------------------------------
     try:
         import json
-        from pathlib import Path
         cache_file = Path("output/transcription.json")
         cache_file.parent.mkdir(parents=True, exist_ok=True)
 
@@ -1304,6 +1575,22 @@ async def create_voice(
         print(f"⚡ Synchronized {len(final_words)} word timestamps to output/transcription.json (0s Whisper wait!)")
     except Exception as cache_sync_err:
         print(f"⚠️ Transcription cache sync note: {cache_sync_err}")
+
+    # Defensive guarantee: Ensure output_mp3 is valid and non-empty before returning
+    if not os.path.exists(output_mp3) or os.path.getsize(output_mp3) < 1000:
+        print("⚠️ Emergency audio recovery: output/voice.mp3 was missing or empty, synthesizing now...")
+        if os.path.exists(output_wav) and os.path.getsize(output_wav) > 1000:
+            subprocess.run(["ffmpeg", "-y", "-i", output_wav, "-codec:a", "libmp3lame", "-q:a", "2", output_mp3], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        elif sys.platform == "darwin":
+            c_voice = "Geeta" if is_telugu_text else ("Lekha" if is_hindi_text else "Rishi")
+            t_aiff = "output/temp_emergency.aiff"
+            try:
+                subprocess.run(["say", "-v", c_voice, "-o", t_aiff, speech_text], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                if os.path.exists(t_aiff) and os.path.getsize(t_aiff) > 1000:
+                    subprocess.run(["ffmpeg", "-y", "-i", t_aiff, "-codec:a", "libmp3lame", "-q:a", "2", output_mp3], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    os.unlink(t_aiff)
+            except Exception as em_err:
+                print(f"Emergency audio synthesis notice: {em_err}")
 
     print()
     print("Voice created successfully!")

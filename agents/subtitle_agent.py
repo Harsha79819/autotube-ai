@@ -30,7 +30,7 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,Noto Sans Telugu,{fontsize},&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,3,2,2,40,40,{margin_v},1
+Style: Default,Kohinoor Telugu,{fontsize},&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,3,2,2,40,40,{margin_v},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -897,8 +897,8 @@ def write_ass_karaoke_subtitles(items, output_ass="output/subtitles.ass", aspect
 
     if aspect_ratio == "9:16":
         res_x, res_y = 1080, 1920
-        font_size = 62
-        margin_v = 210  # Calibrated middle-bottom lower-third position (avoids blocking center subject)
+        font_size = 58
+        margin_v = 360  # Safe lower-third mobile area for 9:16 Shorts/Reels (above platform UI buttons and captions)
     elif aspect_ratio == "16:9":
         res_x, res_y = 1920, 1080
         font_size = 54
@@ -924,6 +924,7 @@ def write_ass_karaoke_subtitles(items, output_ass="output/subtitles.ass", aspect
         any(re.search(r"[\u0900-\u097F]", str(item.get("text", ""))) for item in items)
         or bool(re.search(r"[\u0900-\u097F]", script_text))
     )
+    # macOS native Telugu font with full HarfBuzz complex conjunct shaping
     font_name = "Kohinoor Telugu" if has_telugu else ("Kohinoor Devanagari" if has_hindi else "Arial")
 
     header = f"""[Script Info]
@@ -935,6 +936,7 @@ ScaledBorderAndShadow: yes
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Default,{font_name},{font_size},&H0000FFFF,&H00FFFFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,3.5,1.5,2,40,40,{margin_v},1
+Style: OnScreenBadge,{font_name},52,&H0000E5FF,&H00FFFFFF,&H00000000,&HB0111827,-1,0,0,0,100,100,0,0,3,6,2,8,40,40,360,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -944,6 +946,9 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     # Check if items are chunks (contain spaces or multiple words) or single words
     first_text = items[0].get("text", "").strip()
     is_chunk_list = " " in first_text or len(first_text.split()) > 1 or "index" in items[0]
+
+    # For Indic scripts with complex conjuncts (Telugu), use discrete \k word highlight to avoid splitting ligatures
+    k_tag = r"\k" if has_telugu else r"\kf"
 
     if is_chunk_list:
         for chunk in items:
@@ -962,9 +967,9 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 clean_w = w.replace("**", "").replace("*", "")
                 is_spec = "**" in w or bool(re.search(r"(\d+(?:mah|hz|gb|tb|w|mp)|₹\d+|\$\d+|ufs|s27|snapdragon)", clean_w, re.I))
                 if is_spec:
-                    k_parts.append(f"{{\\kf{word_dur_cs}\\c&H002CD4FF&\\b1\\fscx112\\fscy112}}{clean_w}{{\\r}} ")
+                    k_parts.append(f"{{{k_tag}{word_dur_cs}\\c&H002CD4FF&\\b1\\fscx112\\fscy112}}{clean_w}{{\\r}} ")
                 else:
-                    k_parts.append(f"{{\\kf{word_dur_cs}}}{clean_w} ")
+                    k_parts.append(f"{{{k_tag}{word_dur_cs}}}{clean_w} ")
             k_text = "".join(k_parts).strip()
             start_str = format_ass_timestamp(c_start)
             end_str = format_ass_timestamp(c_end)
@@ -1017,14 +1022,37 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                         karaoke_parts.append(f"{{\\kf{inter_gap}}}")
 
                 if is_spec:
-                    karaoke_parts.append(f"{{\\kf{dur_cs}\\c&H002CD4FF&\\b1\\fscx112\\fscy112}}{w_clean}{{\\r}} ")
+                    karaoke_parts.append(f"{{{k_tag}{dur_cs}\\c&H002CD4FF&\\b1\\fscx112\\fscy112}}{w_clean}{{\\r}} ")
                 else:
-                    karaoke_parts.append(f"{{\\kf{dur_cs}}}{w_clean} ")
+                    karaoke_parts.append(f"{{{k_tag}{dur_cs}}}{w_clean} ")
 
             k_text = "".join(karaoke_parts).strip()
             start_str = format_ass_timestamp(c_start)
             end_str = format_ass_timestamp(c_end)
             dialogues.append(f"Dialogue: 0,{start_str},{end_str},Default,,0,0,0,,{k_text}")
+
+    # Append On-Screen Headline Badges for key beats (Phase 5 Virality)
+    try:
+        from config.settings import get_setting
+        if get_setting("ON_SCREEN_TEXT", True) and aspect_ratio == "9:16":
+            vplan_p = Path("output/visual_plan.json")
+            if vplan_p.exists() and dialogues:
+                vplan_data = json.loads(vplan_p.read_text(encoding="utf-8"))
+                num_beats = len(vplan_data)
+                total_t = float(items[-1].get("end", 30.0)) if items else 30.0
+                beat_dur = total_t / max(1, num_beats)
+                for b_i, b_item in enumerate(vplan_data):
+                    ost = b_item.get("on_screen_text", "").strip()
+                    if ost and len(ost) <= 30:
+                        b_start = b_i * beat_dur
+                        b_end = min(total_t, b_start + min(2.5, max(1.2, beat_dur * 0.85)))
+                        s_str = format_ass_timestamp(b_start)
+                        e_str = format_ass_timestamp(b_end)
+                        dialogues.append(
+                            f"Dialogue: 1,{s_str},{e_str},OnScreenBadge,,0,0,0,,{{\\fad(120,120)}}{{\\b1}}{ost}{{\\b0}}"
+                        )
+    except Exception as badge_err:
+        print(f"On-screen badge generation notice: {badge_err}")
 
     ass_content = header + "\n".join(dialogues) + "\n"
     out_path = Path(output_ass)

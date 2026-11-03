@@ -67,17 +67,44 @@ def get_client():
 # ============================================================
 
 METADATA_MODELS = [
-    "gemini-2.5-flash",
-    "gemini-2.0-flash",
-    "gemini-1.5-flash",
-    "gemini-2.0-flash-lite",
     "gemini-flash-lite-latest",
+    "gemini-flash-latest",
 ]
+
+
+def _call_gemini_metadata(client, model, prompt, timeout=12.0):
+    """Executes a Gemini generate_content call bounded by a strict thread timeout."""
+    import concurrent.futures
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    try:
+        future = executor.submit(client.models.generate_content, model=model, contents=prompt)
+        return future.result(timeout=timeout)
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
 
 
 # ============================================================
 # PARSE GEMINI RESPONSE
 # ============================================================
+
+def sanitize_metadata_title(title: str) -> str:
+    """Auto-corrects common typos and formatting anomalies in YouTube metadata titles."""
+    if not title:
+        return ""
+    replacements = {
+        r"\bdubble\b": "double",
+        r"\bDUBBLE\b": "DOUBLE",
+        r"\bDubble\b": "Double",
+        r"\bstandas\b": "standards",
+        r"\bSTANDAS\b": "STANDARDS",
+        r"\belemination\b": "elimination",
+        r"\bELEMINATION\b": "ELIMINATION",
+    }
+    cleaned = title
+    for pat, rep in replacements.items():
+        cleaned = re.sub(pat, rep, cleaned)
+    return cleaned.strip()
+
 
 def parse_metadata(text):
 
@@ -96,6 +123,7 @@ def parse_metadata(text):
             .split("DESCRIPTION:", 1)[0]
             .strip()
         )
+        title = sanitize_metadata_title(title)
 
     # DESCRIPTION
     if "DESCRIPTION:" in text:
@@ -169,7 +197,7 @@ def generate_fallback_metadata(topic, script):
     # TITLE
     # --------------------------------------------------------
 
-    title = clean_topic
+    title = sanitize_metadata_title(clean_topic)
 
     if len(title) > 95:
 
@@ -230,6 +258,57 @@ def generate_fallback_metadata(topic, script):
     return title, description, tags
 
 
+def _attach_youtube_chapters(description: str, is_shorts: bool = False, total_duration: float = 0.0) -> str:
+    """If output/chapters.json exists, video is long-form (not Shorts), and has >= 3 chapters, appends YouTube clickable timestamps."""
+    if not is_shorts and 0 < total_duration < 90.0:
+        is_shorts = True
+
+    # Auto-detect Shorts from existing output files if not explicitly specified
+    if not is_shorts:
+        try:
+            v_path = os.path.join(PROJECT_ROOT, "output", "voice.mp3")
+            if os.path.exists(v_path):
+                import subprocess
+                probe = subprocess.run(
+                    ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", v_path],
+                    capture_output=True, text=True, timeout=3
+                )
+                if probe.returncode == 0 and probe.stdout.strip():
+                    dur = float(probe.stdout.strip())
+                    if total_duration <= 0:
+                        total_duration = dur
+                    if dur < 90.0:
+                        is_shorts = True
+        except Exception:
+            pass
+
+    if is_shorts:
+        return description
+
+    chapters_file = os.path.join(PROJECT_ROOT, "output", "chapters.json")
+    if not os.path.exists(chapters_file):
+        return description
+
+    try:
+        with open(chapters_file, "r", encoding="utf-8") as f:
+            chapters = json.load(f)
+        if isinstance(chapters, list) and len(chapters) >= 3:
+            # Filter out chapters beyond video duration if duration is provided
+            if total_duration > 0:
+                chapters = [c for c in chapters if c.get("start_time", 0.0) < total_duration]
+            if len(chapters) < 3:
+                return description
+            if "00:00" in description:
+                return description
+            from agents.chapter_engine import format_youtube_chapters_description
+            ts_block = format_youtube_chapters_description(chapters)
+            if ts_block:
+                return description.rstrip() + ts_block
+    except Exception as e:
+        print(f"⚠️ YouTube chapter timestamp attachment notice: {e}")
+    return description
+
+
 # ============================================================
 # MAIN FUNCTION
 # ============================================================
@@ -259,16 +338,15 @@ TAGS:
 [tag1, tag2, tag3, tag4, tag5, tag6, tag7, tag8, tag9, tag10]
 
 Rules:
-- TITLE CTR RULE: Titles must make it immediately clear what the viewer will learn or see within 2 seconds. Favor concrete specifics (price, key spec, comparison, benchmark) over vague hype words.
-- Be factual.
-- Do not invent information.
-- Do not exaggerate.
-- Do not make unsupported claims.
-- Make the title interesting, high-CTR, and accurate.
-- Keep the title under 100 characters.
-- Use important keywords naturally.
-- Tags must be directly relevant to the topic.
-- Do not include unrelated tags.
+- HIGH-CTR TITLE FORMULAS (PROVEN TOP PERFORMERS):
+  * Burning Question (Demands an immediate click): e.g. "NAGARJUNA ROHIT NI TARGET CHESARA?", "Did Prabhas Just Shatter All Records?!"
+  * Bold Provocative Statement (Shock/Curiosity): e.g. "House Lo Unna Vallake Dikku Ledu!", "Bigg Boss 10 Biggest Blunder Exposed!"
+  * For Telugu Entertainment/Bigg Boss/Cinema: Craft punchy titles in Telugu/Tanglish or English featuring emotional tension and curiosity.
+- BIGG BOSS SEASON 10 GROUND TRUTH: If the topic/script discusses Bigg Boss Telugu, the current show is STRICTLY Bigg Boss Telugu 10 (Season 10). NEVER output tags or descriptions for older seasons like Bigg Boss 7, 8, etc. (NEVER write 'Bigg Boss 7 Telugu').
+- OFFICIAL CONTESTANT SPELLINGS: Use exact verified contestant names: Rohit Patnam (NOT Rohit Patnaik), Shalini Patel (NOT Shalini Damera), Aman Masud, Sudheer Reddy (Sudheer Talks), Gundeboina Jhansi (Singer Jhansi), Charan Mahadev.
+- Keep the title punchy and strictly under 85 characters so it never truncates on mobile screens.
+- Be factual to the script, do not invent fake claims, but make the angle irresistible to click.
+- Tags: Include core entities, contestant names, movie titles, and high-volume search tags.
 - Return ONLY TITLE, DESCRIPTION and TAGS.
 """
 
@@ -280,25 +358,30 @@ Rules:
         "metadata.json"
     )
 
+    t_start = time.time()
+
     # --------------------------------------------------------
     # GEMINI ATTEMPTS WITH FALLBACK
     # --------------------------------------------------------
 
     for model in METADATA_MODELS:
+        if time.time() - t_start > 25.0:
+            print("⏱️ Metadata generation exceeded 25s budget, skipping to fallback...")
+            break
+
         try:
             print(f"Trying metadata model: {model}")
 
             active_client = get_client()
-            response = active_client.models.generate_content(
-                model=model,
-                contents=prompt
+            response = _call_gemini_metadata(
+                active_client,
+                model,
+                prompt,
+                timeout=12.0
             )
 
-            text = (
-                response.text.strip()
-                if getattr(response, "text", "")
-                else ""
-            )
+            resp_text = getattr(response, "text", None)
+            text = resp_text.strip() if resp_text else ""
 
             title, description, tags = parse_metadata(
                 text
@@ -309,6 +392,19 @@ Rules:
                 description,
                 tags
             ):
+                # Post-processing sanitization for Bigg Boss Telugu 10
+                if "bigg boss" in topic.lower() or "bigg boss" in script.lower():
+                    description = re.sub(r"\bBigg Boss [1-9]\b", "Bigg Boss Telugu 10", description, flags=re.IGNORECASE)
+                    description = description.replace("Rohit Patnaik", "Rohit Patnam").replace("Shalini Damera", "Shalini Patel")
+                    clean_tags = []
+                    for t in tags:
+                        t_clean = re.sub(r"\bBigg Boss [1-9]\b", "Bigg Boss Telugu 10", t, flags=re.IGNORECASE)
+                        t_clean = t_clean.replace("Rohit Patnaik", "Rohit Patnam").replace("Shalini Damera", "Shalini Patel")
+                        if t_clean not in clean_tags:
+                            clean_tags.append(t_clean)
+                    tags = clean_tags
+
+                description = _attach_youtube_chapters(description)
                 metadata = {
                     "title": title,
                     "description": description,
@@ -352,6 +448,28 @@ Rules:
             print(f"Metadata model {model} failed: {error}")
             continue
 
+    # Multi-provider cascade fallback (Pollinations / Groq / OpenAI)
+    if time.time() - t_start <= 25.0:
+        try:
+            from providers.llm import generate_text_cascade
+            print("Trying multi-provider LLM cascade for metadata...")
+            cascade_text = generate_text_cascade(prompt, step_name="metadata", per_provider_timeout=8.0)
+            c_title, c_desc, c_tags = parse_metadata(cascade_text)
+            if valid_metadata(c_title, c_desc, c_tags):
+                c_desc = _attach_youtube_chapters(c_desc)
+                metadata = {
+                    "title": c_title,
+                    "description": c_desc,
+                    "tags": c_tags
+                }
+                os.makedirs(os.path.dirname(metadata_file), exist_ok=True)
+                with open(metadata_file, "w", encoding="utf-8") as f:
+                    json.dump(metadata, f, ensure_ascii=False, indent=2)
+                print("Metadata generated via multi-provider cascade!")
+                return c_title, c_desc, c_tags
+        except Exception as c_err:
+            print(f"⚠️ Cascade metadata notice: {c_err}")
+
     # --------------------------------------------------------
     # LOCAL FALLBACK
     # --------------------------------------------------------
@@ -365,6 +483,7 @@ Rules:
         script
     )
 
+    description = _attach_youtube_chapters(description)
     metadata = {
         "title": title,
         "description": description,

@@ -117,10 +117,6 @@ class BaseTunnelManager:
         sys.exit(0)
 
     def stop(self):
-        if self._shutdown_called:
-            return
-        self._shutdown_called = True
-
         if TUNNEL_URL_FILE.exists():
             try:
                 TUNNEL_URL_FILE.unlink()
@@ -135,10 +131,11 @@ class BaseTunnelManager:
             except Exception:
                 self.process.kill()
             print("✅ Tunnel stopped.")
+        self.process = None
 
     def run_forever(self):
         if not self.process:
-            return
+            return False
         consecutive_errors = 0
         try:
             while self.process.poll() is None:
@@ -150,7 +147,7 @@ class BaseTunnelManager:
                         if consecutive_errors >= 8:
                             print("\n⚠️ Detected persistent broken tunnel control stream (8 consecutive errors). Auto-restarting tunnel...")
                             self.stop()
-                            sys.exit(1)
+                            return False
                     elif "Registered tunnel connection" in line or "HTTP" in line or "200" in line:
                         consecutive_errors = 0
                 else:
@@ -159,11 +156,11 @@ class BaseTunnelManager:
             self.stop()
             sys.exit(0)
         
-        # If the process exited on its own, capture and forward exit code
+        # If the process exited on its own, clean up and signal reconnect
         code = self.process.poll() if self.process else 1
         print(f"🛑 Tunnel process exited unexpectedly with code: {code}")
         self.stop()
-        sys.exit(code if code is not None else 1)
+        return False
 
 class NgrokTunnelManager(BaseTunnelManager):
     """Manages Ngrok permanent static domain tunnel."""
@@ -354,7 +351,7 @@ class CloudflareQuickTunnelManager(BaseTunnelManager):
             return ""
 
         target_url = f"http://{self.host}:{self.port}"
-        cmd = [binary, "tunnel", "--url", target_url]
+        cmd = [binary, "tunnel", "--protocol", "http2", "--url", target_url]
 
         print("\n" + "=" * 70)
         print("🌐 STARTING CLOUDFLARE QUICK TUNNEL (FALLBACK)")
@@ -374,7 +371,7 @@ class CloudflareQuickTunnelManager(BaseTunnelManager):
         signal.signal(signal.SIGINT, self._sig_handler)
         signal.signal(signal.SIGTERM, self._sig_handler)
 
-        url_regex = re.compile(r"https://[a-zA-Z0-9-]+\.trycloudflare\.com")
+        url_regex = re.compile(r"https://(?!api\b)[a-zA-Z0-9-]+\.trycloudflare\.com")
         start_time = time.time()
         while time.time() - start_time < timeout_sec:
             if self.process.poll() is not None:
@@ -468,26 +465,29 @@ def main():
         app_process = subprocess.Popen(app_cmd)
         time.sleep(2.5)
 
-    manager = resolve_tunnel_manager(mode=args.mode, port=args.port, host=args.host)
-    url = manager.start()
+    try:
+        while True:
+            manager = resolve_tunnel_manager(mode=args.mode, port=args.port, host=args.host)
+            url = manager.start()
 
-    if not url and args.mode in ("auto", "ngrok"):
-        print("🔄 Primary tunnel unavailable or quota exhausted. Falling back to Cloudflare Quick Tunnel...")
-        manager = CloudflareQuickTunnelManager(port=args.port, host=args.host)
-        url = manager.start()
+            if not url and args.mode in ("auto", "ngrok"):
+                print("🔄 Primary tunnel unavailable or quota exhausted. Falling back to Cloudflare Quick Tunnel...")
+                manager = CloudflareQuickTunnelManager(port=args.port, host=args.host)
+                url = manager.start()
 
-    if url:
-        print("\nTunnel is actively running. Press Ctrl+C anytime to stop.\n")
-        try:
-            manager.run_forever()
-        finally:
-            if app_process:
-                app_process.terminate()
-    else:
-        print("❌ Tunnel failed to start. Exiting.")
+            if url:
+                print("\nTunnel is actively running. Press Ctrl+C anytime to stop.\n")
+                res = manager.run_forever()
+                print("🔄 Tunnel connection dropped. Reconnecting in 3 seconds...")
+                time.sleep(3)
+            else:
+                print("⚠️ Tunnel failed to start. Retrying in 5 seconds...")
+                time.sleep(5)
+    except KeyboardInterrupt:
+        print("\n👋 Stopping tunnel runner.")
+    finally:
         if app_process:
             app_process.terminate()
-        sys.exit(1)
 
 if __name__ == "__main__":
     main()

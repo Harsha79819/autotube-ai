@@ -2,6 +2,7 @@ import os
 import json
 import importlib
 import re
+import time
 from supervisor import autonomous_recover
 
 
@@ -92,7 +93,7 @@ def normalize_title(title):
 def is_similar_title(
     title1,
     title2,
-    threshold=0.45,
+    threshold=0.80,
 ):
 
     words1 = set(
@@ -408,6 +409,44 @@ def print_video_status(
     print()
 
 
+def resolve_target_channel(content_type: str = "", topic: str = "", category: str = "") -> str:
+    """
+    Channel Routing Rule:
+      - Channel 1 (Primary) = AI/Tech ONLY.
+        (Nothing else should ever go here — no history, no facts, no movies, no general news outside AI/tech).
+      - Channel 2 (Secondary) = Everything else.
+        (All other content types: History, Interesting Facts, Cinema, General, non-tech News, etc.).
+    """
+    c_lower = str(content_type or "").strip().lower()
+    t_lower = str(topic or "").strip().lower()
+    cat_lower = str(category or "").strip().lower()
+
+    # Explicitly exclude non-tech formats from Channel 1
+    if any(h in c_lower for h in ("history", "fact", "cinema", "entertainment", "general", "flyer", "custom media", "roast", "sarcas", "funny", "comedy", "movie", "review", "custom topic", "deep dive")):
+        return "Channel 2 (Secondary)"
+
+    # AI / Tech content type markers
+    ai_tech_content_types = ["tech news", "tech", "technology", "ai", "ai news", "ai / technology news", "tech / concept"]
+    if any(k == c_lower or k in c_lower for k in ai_tech_content_types):
+        return "Channel 1 (Primary)"
+
+    # Category marker (e.g. from Google News RSS categories)
+    if cat_lower in ("technology", "tech"):
+        return "Channel 1 (Primary)"
+
+    # If content_type is "News" or empty, check if topic specifically discusses AI or technology entities
+    ai_tech_keywords = [
+        "artificial intelligence", "openai", "chatgpt", "gemini ai", "deepseek", "claude 3",
+        "nvidia", "semiconductor", "microchip", "gpu", "robotics",
+        "smartphone", "flagship phone", "processor", "google ai", "apple intelligence"
+    ]
+    if any(kw in t_lower for kw in ai_tech_keywords):
+        return "Channel 1 (Primary)"
+
+    # Everything else defaults strictly to Channel 2
+    return "Channel 2 (Secondary)"
+
+
 def get_channel_credential_paths(channel="Channel 1 (Primary)"):
     """
     Resolve token and client secret file paths based on YouTube channel choice.
@@ -448,7 +487,6 @@ def get_channel_credential_paths(channel="Channel 1 (Primary)"):
 # UPLOAD VIDEO
 # ============================================================
 
-@autonomous_recover("youtube_agent")
 def upload_video(
     video_file,
     title,
@@ -456,6 +494,9 @@ def upload_video(
     tags,
     privacy="public",
     channel="Channel 1 (Primary)",
+    thumbnail_path=None,
+    allow_reupload=False,
+    **kwargs,
 ):
 
     uploaded_videos = (
@@ -482,19 +523,17 @@ def upload_video(
     # DUPLICATE CHECK
     # --------------------------------------------------------
 
-    if title in uploaded_videos:
+    is_force_reupload = allow_reupload or os.getenv("ALLOW_REUPLOAD", "false").lower() in ("true", "1")
 
+    if title in uploaded_videos and not is_force_reupload:
+        prev_id = uploaded_videos[title]
         print()
-        print(
-            "Video already uploaded."
+        print(f"⚠️ Video already uploaded with exact same title: '{title}' (ID: {prev_id})")
+        raise RuntimeError(
+            f"Duplicate upload skipped: Video already uploaded with exact same title '{title}' (Existing YouTube ID: {prev_id})."
         )
-
-        print(
-            "Existing Video ID:",
-            uploaded_videos[title],
-        )
-
-        return uploaded_videos[title]
+    elif title in uploaded_videos and is_force_reupload:
+        print(f"ℹ️ Re-uploading corrected video with title: '{title}' (previous ID: {uploaded_videos[title]})")
 
     # Similar title / same-story detection
     for (
@@ -505,6 +544,7 @@ def upload_video(
         if is_similar_title(
             title,
             previous_title,
+            threshold=0.80,
         ):
 
             print()
@@ -532,7 +572,9 @@ def upload_video(
                 "Upload skipped."
             )
 
-            return previous_video_id
+            raise RuntimeError(
+                f"Duplicate upload skipped: Story matches previously uploaded video '{previous_title}' (Existing YouTube ID: {previous_video_id})."
+            )
 
     # --------------------------------------------------------
     # IMPORT GOOGLE LIBRARIES
@@ -676,6 +718,12 @@ def upload_video(
                     creds.to_json()
                 )
 
+    import socket
+    try:
+        socket.setdefaulttimeout(120.0)
+    except Exception:
+        pass
+
     # --------------------------------------------------------
     # YOUTUBE CLIENT
     # --------------------------------------------------------
@@ -687,32 +735,8 @@ def upload_video(
     )
 
     # --------------------------------------------------------
-    # UPLOAD
+    # UPLOAD WITH RESILIENT RESUMABLE CHUNKS & BROKEN PIPE RECOVERY
     # --------------------------------------------------------
-
-    request = youtube.videos().insert(
-
-        part="snippet,status",
-
-        body={
-            "snippet": {
-                "title": title,
-                "description": description,
-                "tags": tags,
-                "categoryId": "25",
-            },
-
-            "status": {
-                "privacyStatus": privacy,
-            },
-        },
-
-        media_body=MediaFileUpload(
-            video_file,
-            chunksize=-1,
-            resumable=True,
-        ),
-    )
 
     print()
     print("=" * 60)
@@ -739,24 +763,100 @@ def upload_video(
         ),
     )
 
-    print()
-    print("Uploading...")
+    max_session_attempts = 2
+    video_id = None
 
-    response = None
-
-    while response is None:
-
-        status, response = (
-            request.next_chunk()
-        )
-
-        if status:
-
-            print(
-                f"{int(status.progress() * 100)}% Uploaded"
+    for session_attempt in range(1, max_session_attempts + 1):
+        try:
+            request = youtube.videos().insert(
+                part="snippet,status",
+                body={
+                    "snippet": {
+                        "title": title,
+                        "description": description,
+                        "tags": tags,
+                        "categoryId": "25",
+                    },
+                    "status": {
+                        "privacyStatus": privacy,
+                    },
+                },
+                media_body=MediaFileUpload(
+                    video_file,
+                    chunksize=4 * 1024 * 1024,
+                    resumable=True,
+                ),
             )
 
-    video_id = response["id"]
+            print()
+            print(f"Uploading in 4MB resumable chunks (session attempt {session_attempt}/{max_session_attempts})...")
+
+            response = None
+            retry_count = 0
+            max_chunk_retries = 8
+
+            while response is None:
+                try:
+                    status, response = request.next_chunk()
+                    if status:
+                        print(
+                            f"{int(status.progress() * 100)}% Uploaded"
+                        )
+                    retry_count = 0
+                except Exception as chunk_err:
+                    err_str = str(chunk_err).lower()
+                    err_type = type(chunk_err).__name__
+
+                    retriable_keywords = (
+                        "broken pipe",
+                        "errno 32",
+                        "connection reset",
+                        "reset by peer",
+                        "socket",
+                        "connection",
+                        "timeout",
+                        "timed out",
+                        "ssl",
+                        "500",
+                        "502",
+                        "503",
+                        "504",
+                        "408",
+                        "remotedisconnected",
+                        "incomplete read",
+                        "bad file descriptor",
+                        "network is unreachable",
+                        "unexpected eof",
+                    )
+                    is_retriable = (
+                        any(w in err_str for w in retriable_keywords)
+                        or isinstance(chunk_err, (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, ConnectionRefusedError, socket.error, socket.timeout, OSError))
+                    )
+
+                    if is_retriable and retry_count < max_chunk_retries:
+                        retry_count += 1
+                        sleep_sec = min(2 ** retry_count, 30)
+                        print(
+                            f"⚠️ YouTube chunk upload interrupted ({err_type}: {chunk_err}). "
+                            f"Reconnecting and resuming from last acknowledged byte in {sleep_sec}s "
+                            f"(attempt {retry_count}/{max_chunk_retries})..."
+                        )
+                        time.sleep(sleep_sec)
+                    else:
+                        raise chunk_err
+
+            video_id = response["id"]
+            break  # Upload succeeded
+
+        except Exception as sess_err:
+            if session_attempt < max_session_attempts:
+                print(
+                    f"⚠️ YouTube upload session interrupted: {sess_err}. "
+                    f"Initiating fresh upload session in 4s (attempt {session_attempt + 1}/{max_session_attempts})..."
+                )
+                time.sleep(4.0)
+                continue
+            raise sess_err
 
     print()
     print(
@@ -778,7 +878,9 @@ def upload_video(
     # --------------------------------------------------------
 
     thumbnail_file = (
-        "output/thumbnail.jpg"
+        thumbnail_path
+        if (thumbnail_path and os.path.exists(thumbnail_path))
+        else "output/thumbnail.jpg"
     )
 
     if os.path.exists(

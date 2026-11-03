@@ -2,14 +2,27 @@
 
 import asyncio
 import datetime
+import functools
 import json
 import os
 import re
 import shutil
+import time
 from pathlib import Path
-from importlib import import_module
+try:
+    import streamlit as st
+except ImportError:
+    st = None
 
-st = import_module("streamlit")
+# Synchronously pre-initialize torch on the main thread to prevent multi-threaded import race conditions
+try:
+    import torch
+except Exception:
+    pass
+
+from config.format_profiles import get_format_profile, FormatProfile
+from agents.validation_agent import ValidationAgent, ValidationResult
+from run_lock import PipelineLock
 
 
 # ============================================================
@@ -68,10 +81,10 @@ VOICE_IDS = {
 }
 
 VOICE_TUNING = {
-    "👨 Mohan (Telugu Creator / Anchor) - Natural Spoken Delivery": ("+8%", "+2Hz"),
-    "👩 Shruti (Telugu Creator / Anchor) - Conversational": ("+8%", "+2Hz"),
-    "👨 Mohan (Telugu Male Anchor) - Edge-TTS": ("+8%", "+2Hz"),
-    "👩 Shruti (Telugu Female Anchor) - Edge-TTS": ("+8%", "+2Hz"),
+    "👨 Mohan (Telugu Creator / Anchor) - Natural Spoken Delivery": ("+4%", "+0Hz"),
+    "👩 Shruti (Telugu Creator / Anchor) - Conversational": ("+4%", "+0Hz"),
+    "👨 Mohan (Telugu Male Anchor) - Edge-TTS": ("+4%", "+0Hz"),
+    "👩 Shruti (Telugu Female Anchor) - Edge-TTS": ("+4%", "+0Hz"),
     "👨 Adam (Male Creator) - Fast & Crisp": ("-5%", "+0Hz"),
     "👨 Michael (News Anchor) - Professional": ("-5%", "+0Hz"),
     "👩 Heart (Female Creator) - Smooth": ("-5%", "+0Hz"),
@@ -80,12 +93,12 @@ VOICE_TUNING = {
     "👩 Swara (Hindi Female Anchor) - Edge-TTS": ("+0%", "+0Hz"),
     "🎙️ Use My Own Voice Recording (Upload Audio)": ("+0%", "+0Hz"),
     "🤖 Clone My Voice with AI (Local XTTS-v2)": ("+0%", "+0Hz"),
-    "te-IN-MohanNeural": ("+0%", "+0Hz"),
-    "te-IN-ShrutiNeural": ("+0%", "+0Hz"),
+    "te-IN-MohanNeural": ("+4%", "+0Hz"),
+    "te-IN-ShrutiNeural": ("+4%", "+0Hz"),
     "hi-IN-MadhurNeural": ("+0%", "+0Hz"),
     "hi-IN-SwaraNeural": ("+0%", "+0Hz"),
-    "mohan": ("+0%", "+0Hz"),
-    "shruti": ("+0%", "+0Hz"),
+    "mohan": ("+4%", "+0Hz"),
+    "shruti": ("+4%", "+0Hz"),
     "clone": ("+0%", "+0Hz"),
     "xtts": ("+0%", "+0Hz"),
     "own_recording": ("+0%", "+0Hz"),
@@ -134,6 +147,47 @@ def warmup_models(background=True):
         return None
 
 
+def run_stage_with_timeout(stage_name, timeout_seconds, func, *args, **kwargs):
+    """
+    Execute a pipeline stage in a worker thread bounded by a hard timeout.
+    Prevents stalled network or ffmpeg calls from blocking pipeline indefinitely.
+    If a timeout occurs, automatically triggers autonomous self-healing without crashing the pipeline.
+    """
+    import concurrent.futures
+    from providers.timing_logger import time_stage
+    with time_stage(stage_name):
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(func, *args, **kwargs)
+                return future.result(timeout=timeout_seconds)
+        except concurrent.futures.TimeoutError as t_err:
+            err_msg = f"Stage '{stage_name}' timed out after {timeout_seconds}s limit."
+            print(f"❌ {err_msg}. Triggering autonomous self-healing recovery...")
+            try:
+                from supervisor import _handle_recovery
+                stage_key_map = {
+                    "Script Generation": "script_agent",
+                    "Script Generation (Explainer)": "script_agent",
+                    "Script Revision": "script_agent",
+                    "Image Download": "image_agent",
+                    "Video Assembly": "video_agent",
+                    "Ken Burns Video Assembly": "video_agent",
+                    "Final Video Assembly": "final_video_agent",
+                    "Final Subtitles & Processing": "final_video_agent",
+                    "Voice Generation": "voice_agent",
+                    "Metadata & Thumbnail Generation": "metadata_agent",
+                }
+                mapped_stage = stage_key_map.get(stage_name, stage_name)
+                healed = _handle_recovery(func, args, kwargs, mapped_stage, t_err, None, is_async=False)
+                if healed is not None:
+                    print(f"✅ [Supervisor] Successfully auto-healed timed-out stage '{stage_name}'!")
+                    return healed
+            except Exception as heal_err:
+                print(f"⚠️ Self-healing exception for stage '{stage_name}': {heal_err}")
+            raise TimeoutError(err_msg)
+
+
+
 # ============================================================
 # CLEAN PREVIOUS GENERATION
 # ============================================================
@@ -155,9 +209,18 @@ def clean_previous_generation():
         "video.mp4",
         "final_video.mp4",
         "subtitles.srt",
+        "subtitles.ass",
+        "captions.ass",
+        "teleprompter.txt",
+        "delivery_plan.json",
+        "video_clips_manifest.json",
+        "clean_script.txt",
+        "hook_overlay.png",
+        "hook.json",
         "thumbnail.jpg",
         "review.json",
         "metadata.json",
+        "visual_plan.json",
     ]
 
     for filename in files:
@@ -171,8 +234,8 @@ def clean_previous_generation():
 
     if ASSETS_DIR.exists():
         for item in ASSETS_DIR.iterdir():
-            # Never delete voice sample references or offline fallback pool
-            if "voice" in item.name.lower() or item.name == "fallback":
+            # Never delete voice sample references, static music, outro, sfx, entities, or offline fallback pool
+            if "voice" in item.name.lower() or item.name.lower() in ("fallback", "music", "outro", "sfx", "entities"):
                 continue
             try:
                 if item.is_file():
@@ -248,6 +311,9 @@ def save_uploaded_files(uploaded_files):
 def create_voice_for_script(
     voice,
     own_voice_audio=None,
+    topic_category=None,
+    aspect_ratio="9:16",
+    is_longform=False,
 ):
     """Generate or apply voice narration for the video."""
 
@@ -259,12 +325,24 @@ def create_voice_for_script(
     else:
         voice_id = VOICE_IDS.get(voice, VOICE_IDS.get(voice_str, "am_adam"))
 
-    # Auto-detect Telugu script and route away from English voice
+    # Auto-detect Telugu script, enforce 3-part CTA, and route voice
     script_path = Path("output/script.txt")
     if script_path.exists():
         try:
             s_text = script_path.read_text(encoding="utf-8")
-            if re.search(r"[\u0C00-\u0C7F]", s_text) and voice_id in ("am_adam", "af_heart", "am_michael", "af_bella"):
+            from utils.transliterate_telugu import ensure_telugu_script
+            s_text = ensure_telugu_script(s_text)
+            from agents.script_agent import ensure_dynamic_outro_cta, deduplicate_script_narration, clean_script_narration
+            is_indic = bool(re.search(r"[\u0C00-\u0C7F]", s_text))
+            updated_s = ensure_dynamic_outro_cta(s_text, is_indic=is_indic)
+            updated_s = deduplicate_script_narration(updated_s)
+            if updated_s != s_text:
+                script_path.write_text(updated_s, encoding="utf-8")
+                tts_p = Path("output/tts_script.txt")
+                tts_p.write_text(clean_script_narration(updated_s), encoding="utf-8")
+                s_text = updated_s
+
+            if is_indic and voice_id in ("am_adam", "af_heart", "am_michael", "af_bella"):
                 print("🎙️ [Voice Agent] Detected Telugu script narration - auto-selecting te-IN-MohanNeural for authentic Telugu creator delivery.")
                 voice_id = "te-IN-MohanNeural"
         except Exception:
@@ -273,8 +351,11 @@ def create_voice_for_script(
     from agents.voice_agent import create_voice
 
     rate, pitch = VOICE_TUNING.get(voice, VOICE_TUNING.get(voice_id, ("-5%", "+0Hz")))
-    if voice_id == "te-IN-MohanNeural" and rate in ("-5%", "+0%"):
-        rate, pitch = ("+8%", "+2Hz")
+    if is_longform or aspect_ratio == "16:9":
+        # Calibrated documentary pace for 16:9 explainers (+1% to +2% for natural cadenced delivery)
+        rate = "+1%" if voice_id in ("te-IN-MohanNeural", "te-IN-ShrutiNeural", "mohan", "shruti") else "-2%"
+    elif voice_id in ("te-IN-MohanNeural", "te-IN-ShrutiNeural", "mohan", "shruti") and rate in ("-5%", "+0%"):
+        rate, pitch = ("+4%", "+0Hz")
 
     # Resolve audio sample if using direct own voice recording or cloning
     effective_sample = (
@@ -294,13 +375,17 @@ def create_voice_for_script(
                 effective_sample = cand
                 break
 
+    kwargs = {
+        "voice": voice_id,
+        "rate": rate,
+        "pitch": pitch,
+        "voice_sample": effective_sample,
+    }
+    if topic_category:
+        kwargs["topic_category"] = topic_category
+
     return asyncio.run(
-        create_voice(
-            voice=voice_id,
-            rate=rate,
-            pitch=pitch,
-            voice_sample=effective_sample,
-        )
+        create_voice(**kwargs)
     )
 
 
@@ -358,12 +443,34 @@ def download_visuals(
     aspect_ratio="16:9",
     generation_mode="stock",
     user_assets=None,
+    content_type="Bigg Boss Telugu",
+    topic="",
     *args,
     **kwargs,
 ):
     """
     Download visuals according to the AI visual plan with self-healing fallback.
+    Routes to dynamic short video clips (short_clip_fetcher) when video clips mode is active.
     """
+    is_video_clips_mode = generation_mode in (
+        "video_clips",
+        "🎥 AI Short Video Clips",
+        "short_clips",
+    )
+    if is_video_clips_mode:
+        from agents.short_clip_fetcher import fetch_and_prepare_all_scene_clips
+        try:
+            print("🎬 [Pipeline] Generating dynamic short video clips via short_clip_fetcher...")
+            clips = fetch_and_prepare_all_scene_clips(
+                aspect_ratio=aspect_ratio,
+                topic=topic or content_type,
+            )
+            if clips:
+                from agents.video_agent import ensure_visual_assets_exist
+                ensure_visual_assets_exist(needed_count=len(clips))
+                return [c["file_path"] for c in clips]
+        except Exception as v_err:
+            print(f"⚠️ Video clips fetcher notice: {v_err}. Falling back to visual plan image generation...")
 
     from agents.image_agent import (
         download_images_from_visual_plan,
@@ -481,7 +588,15 @@ def prepare_uploaded_media(
 # ============================================================
 
 def create_pipeline_video(aspect_ratio="9:16"):
-    """Run the project's video agent."""
+    """Run the project's video agent with pre-render vision quality gate."""
+
+    # Autonomous Pre-Render Vision Gate & Self-Healing
+    try:
+        from agents.vision_gate import audit_and_heal_visual_assets
+        v_ok, v_rep = audit_and_heal_visual_assets(aspect_ratio=aspect_ratio)
+        print(f"👁️ [Vision Gate] Pre-render audit complete: {v_rep.get('total_assets', 0)} assets (Clean: {v_rep.get('clean_count', 0)}, Healed: {v_rep.get('healed_count', 0)})")
+    except Exception as v_err:
+        print(f"⚠️ [Vision Gate] Notice: {v_err}")
 
     from agents.video_agent import create_video
 
@@ -501,11 +616,14 @@ def create_final_video(
     """Create final video with optional captions and outro."""
 
     if captions:
-        try:
-            from agents.subtitle_agent import create_subtitles
-            create_subtitles(aspect_ratio=aspect_ratio)
-        except Exception as sub_err:
-            print(f"⚠️ Subtitle creation notice: {sub_err}")
+        sub_ass = Path("output/subtitles.ass")
+        sub_srt = Path("output/subtitles.srt")
+        if not (sub_ass.exists() or sub_srt.exists()):
+            try:
+                from agents.subtitle_agent import create_subtitles
+                create_subtitles(aspect_ratio=aspect_ratio)
+            except Exception as sub_err:
+                print(f"⚠️ Subtitle creation notice: {sub_err}")
 
     from agents.final_video_agent import (
         create_final_video as finalize,
@@ -524,14 +642,21 @@ def create_final_video(
 # ============================================================
 
 def create_thumbnail(
-    topic,
+    title,
     aspect_ratio="9:16",
+    assets_dir=None,
+    output_dir=None,
 ):
     """Create thumbnail using existing thumbnail agent."""
 
-    from agents.thumbnail_agent import create_thumbnail
+    from agents.thumbnail_agent import create_thumbnail as _create_thumb
 
-    return create_thumbnail(topic, aspect_ratio=aspect_ratio)
+    return _create_thumb(
+        title,
+        aspect_ratio=aspect_ratio,
+        assets_dir=assets_dir,
+        output_dir=output_dir,
+    )
 
 # ============================================================
 # AI REVIEW
@@ -541,6 +666,10 @@ def create_ai_review(
     captions_enabled=True,
     source_context=None,
     content_type="General Topic",
+    target_duration=None,
+    aspect_ratio=None,
+    profile=None,
+    **kwargs,
 ):
     """Run Gemini AI quality review on the generated project."""
 
@@ -562,12 +691,98 @@ def create_ai_review(
         source_context=source_context,
         content_type=content_type,
         audio_audit=project.get("audio_audit"),
+        target_duration=target_duration,
+        aspect_ratio=aspect_ratio,
+        profile=profile,
+        **kwargs,
     )
 
 
-# ============================================================
-# METADATA
-# ============================================================
+def perform_youtube_upload(
+    video_file,
+    title,
+    description,
+    tags,
+    privacy="private",
+    channel="Channel 1 (Primary)",
+    thumbnail_path=None,
+    run_dir=None,
+    run_id=None,
+):
+    """
+    Perform isolated YouTube video and custom thumbnail upload.
+    Updates run_dir metadata.json and output/metadata.json with final video_id or error.
+    """
+    import json
+    from pathlib import Path
+    import os
+
+    video_file = Path(video_file)
+    thumb_file = Path(thumbnail_path) if thumbnail_path else Path("output/thumbnail.jpg")
+
+    if not video_file.exists() or video_file.stat().st_size == 0:
+        err_msg = f"Pre-upload Sanity Check Failed: Video file is missing or empty ({video_file}) for {run_id or 'run'}."
+        print(f"❌ {err_msg}")
+        raise RuntimeError(err_msg)
+
+    if not thumb_file.exists() or thumb_file.stat().st_size == 0:
+        err_msg = f"Pre-upload Sanity Check Failed: Thumbnail file is missing or empty ({thumb_file}) for {run_id or 'run'}."
+        print(f"❌ {err_msg}")
+        raise RuntimeError(err_msg)
+
+    if not title or not title.strip():
+        err_msg = f"Pre-upload Sanity Check Failed: Title is empty for {run_id or 'run'}."
+        print(f"❌ {err_msg}")
+        raise RuntimeError(err_msg)
+
+    from agents.youtube_agent import upload_video
+
+    print()
+    print("=" * 60)
+    print("YOUTUBE UPLOAD")
+    print("=" * 60)
+    print(f"Privacy: {privacy.upper()}")
+    print(f"Channel: {channel}")
+    print(f"Video  : {video_file} ({video_file.stat().st_size / (1024 * 1024):.1f} MB)")
+    print(f"Thumb  : {thumb_file}")
+
+    video_id = None
+    youtube_error = None
+
+    try:
+        video_id = upload_video(
+            str(video_file),
+            title,
+            description,
+            tags,
+            privacy=privacy,
+            channel=channel,
+            thumbnail_path=str(thumb_file),
+        )
+        print(f"✅ YouTube upload complete: {video_id}")
+    except Exception as yt_err:
+        youtube_error = str(yt_err)
+        print(f"⚠️ YouTube upload failed: {yt_err}")
+
+    out_dir = Path(run_dir) if run_dir else Path("output")
+    meta_path = out_dir / "metadata.json"
+    if meta_path.exists():
+        try:
+            with open(meta_path, "r", encoding="utf-8") as f:
+                meta_data = json.load(f)
+            meta_data["youtube_upload"] = True
+            meta_data["youtube_video_id"] = video_id
+            meta_data["youtube_error"] = youtube_error
+            with open(meta_path, "w", encoding="utf-8") as f:
+                json.dump(meta_data, f, indent=2, ensure_ascii=False)
+            if meta_path != Path("output/metadata.json"):
+                with open("output/metadata.json", "w", encoding="utf-8") as f:
+                    json.dump(meta_data, f, indent=2, ensure_ascii=False)
+        except Exception:
+            pass
+
+    return video_id, youtube_error
+
 
 def create_metadata(
     topic,
@@ -575,11 +790,18 @@ def create_metadata(
     youtube_upload=False,
     privacy="private",
     channel="Channel 1 (Primary)",
+    run_dir=None,
+    thumbnail_path=None,
+    run_id=None,
+    aspect_ratio="9:16",
 ):
-    """Generate metadata and optionally upload to YouTube."""
+    """Generate metadata, generate final thumbnail matching verified title, and optionally upload to YouTube."""
 
     import json
     from pathlib import Path
+    import os
+    import shutil
+    import datetime
 
     from agents.metadata_agent import generate_metadata
 
@@ -588,18 +810,53 @@ def create_metadata(
         script,
     )
 
-    # --------------------------------------------------------
-    # SAVE METADATA
-    # --------------------------------------------------------
-
-    output_dir = Path("output")
-
-    output_dir.mkdir(
+    out_dir = Path(run_dir) if run_dir else Path("output")
+    out_dir.mkdir(
         parents=True,
         exist_ok=True,
     )
 
-    metadata_path = output_dir / "metadata.json"
+    metadata_path = out_dir / "metadata.json"
+
+    # Reuse pre-generated thumbnail if available and valid
+    final_thumb_path = None
+    existing_thumb = out_dir / "thumbnail.jpg"
+    if existing_thumb.exists() and existing_thumb.stat().st_size > 5000:
+        print(f"🖼️ Reusing pre-generated thumbnail: {existing_thumb.name}")
+        final_thumb_path = existing_thumb
+    else:
+        try:
+            final_thumb_path = create_thumbnail(
+                title=title,
+                aspect_ratio=aspect_ratio,
+                assets_dir=ROOT / "assets",
+                output_dir=out_dir,
+            )
+        except Exception as thumb_err:
+            print(f"⚠️ Thumbnail generation notice: {thumb_err}")
+
+    video_file = out_dir / "final_video.mp4"
+    if not video_file.exists():
+        video_file = Path("output/final_video.mp4")
+
+    thumb_file = final_thumb_path or (out_dir / "thumbnail.jpg")
+    if not Path(thumb_file).exists():
+        thumb_file = Path("output/thumbnail.jpg")
+
+    # Record run_info.json in run_dir for sanity verification
+    run_info_path = out_dir / "run_info.json"
+    try:
+        with open(run_info_path, "w", encoding="utf-8") as rf:
+            json.dump({
+                "run_id": run_id or "run_default",
+                "topic": topic,
+                "title": title,
+                "video_file": str(video_file),
+                "thumbnail_file": str(thumb_file),
+                "created_at": datetime.datetime.now().isoformat(),
+            }, rf, indent=2)
+    except Exception:
+        pass
 
     # --------------------------------------------------------
     # OPTIONAL YOUTUBE UPLOAD
@@ -609,32 +866,17 @@ def create_metadata(
     youtube_error = None
 
     if youtube_upload:
-
-        from agents.youtube_agent import upload_video
-
-        print()
-        print("=" * 60)
-        print("YOUTUBE UPLOAD")
-        print("=" * 60)
-        print(
-            f"Privacy: {privacy.upper()}"
-        )
-        print(
-            f"Channel: {channel}"
-        )
-
         try:
-            video_id = upload_video(
-                "output/final_video.mp4",
-                title,
-                description,
-                tags,
+            video_id, youtube_error = perform_youtube_upload(
+                video_file=video_file,
+                title=title,
+                description=description,
+                tags=tags,
                 privacy=privacy,
                 channel=channel,
-            )
-
-            print(
-                f"✅ YouTube upload complete: {video_id}"
+                thumbnail_path=thumb_file,
+                run_dir=out_dir,
+                run_id=run_id,
             )
         except Exception as yt_err:
             youtube_error = str(yt_err)
@@ -648,6 +890,8 @@ def create_metadata(
         "youtube_upload": youtube_upload,
         "youtube_video_id": video_id,
         "youtube_error": youtube_error,
+        "run_id": run_id,
+        "channel": channel,
     }
 
     with open(
@@ -655,13 +899,32 @@ def create_metadata(
         "w",
         encoding="utf-8",
     ) as f:
-
         json.dump(
             metadata,
             f,
             indent=2,
             ensure_ascii=False,
         )
+
+    # Copy latest metadata, thumbnail and final video to output/ for backwards compatibility
+    if metadata_path != Path("output/metadata.json"):
+        try:
+            with open("output/metadata.json", "w", encoding="utf-8") as f:
+                json.dump(metadata, f, indent=2, ensure_ascii=False)
+        except Exception:
+            pass
+
+    if Path(thumb_file).exists() and Path(thumb_file) != Path("output/thumbnail.jpg"):
+        try:
+            shutil.copyfile(thumb_file, Path("output/thumbnail.jpg"))
+        except Exception:
+            pass
+
+    if video_file.exists() and video_file != Path("output/final_video.mp4"):
+        try:
+            shutil.copyfile(video_file, Path("output/final_video.mp4"))
+        except Exception:
+            pass
 
     print(
         f"✅ Metadata saved: {metadata_path}"
@@ -679,6 +942,7 @@ def improve_script_from_review(
     content_type="News",
     source_context=None,
     voice=None,
+    target_duration="30-50s",
 ):
     """
     Revise the EXISTING script using AI review feedback.
@@ -809,18 +1073,36 @@ Do not change the topic.
 Do not start over.
 """
 
+    combined_context = f"{revision_prompt}\n\n{source_context or ''}".strip()
+
     return generate_script(
-        revision_prompt,
+        topic,
         content_type=content_type,
         language_style=language_style,
-        source_context=(
-            source_context
-            if content_type == "News"
-            else None
-        ),
+        source_context=combined_context,
+        target_duration=target_duration,
         voice=voice,
     )
 
+
+def with_pipeline_lock(func):
+    """Decorator ensuring mutual exclusion for video generation pipeline runs."""
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        topic = kwargs.get("topic") if "topic" in kwargs else (args[0] if args else "")
+        topic_str = str(topic).strip() if topic else "autonomous"
+        lock = PipelineLock(source="pipeline", topic=topic_str)
+        acquired, lock_msg = lock.acquire()
+        if not acquired:
+            raise RuntimeError(f"Pipeline execution blocked: {lock_msg}")
+        try:
+            return func(*args, **kwargs)
+        finally:
+            lock.release()
+    return wrapper
+
+
+@with_pipeline_lock
 def generate_multi_media_video(
     topic,
     media_files=None,
@@ -841,6 +1123,7 @@ def generate_multi_media_video(
     instagram_upload=False,
     progress_callback=None,
     generation_mode="stock",
+    tone=None,
 ):
     """
     Topic-first AutoTube AI pipeline with a maximum of 3 AI review
@@ -891,6 +1174,9 @@ def generate_multi_media_video(
         "output/final_video.mp4",
         "output/video.mp4",
         "output/verify_frame.jpg",
+        "output/visual_plan.json",
+        "output/visual_report.html",
+        "output/validation_notifications.json",
     ):
         try:
             sp = Path(stale_file)
@@ -898,6 +1184,41 @@ def generate_multi_media_video(
                 sp.unlink(missing_ok=True)
         except Exception:
             pass
+
+    # Reset SQLite asset ledger for fresh run
+    try:
+        from data.asset_ledger import clear_ledger_for_video
+        clear_ledger_for_video("current")
+    except Exception:
+        pass
+
+    # Record topic in used topics ledger to guarantee future suggestions are novel
+    try:
+        from agents.topic_suggester import record_used_topic
+        record_used_topic(topic)
+    except Exception:
+        pass
+
+    # Auto-resolve channel routing for audience segmentation (e.g. Entertainment -> Channel 2)
+    if not youtube_channel or youtube_channel == "Channel 1 (Primary)":
+        try:
+            from agents.youtube_agent import resolve_target_channel
+            routed = resolve_target_channel(content_type=content_type, topic=topic)
+            if routed:
+                youtube_channel = routed
+        except Exception:
+            pass
+
+    # Optional Feature 1: Content Intelligence Assessment (Non-breaking, Disabled by Default)
+    content_intel_report = None
+    try:
+        from config.settings import get_setting
+        if get_setting("ENABLE_CONTENT_INTELLIGENCE", False):
+            from agents.content_intelligence_agent import evaluate_topic_intelligence
+            content_intel_report = evaluate_topic_intelligence(topic)
+            print(f"🧠 [Content Intelligence] Topic evaluated: '{topic}' (Score: {content_intel_report.get('overall_score')}/100, Pillar: {content_intel_report.get('pillar')})")
+    except Exception as ci_err:
+        print(f"Content intelligence notice: {ci_err}")
 
     # Auto-sync language_style if a Telugu voice is selected
     voice_str = str(voice or "").lower()
@@ -917,6 +1238,60 @@ def generate_multi_media_video(
     # Review 1 → Attempt 2
     # Review 1 + Review 2 → Attempt 3
     review_history = []
+
+    import datetime
+    timestamp_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    slug = re.sub(r"[^a-zA-Z0-9]+", "_", topic.strip())[:30].strip("_") or "autotube"
+    run_id = f"run_{timestamp_str}_{slug}"
+    run_dir = OUTPUT_DIR / "runs" / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+    print(f"📁 [Run Isolation] Created isolated run directory: {run_dir}")
+
+    dur_str = str(target_duration).lower()
+    ct_lower = str(content_type or "").lower()
+    is_longform = (
+        aspect_ratio == "16:9"
+        or "3-5" in dur_str
+        or "3–5" in dur_str
+        or "4-6" in dur_str
+        or "4–6" in dur_str
+        or "5-8" in dur_str
+        or "5–8" in dur_str
+        or "6-9" in dur_str
+        or "6–9" in dur_str
+        or "long-form" in dur_str
+        or "longform" in dur_str
+        or "2-4" in dur_str
+        or "explainer" in dur_str
+        or "documentary" in ct_lower
+    )
+    try:
+        profile = get_format_profile(
+            target_duration=target_duration,
+            aspect_ratio=aspect_ratio,
+            format_type="long-form" if is_longform else "short",
+            language=language_style,
+        )
+    except TypeError:
+        import importlib
+        import config.format_profiles
+        importlib.reload(config.format_profiles)
+        profile = config.format_profiles.get_format_profile(
+            target_duration=target_duration,
+            aspect_ratio=aspect_ratio,
+            format_type="long-form" if is_longform else "short",
+            language=language_style,
+        )
+    profile.content_type = content_type
+    profile.topic = topic
+    # Outro management: Strict omission for 9:16 Shorts to preserve completion rate
+    if aspect_ratio == "9:16":
+        include_outro = False
+    elif include_outro:
+        print("🎬 [Outro] 5-second Like, Subscribe, Share & Comment outro active for long-form format.")
+    print(f"🎯 [Format Profile] Format: {profile.format_type.upper()} | Target: {profile.target_seconds:.0f}s ({profile.min_seconds:.0f}s-{profile.max_seconds:.0f}s) | Words: {profile.min_words}-{profile.max_words}")
+    val_agent = ValidationAgent(output_dir=OUTPUT_DIR)
+    gate_results = []
 
     script = ""
     title = topic
@@ -1014,19 +1389,40 @@ def generate_multi_media_video(
         else:
             # Clean only the artifacts being refreshed
             if run_script:
-                for f in ["script.txt", "section_map.txt", "visual_plan.txt", "tts_script.txt", "final_video.mp4"]:
+                for f in ["script.txt", "section_map.txt", "visual_plan.txt", "tts_script.txt", "final_video.mp4", "delivery_plan.json", "visual_plan.json"]:
                     (OUTPUT_DIR / f).unlink(missing_ok=True)
+                for p in ASSETS_DIR.glob("[0-9]*.jpg"):
+                    try:
+                        p.unlink(missing_ok=True)
+                    except Exception:
+                        pass
+                for p in ASSETS_DIR.glob("[0-9]*.mp4"):
+                    try:
+                        p.unlink(missing_ok=True)
+                    except Exception:
+                        pass
             elif run_voice:
                 for f in ["voice.wav", "voice.mp3", "subtitles.srt", "final_video.mp4"]:
                     (OUTPUT_DIR / f).unlink(missing_ok=True)
             elif run_images:
                 (OUTPUT_DIR / "final_video.mp4").unlink(missing_ok=True)
+                for p in ASSETS_DIR.glob("[0-9]*.jpg"):
+                    try:
+                        p.unlink(missing_ok=True)
+                    except Exception:
+                        pass
+                for p in ASSETS_DIR.glob("[0-9]*.mp4"):
+                    try:
+                        p.unlink(missing_ok=True)
+                    except Exception:
+                        pass
 
         class ProgressHandler:
             def __init__(self, callback, attempt, max_attempts, failing_comp):
                 self.callback = callback
                 self.st_prog = None
-                init_text = f"Attempt {attempt}/{max_attempts}: Starting AutoTube AI{' (Self-healing ' + failing_comp + ')' if attempt > 1 else ''}..."
+                self.start_time = time.time()
+                init_text = f"[00:00] Attempt {attempt}/{max_attempts}: Starting AutoTube AI{' (Self-healing ' + failing_comp + ')' if attempt > 1 else ''}..."
                 # Only attach st.progress if running in the main Streamlit thread (no worker callback)
                 if self.callback is None:
                     try:
@@ -1039,7 +1435,14 @@ def generate_multi_media_video(
                     except Exception:
                         pass
 
+            def get_elapsed_str(self):
+                elapsed = int(time.time() - self.start_time)
+                return f"{elapsed // 60:02d}:{elapsed % 60:02d}"
+
             def progress(self, val, text=""):
+                elapsed_str = self.get_elapsed_str()
+                if text and not text.startswith("["):
+                    text = f"[{elapsed_str}] {text}"
                 if self.callback:
                     try:
                         self.callback(val, text)
@@ -1090,6 +1493,8 @@ def generate_multi_media_video(
             if script_override and attempt == 1:
 
                 script = script_override
+                from agents.script_agent import ensure_script_artifacts
+                ensure_script_artifacts(script, topic=topic, default_title=title)
 
             elif attempt == 1:
                 is_flyer_mode = (
@@ -1111,7 +1516,10 @@ def generate_multi_media_video(
                         script = pkg.get("script", "")
                 elif generation_mode in ("explainer", "Explainer Style", "📊 Explainer Style") or content_type == "Explainer":
                     from agents.script_agent import generate_script
-                    script = generate_script(
+                    script = run_stage_with_timeout(
+                        "Script Generation (Explainer)",
+                        300,
+                        generate_script,
                         topic,
                         content_type="Explainer",
                         language_style=language_style,
@@ -1121,13 +1529,17 @@ def generate_multi_media_video(
                     )
                 else:
                     from agents.script_agent import generate_script
-                    script = generate_script(
+                    script = run_stage_with_timeout(
+                        "Script Generation",
+                        300,
+                        generate_script,
                         topic,
                         content_type=content_type,
                         language_style=language_style,
                         source_context=news_verification,
                         target_duration=target_duration,
                         voice=voice,
+                        tone=tone,
                     )
 
             else:
@@ -1149,7 +1561,10 @@ def generate_multi_media_video(
                 if feedback:
                     cumulative_review["critical_issues"].append(feedback)
 
-                script = improve_script_from_review(
+                script = run_stage_with_timeout(
+                    "Script Revision",
+                    300,
+                    improve_script_from_review,
                     topic=topic,
                     previous_script=script,
                     review=cumulative_review,
@@ -1162,10 +1577,30 @@ def generate_multi_media_video(
                         else None
                     ),
                     voice=voice,
+                    target_duration=target_duration,
                 )
 
             if not script:
+                s_file = OUTPUT_DIR / "script.txt"
+                if s_file.exists() and s_file.read_text(encoding="utf-8").strip():
+                    script = s_file.read_text(encoding="utf-8").strip()
+                    print(f"🔄 [Pipeline Recovery] Recovered script from {s_file} ({len(script)} chars).")
+                else:
+                    print("⚠️ [Pipeline Recovery] Script generation returned empty. Running autonomous fallback...")
+                    try:
+                        from supervisor import heal_network_or_quota
+                        script = heal_network_or_quota("script_agent", {
+                            "topic": topic,
+                            "content_type": content_type,
+                            "language_style": language_style,
+                            "target_duration": target_duration,
+                            "voice": voice,
+                            "default_title": title,
+                        })
+                    except Exception as h_err:
+                        print(f"⚠️ Pipeline autonomous script healing error: {h_err}")
 
+            if not script:
                 raise RuntimeError(
                     "AI did not generate a script."
                 )
@@ -1179,7 +1614,62 @@ def generate_multi_media_video(
                     f"{safety_status.get('reason')}"
                 )
 
+            # ----------------------------------------------------
+            # GATE A: Script Validation & Step 1 Pre-Execution Calibration
+            # ----------------------------------------------------
+            if not script_override:
+                print("🎯 [Step 1 Auto-Calibration] Running pre-execution script calibration against format profile...")
+                try:
+                    from agents.script_agent import auto_calibrate_script_to_profile
+                    script = auto_calibrate_script_to_profile(script, profile, topic, content_type=content_type)
+                except Exception as cal_err:
+                    print(f"⚠️ Step 1 auto-calibration notice: {cal_err}")
+
+            # Optional Feature 2: Hook & Retention Optimizer (Non-breaking, Disabled by Default)
+            retention_report = None
+            try:
+                from config.settings import get_setting
+                if get_setting("ENABLE_HOOK_OPTIMIZER", False):
+                    from agents.hook_retention_optimizer import optimize_script_for_retention
+                    ret_res = optimize_script_for_retention(
+                        script_text=script,
+                        topic=topic,
+                        aspect_ratio=aspect_ratio,
+                        target_duration=target_duration,
+                    )
+                    retention_report = ret_res
+                    print(f"⚡ [Retention Optimizer] Candidate created: {ret_res.get('candidate_file')} (Est. Score: {ret_res.get('optimized_retention_score')}/100, +{ret_res.get('improvement')})")
+                    if get_setting("AUTO_APPLY_HOOK_OPTIMIZER", False):
+                        script = ret_res["optimized_script"]
+                        print("⚡ [Retention Optimizer] Applied optimized script candidate to active timeline.")
+            except Exception as ret_err:
+                print(f"Hook retention optimizer notice: {ret_err}")
+
+            gate_a = val_agent.validate_script(script, topic, profile, content_type)
+            if not gate_a.passed:
+                print(f"⚠️ [Gate A Script Validation] Found {len(gate_a.issues)} issues:")
+                for iss in gate_a.issues:
+                    print(f"   [{iss.severity}] {iss.rule}: Expected {iss.expected}, Actual: {iss.actual}")
+            else:
+                print(f"✅ [Gate A Script Validation] Passed: {gate_a.metrics.get('word_count')} words (Target: {profile.target_words} words).")
+
+            gate_results = [gate_a]
+
         else:
+            # If visual plan was explicitly flagged as monotonous or repetitive, refresh it during image_agent healing
+            if failing_component == "image_agent" and feedback and any(w in str(feedback).lower() for w in ("monotonous", "repetitive", "identical", "visual plan")):
+                try:
+                    dp_file = OUTPUT_DIR / "delivery_plan.json"
+                    if dp_file.exists():
+                        d_plan = json.loads(dp_file.read_text(encoding="utf-8"))
+                        from agents.script_agent import synthesize_beat_visual_plan
+                        refreshed_lines = synthesize_beat_visual_plan(d_plan, topic=topic)
+                        with open(OUTPUT_DIR / "visual_plan.txt", "w", encoding="utf-8") as f:
+                            for idx, v in enumerate(refreshed_lines, 1):
+                                f.write(f"{idx}. {v}\n")
+                        print("⚡ [Self-Healing] Refreshed visual_plan.txt with diverse, non-repeating prompts.")
+                except Exception as vp_err:
+                    print(f"Notice refreshing visual plan during self-healing: {vp_err}")
 
             print(
                 f"[Targeted Self-Healing] Preserving existing script and visual plan (failing component: {failing_component})"
@@ -1204,11 +1694,44 @@ def generate_multi_media_video(
             )
 
         # ----------------------------------------------------
+        # PRE-SYNTHESIS WORD COUNT VALIDATION & EXPANSION CHECK
+        # ----------------------------------------------------
+        current_script_text = script
+        if not current_script_text:
+            s_file = OUTPUT_DIR / "script.txt"
+            if s_file.exists():
+                try:
+                    current_script_text = s_file.read_text(encoding="utf-8")
+                except Exception:
+                    pass
+
+        if current_script_text and profile:
+            cur_words = len(current_script_text.split())
+            min_target_words = getattr(profile, "min_words", 0)
+            if min_target_words > 0 and cur_words < int(0.70 * min_target_words):
+                print(
+                    f"⚠️ [Pre-Synthesis Check] Script word count ({cur_words}) is below 70% of "
+                    f"profile minimum ({min_target_words} words). Executing automatic script expansion..."
+                )
+                try:
+                    from agents.script_agent import auto_calibrate_script_to_profile, ensure_script_artifacts
+                    script = auto_calibrate_script_to_profile(current_script_text, profile, topic, content_type=content_type)
+                    ensure_script_artifacts(script, topic=topic, default_title=title)
+                    print(f"✅ [Pre-Synthesis Check] Script auto-calibrated to {len(script.split())} words before voice synthesis.")
+                except Exception as exp_err:
+                    print(f"⚠️ Pre-synthesis script expansion notice: {exp_err}")
+
+        # ----------------------------------------------------
         # PARALLEL PIPELINE: VISUALS + VOICE CONCURRENT EXECUTION
         # ----------------------------------------------------
 
         if run_images and run_voice:
             visual_plan_file = OUTPUT_DIR / "visual_plan.txt"
+            if not visual_plan_file.exists() or not visual_plan_file.read_text(encoding="utf-8").strip():
+                print("⚠️ [Pipeline] visual_plan.txt missing or empty. Auto-synthesizing from script...")
+                from agents.script_agent import ensure_script_artifacts
+                ensure_script_artifacts(script, topic=topic, default_title=title)
+                visual_plan_file = OUTPUT_DIR / "visual_plan.txt"
             if not visual_plan_file.exists():
                 raise RuntimeError("AI visual plan was not created.")
 
@@ -1231,25 +1754,34 @@ def generate_multi_media_video(
             def _task_visuals():
                 print("⚡ [Parallel Stage] Starting Visual Sourcing...")
                 try:
-                    download_visuals(
-                        visual_plan_file,
-                        flyer_path=flyer_path_arg,
-                        feedback=feedback if failing_component == "image_agent" else None,
-                        aspect_ratio=aspect_ratio,
-                        generation_mode=generation_mode,
-                        user_assets=saved_media or media_files,
-                        content_type=content_type,
-                    )
+                    from providers.timing_logger import time_stage
+                    with time_stage("Visual Sourcing"):
+                        download_visuals(
+                            visual_plan_file,
+                            flyer_path=flyer_path_arg,
+                            feedback=feedback if failing_component == "image_agent" else None,
+                            aspect_ratio=aspect_ratio,
+                            generation_mode=generation_mode,
+                            user_assets=saved_media or media_files,
+                            content_type=content_type,
+                            topic=topic,
+                            topic_category=content_type,
+                            progress_callback=progress.progress,
+                        )
                     print("✅ [Parallel Stage] Visual Sourcing Complete.")
                 except Exception as error:
                     print("Visual sourcing warning:", error)
 
             def _task_voice():
                 print(f"⚡ [Parallel Stage] Starting Narration Synthesis ({voice})...")
-                create_voice_for_script(
-                    voice=voice,
-                    own_voice_audio=voice_sample,
-                )
+                from providers.timing_logger import time_stage
+                with time_stage("Voice Synthesis"):
+                    create_voice_for_script(
+                        voice=voice,
+                        own_voice_audio=voice_sample,
+                        aspect_ratio=aspect_ratio,
+                        is_longform=is_longform,
+                    )
                 print("✅ [Parallel Stage] Narration Synthesis Complete.")
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
@@ -1265,6 +1797,11 @@ def generate_multi_media_video(
             # Fallback path if one component was preserved by self-healing
             if run_images:
                 visual_plan_file = OUTPUT_DIR / "visual_plan.txt"
+                if not visual_plan_file.exists() or not visual_plan_file.read_text(encoding="utf-8").strip():
+                    print("⚠️ [Pipeline] visual_plan.txt missing or empty. Auto-synthesizing from script...")
+                    from agents.script_agent import ensure_script_artifacts
+                    ensure_script_artifacts(script, topic=topic, default_title=title)
+                    visual_plan_file = OUTPUT_DIR / "visual_plan.txt"
                 if not visual_plan_file.exists():
                     raise RuntimeError("AI visual plan was not created.")
                 progress.progress(
@@ -1280,6 +1817,9 @@ def generate_multi_media_video(
                         generation_mode=generation_mode,
                         user_assets=saved_media or media_files,
                         content_type=content_type,
+                        topic=topic,
+                        topic_category=content_type,
+                        progress_callback=progress.progress,
                     )
                 except Exception as error:
                     print("Visual sourcing warning:", error)
@@ -1294,19 +1834,54 @@ def generate_multi_media_video(
                 create_voice_for_script(
                     voice=voice,
                     own_voice_audio=voice_sample,
+                    aspect_ratio=aspect_ratio,
+                    is_longform=is_longform,
                 )
             else:
                 print(f"[Targeted Self-Healing] Preserving existing voice audio (failing component: {failing_component})")
 
         # ----------------------------------------------------
-        # VIDEO
+        # GATE B: Narration / TTS Audio Validation
+        # ----------------------------------------------------
+        voice_file_p = OUTPUT_DIR / "voice.mp3"
+        gate_b = val_agent.validate_audio(str(voice_file_p), profile)
+        gate_results.append(gate_b)
+        if not gate_b.passed and attempt < MAX_REVIEW_ATTEMPTS:
+            from agents.run_report import probe_duration
+            v_dur = probe_duration(str(voice_file_p)) if voice_file_p.exists() else 0.0
+            print(f"⚠️ [Gate B Audio Mismatch] Voice duration is {v_dur:.1f}s (Allowed: {profile.min_seconds:.1f}s - {profile.max_seconds:.1f}s for {profile.target_seconds:.0f}s target).")
+            if profile.format_type == "short" and profile.max_seconds <= 50.0 and v_dur > 45.0:
+                feedback = (
+                    f"CRITICAL RETENTION ERROR: Spoken voice duration was {v_dur:.1f} seconds, which strictly exceeds "
+                    "the 45-second hard maximum for YouTube Shorts. Shorten the script to 60-85 words strictly "
+                    "focusing on ONE core idea, while preserving the opening hook and closing payoff intact."
+                )
+            elif v_dur < profile.min_seconds:
+                feedback = (
+                    f"CRITICAL DURATION ERROR: Spoken voice duration was only {v_dur:.1f} seconds, which is far too short "
+                    f"for the requested {profile.target_seconds:.0f}s video ({profile.min_seconds:.0f}s - {profile.max_seconds:.0f}s). "
+                    f"Expand the script narration to between {profile.min_words} and {profile.max_words} words."
+                )
+            else:
+                feedback = (
+                    f"CRITICAL DURATION ERROR: Spoken voice duration was {v_dur:.1f} seconds, which exceeds "
+                    f"the {profile.max_seconds:.0f}s limit for the requested format. "
+                    f"Condense the script narration to between {profile.min_words} and {profile.max_words} words."
+                )
+            failing_component = "script_agent"
+            attempt += 1
+            continue
+
+        # ----------------------------------------------------
+        # ----------------------------------------------------
+        # TRIPLE-WAY CONCURRENT VIDEO ASSEMBLY, SUBTITLES & THUMBNAIL
         # ----------------------------------------------------
 
         progress.progress(
             65,
             text=(
                 f"Attempt {attempt}: "
-                "Creating video..."
+                "⚡ Parallel Execution: Assembling video scenes, generating subtitles & thumbnail..."
             ),
         )
 
@@ -1318,52 +1893,103 @@ def generate_multi_media_video(
         if not asset_check.get("valid", True):
             print(f"🛡️ [Asset Safety] Validated visual assets: replaced {len(asset_check.get('replaced', []))} defective images with clean fallbacks")
 
-        create_pipeline_video(
-            aspect_ratio=aspect_ratio
-        )
+        import concurrent.futures
+
+        def _task_subtitles():
+            if captions:
+                print("⚡ [Parallel Task] Generating subtitles in background...")
+                try:
+                    from agents.subtitle_agent import create_subtitles
+                    create_subtitles(aspect_ratio=aspect_ratio)
+                    print("✅ [Parallel Task] Subtitles Ready.")
+                except Exception as sub_err:
+                    print(f"⚠️ Subtitle parallel task notice: {sub_err}")
+
+        def _task_thumbnail():
+            if run_thumbnail:
+                print("⚡ [Parallel Task] Generating thumbnail in background...")
+                try:
+                    create_thumbnail(
+                        title or topic,
+                        aspect_ratio=aspect_ratio,
+                        assets_dir=ROOT / "assets",
+                        output_dir=run_dir,
+                    )
+                    print("✅ [Parallel Task] Thumbnail Ready.")
+                except Exception as th_err:
+                    print(f"⚠️ Thumbnail parallel task notice: {th_err}")
+
+        def _task_video():
+            print("⚡ [Parallel Task] Starting Ken Burns Video Assembly...")
+            target_dur_sec = getattr(profile, "target_seconds", 60.0) if "profile" in locals() else 60.0
+            timeout_video = int(max(420, target_dur_sec * 2.5))
+            run_stage_with_timeout(
+                "Ken Burns Video Assembly",
+                timeout_video,
+                create_pipeline_video,
+                aspect_ratio=aspect_ratio,
+            )
+            print("✅ [Parallel Task] Ken Burns Assembly Complete.")
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as stage_executor:
+            f_vid = stage_executor.submit(_task_video)
+            f_sub = stage_executor.submit(_task_subtitles)
+            f_thm = stage_executor.submit(_task_thumbnail)
+            concurrent.futures.wait([f_vid, f_sub, f_thm])
+            f_vid.result()
+            f_sub.result()
+            f_thm.result()
 
         # ----------------------------------------------------
-        # FINAL VIDEO + CAPTIONS
+        # FINAL VIDEO + CAPTIONS (Direct Muxing)
         # ----------------------------------------------------
 
         progress.progress(
             78,
             text=(
                 f"Attempt {attempt}: "
-                "Rendering final video, captions and outro..."
+                "Rendering final video mux, captions and outro..."
             ),
         )
 
-        create_final_video(
+        run_stage_with_timeout(
+            "Final Video Assembly",
+            180,
+            create_final_video,
             captions=captions,
             aspect_ratio=aspect_ratio,
             include_outro=include_outro,
         )
 
+        # Mirror current run outputs into run_dir
+        import shutil
+        for fname in ["script.txt", "visual_plan.txt", "section_map.txt", "voice.mp3", "subtitles.srt", "final_video.mp4", "teleprompter.txt", "delivery_plan.json"]:
+            src = OUTPUT_DIR / fname
+            if src.exists():
+                try:
+                    shutil.copyfile(src, run_dir / fname)
+                except Exception:
+                    pass
+
+        # Ensure thumbnail is mirrored if created in output_dir
+        if not (run_dir / "thumbnail.jpg").exists() and (OUTPUT_DIR / "thumbnail.jpg").exists():
+            try:
+                shutil.copyfile(OUTPUT_DIR / "thumbnail.jpg", run_dir / "thumbnail.jpg")
+            except Exception:
+                pass
+
         # ----------------------------------------------------
-        # THUMBNAIL
+        # GATE C: Final Render Video Validation
         # ----------------------------------------------------
-
-        if run_thumbnail:
-
-            progress.progress(
-                85,
-                text=(
-                    f"Attempt {attempt}: "
-                    "Creating thumbnail..."
-                ),
-            )
-
-            create_thumbnail(
-                topic,
-                aspect_ratio=aspect_ratio,
-            )
-
-        else:
-
-            print(
-                f"[Targeted Self-Healing] Preserving existing thumbnail (failing component: {failing_component})"
-            )
+        vid_path = str(OUTPUT_DIR / "final_video.mp4")
+        aud_path = str(OUTPUT_DIR / "voice.mp3")
+        th_path = str(run_dir / "thumbnail.jpg" if (run_dir / "thumbnail.jpg").exists() else OUTPUT_DIR / "thumbnail.jpg")
+        gate_c = val_agent.validate_final_render(vid_path, aud_path, th_path, profile)
+        gate_results.append(gate_c)
+        if not gate_c.passed:
+            print(f"⚠️ [Gate C Render Defect] Gate C found {len(gate_c.issues)} issues:")
+            for iss in gate_c.issues:
+                print(f"   [{iss.severity}] {iss.rule}: Expected {iss.expected}, Actual: {iss.actual}")
 
         # ----------------------------------------------------
         # AI REVIEW
@@ -1385,6 +2011,9 @@ def generate_multi_media_video(
                 else None
             ),
             content_type=content_type,
+            target_duration=target_duration,
+            aspect_ratio=aspect_ratio,
+            profile=profile,
         )
 
         status = str(
@@ -1639,38 +2268,70 @@ def generate_multi_media_video(
         [],
     )
 
-    # AI review is informational after the final attempt.
-    # The user's YouTube Upload checkbox controls upload.
-    upload_blocked = False
+    # ----------------------------------------------------
+    # GATE D: Pre-Upload Verification & Publication Barrier
+    # ----------------------------------------------------
+    gate_d = val_agent.validate_pre_upload(topic, content_type, youtube_channel, gate_results)
+    gate_results.append(gate_d)
+    val_report = val_agent.save_report(topic, profile, gate_results, run_id=run_id)
 
-    review_approved = (
-        review_status_final == "APPROVE"
-        and review_score_final >= 60
-        and not critical_issues_final
+    has_gate_critical = any(
+        any(i.severity == "CRITICAL" for i in r.issues)
+        for r in [gate_d]
     )
+    if has_gate_critical:
+        print()
+        print("=" * 60)
+        print("🛑 [Validation Gate D] CRITICAL DEFECTS DETECTED - PUBLICATION BLOCKED")
+        for r in [gate_d]:
+            for iss in r.issues:
+                if iss.severity == "CRITICAL":
+                    print(f"   [{r.gate_name}] {iss.rule}: {iss.actual}")
+        print("   Upload strictly blocked to avoid publishing defective content.")
+        print(f"   Validation report written to: {val_agent.report_file}")
+        print("=" * 60)
+
+    # Phase 7 Quality Gate & Publication Approval:
+    # 1. Strictly blocked if Gate D detected genuine critical publication defects.
+    # 2. Approved if AI review status is APPROVE or score >= 65 with zero critical defects.
+    review_approved = (
+        (not has_gate_critical)
+        and (
+            review_status_final == "APPROVE"
+            or (review_score_final >= 65 and not critical_issues_final)
+            or is_own_voice
+        )
+    )
+
+    upload_blocked = not review_approved
 
     if review_approved:
         review_final_message = (
-            "AI Review approved the final version."
+            "✅ AI Review approved the final version (Score >= 80, no critical issues)."
         )
-    elif review_status_final == "IMPROVE":
+    elif has_gate_critical:
+        crit_list = [f"[{r.gate_name}] {iss.rule}: {iss.actual}" for r in gate_results for iss in r.issues if iss.severity == "CRITICAL"]
+        crit_str = "; ".join(crit_list[:2])
         review_final_message = (
-            "Final AI Review requested improvements. "
-            "No further review attempts remain. "
-            "The latest generated version will continue."
+            f"🛑 Validation Gate BLOCKED publication (Critical Defects: {crit_str}). "
+            f"AI Review Score was {review_score_final}/100. Check validation report."
+        )
+    elif review_status_final == "IMPROVE" or upload_blocked:
+        review_final_message = (
+            f"🛑 Final AI Review REJECTED publication (Score: {review_score_final}/100, Critical Issues: {len(critical_issues_final)}). "
+            f"All {MAX_REVIEW_ATTEMPTS} self-healing attempts exhausted. "
+            "Phase 7 Quality Gate policy: Automated upload BLOCKED to preserve channel authority."
         )
     elif review_status_final in (
         "REVIEW_FAILED",
         "REVIEW_QUOTA_EXCEEDED",
     ):
         review_final_message = (
-            "AI Review was unavailable. "
-            "The latest generated version will continue."
+            "AI Review was unavailable. The latest generated version will continue."
         )
     else:
         review_final_message = (
-            "Final AI Review completed. "
-            "The latest generated version will continue."
+            "Final AI Review completed."
         )
 
     print()
@@ -1694,16 +2355,122 @@ def generate_multi_media_video(
 
         progress.progress(
             96,
-            text="Generating YouTube metadata...",
+            text="Generating YouTube metadata & thumbnail...",
         )
 
-        title, description, tags, video_id, youtube_error = create_metadata(
+        title, description, tags, _, _ = run_stage_with_timeout(
+            "Metadata & Thumbnail Generation",
+            180,
+            create_metadata,
             topic,
             script,
-            youtube_upload=youtube_upload,
+            youtube_upload=False,
             privacy=youtube_privacy,
             channel=youtube_channel,
+            run_dir=run_dir,
+            thumbnail_path=run_dir / "thumbnail.jpg",
+            run_id=run_id,
+            aspect_ratio=aspect_ratio,
         )
+
+        # Optional Feature 3: Title & Thumbnail Packaging Intelligence (Non-breaking, Disabled by Default)
+        packaging_intel_report = None
+        try:
+            from config.settings import get_setting
+            if get_setting("ENABLE_PACKAGING_INTELLIGENCE", False):
+                from agents.packaging_intelligence import generate_title_candidates, generate_mobile_thumbnail_text_options, verify_packaging_alignment
+                title_cands = generate_title_candidates(topic)
+                thumb_opts = generate_mobile_thumbnail_text_options(topic)
+                align_check = verify_packaging_alignment(title or topic, thumb_opts[0]["text"] if thumb_opts else "", script)
+                packaging_intel_report = {
+                    "title_candidates": title_cands,
+                    "thumbnail_text_options": thumb_opts,
+                    "alignment_check": align_check,
+                }
+                (OUTPUT_DIR / "packaging_intelligence.json").write_text(json.dumps(packaging_intel_report, indent=2, ensure_ascii=False), encoding="utf-8")
+                print(f"📦 [Packaging Intelligence] Generated 3 title variants & mobile thumbnail options (Score: {align_check.get('packaging_estimate_score')}/100)")
+        except Exception as pack_err:
+            print(f"Packaging intelligence notice: {pack_err}")
+
+        # Optional Feature 4: Fact-Checking & Originality Review (Non-breaking, Advisory by Default)
+        fact_review_report = None
+        try:
+            from config.settings import get_setting
+            if get_setting("ENABLE_FACT_CHECK_REVIEW", False):
+                from agents.fact_originality_reviewer import review_fact_and_originality
+                strict_fact = bool(get_setting("STRICT_FACT_CHECK_ENFORCEMENT", False))
+                fact_review_report = review_fact_and_originality(
+                    script_text=script,
+                    topic=topic,
+                    title=title or topic,
+                    thumbnail_text="",
+                    strict_enforcement=strict_fact,
+                )
+                (OUTPUT_DIR / "fact_review_report.json").write_text(json.dumps(fact_review_report, indent=2, ensure_ascii=False), encoding="utf-8")
+                print(f"⚖️ [Fact & Originality Review] Status: {fact_review_report.get('status')} (Score: {fact_review_report.get('score')}/100, Findings: {fact_review_report.get('total_findings')})")
+                if strict_fact and not fact_review_report.get("passed", True):
+                    upload_blocked = True
+                    youtube_error = f"Upload blocked by strict fact-checking review policy: {fact_review_report.get('status')}."
+        except Exception as fact_err:
+            print(f"Fact review notice: {fact_err}")
+
+        video_id = None
+        youtube_error = None
+
+        if youtube_upload:
+            if upload_blocked:
+                print()
+                print("=" * 60)
+                print("🛑 [Phase 7 Quality Gate] YouTube upload BLOCKED.")
+                if has_gate_critical:
+                    crit_msgs = [f"[{r.gate_name}] {iss.rule}: {iss.actual}" for r in [gate_d] for iss in r.issues if iss.severity == "CRITICAL"]
+                    crit_summary = "; ".join(crit_msgs[:2]) if crit_msgs else "Pre-upload barrier defect"
+                    print(f"   Reason: Validation gate failure: {crit_summary}")
+                    print(f"   AI Review Score: {review_score_final}/100")
+                    youtube_error = f"Upload skipped: Validation gate defect ({crit_summary}) [Review Score: {review_score_final}/100]."
+                else:
+                    print(f"   Reason: Video failed AI Review after {MAX_REVIEW_ATTEMPTS} healing attempts.")
+                    print(f"   Score: {review_score_final}/100 (< 65) or Critical Issues: {critical_issues_final}")
+                    youtube_error = f"Upload skipped: Review score below threshold ({review_score_final}/100) after {MAX_REVIEW_ATTEMPTS} attempts."
+                print("   Skipping upload to preserve channel authority and retention metrics.")
+                print("=" * 60)
+                video_id = None
+            else:
+                progress.progress(
+                    98,
+                    text=f"Uploading video to YouTube ({youtube_channel})...",
+                )
+                out_dir = Path(run_dir) if run_dir else Path("output")
+                video_file = out_dir / "final_video.mp4"
+                if not video_file.exists():
+                    video_file = Path("output/final_video.mp4")
+                thumb_file = out_dir / "thumbnail.jpg"
+                if not thumb_file.exists():
+                    thumb_file = Path("output/thumbnail.jpg")
+
+                try:
+                    video_id, youtube_error = run_stage_with_timeout(
+                        "YouTube Upload",
+                        600,
+                        perform_youtube_upload,
+                        video_file=video_file,
+                        title=title,
+                        description=description,
+                        tags=tags,
+                        privacy=youtube_privacy,
+                        channel=youtube_channel,
+                        thumbnail_path=thumb_file,
+                        run_dir=out_dir,
+                        run_id=run_id,
+                    )
+                except TimeoutError as t_err:
+                    youtube_error = "YouTube upload timed out after 600s limit: the video file is large and network upload took longer than allowed. Your video was successfully created and is saved on disk ready to preview, download, or publish manually."
+                    video_id = None
+                    print(f"⚠️ {youtube_error}")
+                except Exception as yt_err:
+                    youtube_error = str(yt_err)
+                    video_id = None
+                    print(f"⚠️ YouTube upload error: {yt_err}")
 
     else:
 
@@ -1721,7 +2488,11 @@ def generate_multi_media_video(
     # --------------------------------------------------------
     # OPTIONAL INSTAGRAM REELS UPLOAD
     # --------------------------------------------------------
-    instagram_status = {"eligible": False, "reason": "Instagram upload not enabled", "result": None}
+    # Strict rule: Long-form videos or non-9:16 formats are NEVER uploaded to Instagram Reels
+    if is_longform or str(aspect_ratio).strip() != "9:16":
+        instagram_upload = False
+
+    instagram_status = {"eligible": False, "reason": "Excluded: Long-format or landscape videos cannot be uploaded to Instagram Reels" if is_longform else "Instagram upload not enabled", "result": None}
     if instagram_upload:
         try:
             from agents.instagram_agent import should_upload_to_instagram, upload_to_instagram_reels
@@ -1739,15 +2510,31 @@ def generate_multi_media_video(
                     dur = 0.0
 
             eligible, reason = should_upload_to_instagram(dur, instagram_upload, aspect_ratio)
+            if upload_blocked and eligible:
+                eligible = False
+                reason = f"Blocked by Phase 7 Quality Gate (Score: {review_score_final}/100 < 80 or critical issues present)"
+
             instagram_status = {"eligible": eligible, "reason": reason, "duration": dur, "result": None}
 
             if eligible:
                 print(f"📸 Instagram Reels: Video is eligible ({dur:.1f}s, {aspect_ratio}). Preparing upload...")
-                public_base = os.getenv("PUBLIC_VIDEO_BASE_URL", "https://smokeless-waking-remote.ngrok-free.dev")
-                public_url = f"{public_base}/output/final_video.mp4"
+                public_base = os.getenv("PUBLIC_VIDEO_BASE_URL", "")
+                tunnel_file = OUTPUT_DIR / "tunnel_url.txt"
+                if tunnel_file.exists():
+                    try:
+                        t_u = tunnel_file.read_text(encoding="utf-8").strip()
+                        if t_u.startswith("http"):
+                            public_base = t_u
+                    except Exception:
+                        pass
+                if not public_base:
+                    public_base = "https://smokeless-waking-remote.ngrok-free.dev"
+
+                public_url = f"{public_base.rstrip('/')}/output/final_video.mp4"
                 res = upload_to_instagram_reels(
-                    video_source=str(final_vid) if final_vid.exists() else public_url,
-                    caption=f"{title}\n\n{description[:300]}"
+                    video_source=str(final_vid) if final_vid.exists() else None,
+                    caption=f"{title}\n\n{description[:300]}",
+                    public_video_url=public_url,
                 )
                 instagram_status["result"] = res
                 if res.get("success"):
@@ -1760,12 +2547,77 @@ def generate_multi_media_video(
             print("⚠️ Instagram Reels processing error:", ig_err)
             instagram_status = {"eligible": False, "reason": str(ig_err), "result": None}
 
-    progress.progress(
-        100,
-        text="✅ AutoTube AI generation completed!",
-    )
+    # ----------------------------------------------------
+    # Phase 1 Virality Upgrade: Run Report & Metrics Audit
+    # ----------------------------------------------------
+    run_rep = {}
+    try:
+        from agents.run_report import generate_run_report
+        run_rep = generate_run_report(
+            output_dir_str=str(OUTPUT_DIR),
+            topic=topic,
+            is_shorts=(aspect_ratio == "9:16"),
+            profile=profile,
+            target_duration=target_duration,
+        )
+    except Exception as rep_err:
+        print(f"⚠️ Run report error: {rep_err}")
+
+    timing_report = {}
+    try:
+        from providers.timing_logger import generate_pipeline_timing_report
+        timing_report = generate_pipeline_timing_report()
+    except Exception as t_err:
+        print(f"⚠️ Timing report notice: {t_err}")
+
+    # Optional Feature 6: Experiment and Learning Logger (Non-breaking, Disabled by Default)
+    try:
+        from config.settings import get_setting
+        if get_setting("ENABLE_EXPERIMENT_LOGGING", False):
+            from analytics.experiment_logger import log_experiment_run
+            dur_actual = None
+            final_vid_p = OUTPUT_DIR / "final_video.mp4"
+            if final_vid_p.exists():
+                try:
+                    import subprocess
+                    p_dur = subprocess.run(
+                        ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", str(final_vid_p)],
+                        capture_output=True, text=True
+                    )
+                    dur_actual = float(p_dur.stdout.strip())
+                except Exception:
+                    pass
+            log_experiment_run(
+                topic=topic,
+                content_pillar=content_intel_report.get("pillar", "viral_entertainment_explainers") if content_intel_report else "viral_entertainment_explainers",
+                aspect_ratio=aspect_ratio,
+                target_duration=target_duration,
+                actual_duration_sec=dur_actual,
+                hook_variant="optimized" if (retention_report and get_setting("AUTO_APPLY_HOOK_OPTIMIZER", False)) else "standard",
+                title_variant=title,
+                thumbnail_text=packaging_intel_report["thumbnail_text_options"][0]["text"] if (packaging_intel_report and packaging_intel_report.get("thumbnail_text_options")) else "",
+                heuristic_scores={
+                    "retention_score": retention_report.get("optimized_retention_score", 0.0) if retention_report else 0.0,
+                    "packaging_score": packaging_intel_report["alignment_check"].get("packaging_estimate_score", 0.0) if packaging_intel_report else 0.0,
+                    "fact_score": fact_review_report.get("score", 0.0) if fact_review_report else 0.0,
+                },
+                youtube_video_id=video_id,
+            )
+            print("📝 [Experiment Logger] Logged run safely to data/experiment_log.json")
+    except Exception as exp_err:
+        print(f"Experiment logger notice: {exp_err}")
 
     return {
+        "status": "APPROVED" if review_approved else "SKIPPED_UNPUBLISHED",
+        "quality_gate_passed": review_approved,
+        "timing_report": timing_report,
+        "run_report": run_rep,
+        "validation_report": val_report if "val_report" in locals() else {},
+        "format_profile": profile.to_dict() if "profile" in locals() else {},
+        "content_intelligence": content_intel_report if "content_intel_report" in locals() else None,
+        "retention_report": retention_report if "retention_report" in locals() else None,
+        "packaging_intelligence": packaging_intel_report if "packaging_intel_report" in locals() else None,
+        "fact_review": fact_review_report if "fact_review_report" in locals() else None,
         "script": script,
         "title": title,
         "description": description,
@@ -1784,5 +2636,7 @@ def generate_multi_media_video(
         "youtube_video_id": video_id,
         "youtube_error": youtube_error,
         "instagram_status": instagram_status,
+        "run_id": run_id,
+        "run_dir": str(run_dir),
     }
 

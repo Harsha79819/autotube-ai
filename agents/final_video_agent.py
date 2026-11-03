@@ -1,21 +1,43 @@
+"""
+AutoTube AI - Final Video Rendering Agent (agents/final_video_agent.py)
+
+Combines video scenes, burns subtitles (libass or SRT), overlays Frame-0
+viral hook cards for Shorts, and applies mobile-optimized MP4 encoding (+faststart).
+
+Phase 1 Upgrades:
+  1. Strict Outro Removal for Shorts (9:16): Eliminates the 2-second drop-off outro.
+  2. Frame 0 Hook Text Overlay: Burns output/hook_overlay.png onto Frame 0 for the
+     first ~2.0 seconds (t=0.0s to t=2.0s) so viewers immediately see the visual hook.
+"""
+
 import os
 import re
 import shutil
 import subprocess
+from pathlib import Path
 from supervisor import autonomous_recover
 
 
 @autonomous_recover("final_video_agent")
-def create_final_video(add_captions=False, aspect_ratio="9:16", burn_captions=None, captions=None, include_outro=False, outro_clip=None):
+def create_final_video(
+    add_captions=False,
+    aspect_ratio="9:16",
+    burn_captions=None,
+    captions=None,
+    include_outro=False,
+    outro_clip=None,
+    input_video=None,
+    output_video=None,
+):
     if burn_captions is not None:
         add_captions = burn_captions
     elif captions is not None:
         add_captions = captions
 
-    input_video = "output/video.mp4"
-    subtitles = "output/subtitles.srt"
-    output_video = "output/final_video.mp4"
-
+    if input_video is None:
+        input_video = "output/video.mp4"
+    if output_video is None:
+        output_video = "output/final_video.mp4"
     ass_subtitles = "output/subtitles.ass"
     srt_subtitles = "output/subtitles.srt"
 
@@ -23,12 +45,11 @@ def create_final_video(add_captions=False, aspect_ratio="9:16", burn_captions=No
         print("Input video not found:", input_video)
         return None
 
-    if add_captions and not os.path.exists(srt_subtitles) and not os.path.exists(ass_subtitles):
-        print("⚠️ Subtitle file not found. Falling back to clean video without burned subtitles.")
-        add_captions = False
-
     if os.path.exists(output_video):
-        os.remove(output_video)
+        try:
+            os.remove(output_video)
+        except Exception:
+            pass
 
     if aspect_ratio == "9:16":
         target_w, target_h = 1080, 1920
@@ -37,13 +58,57 @@ def create_final_video(add_captions=False, aspect_ratio="9:16", burn_captions=No
     else:
         target_w, target_h = 1080, 1080
 
+    # --------------------------------------------------------
+    # Universal Outro: Active for all video formats (9:16 Shorts & 16:9 Long-form)
+    # --------------------------------------------------------
+    is_shorts = (aspect_ratio == "9:16")
+
+    # --------------------------------------------------------
+    # Phase 1 Virality Upgrade: Frame 0 Viral Hook Text Overlay
+    # --------------------------------------------------------
+    hook_overlay_path = "output/hook_overlay.png"
+    has_hook_overlay = False
+    if is_shorts:
+        if not os.path.exists(hook_overlay_path):
+            hook_txt = ""
+            if os.path.exists("output/hook.json"):
+                try:
+                    import json
+                    h_data = json.loads(Path("output/hook.json").read_text(encoding="utf-8"))
+                    hook_txt = h_data.get("chosen_hook", "")
+                except Exception:
+                    pass
+            if not hook_txt and os.path.exists("output/script.txt"):
+                try:
+                    s_lines = [
+                        l.strip()
+                        for l in Path("output/script.txt").read_text(encoding="utf-8").splitlines()
+                        if l.strip() and not l.startswith("#")
+                    ]
+                    if s_lines:
+                        hook_txt = s_lines[0]
+                except Exception:
+                    pass
+            if hook_txt:
+                try:
+                    from agents.hook_card import generate_hook_card
+                    generate_hook_card(hook_txt, output_path=hook_overlay_path, width=target_w, height=target_h)
+                except Exception as e:
+                    print(f"⚠️ Hook card generation notice: {e}")
+
+        has_hook_overlay = bool(
+            os.path.exists(hook_overlay_path) and os.path.getsize(hook_overlay_path) > 500
+        )
+
     print("=" * 60)
     print("FINAL VIDEO RENDERING")
     print("=" * 60)
-    print("Input:", input_video)
-    print("Output:", output_video)
-    print(f"Target: {target_w}x{target_h} ({aspect_ratio})")
-    print("Burn Captions into Video:", add_captions)
+    print("Input:                    ", input_video)
+    print("Output:                   ", output_video)
+    print(f"Target:                   {target_w}x{target_h} ({aspect_ratio})")
+    print("Burn Captions:            ", add_captions)
+    print("Frame 0 Hook Overlay:     ", "YES (t=0.0s to 2.0s)" if has_hook_overlay else "NO")
+    print("Include Outro:            ", "YES" if include_outro else "NO (Omitted for Shorts retention)")
 
     # Check if input video has an audio stream
     probe_cmd = [
@@ -51,81 +116,84 @@ def create_final_video(add_captions=False, aspect_ratio="9:16", burn_captions=No
         "-show_entries", "stream=codec_type", "-of", "default=nw=1:nk=1",
         input_video
     ]
-    p_res = subprocess.run(probe_cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    p_res = subprocess.run(probe_cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=8)
     video_has_audio = bool(p_res.stdout.strip())
     audio_source = "output/mixed_audio.wav" if os.path.exists("output/mixed_audio.wav") else "output/voice.mp3"
 
-    # Optimization: When burn_captions is OFF, skip re-encoding if video already has audio!
-    if not add_captions and video_has_audio:
-        print("⏩ Burn Captions is OFF: Video already has audio. Applying +faststart for instant mobile streaming...")
-        try:
-            subprocess.run([
-                "ffmpeg", "-y", "-i", input_video,
-                "-c", "copy", "-movflags", "+faststart",
-                output_video
-            ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
-        except Exception:
-            import shutil
-            shutil.copyfile(input_video, output_video)
-        if include_outro:
-            from agents.video_agent import append_outro
-            outro_path = outro_clip or "assets/outro/like_share_subscribe.mp4"
-            print("🎬 Appending Like/Share/Subscribe outro...")
-            append_outro(output_video, outro_clip_path=outro_path, output_path=output_video)
-        print("=" * 60)
-        print("FINAL VIDEO CREATED (INSTANT CLEAN VIDEO)!")
-        print(f"{target_w}x{target_h} ({aspect_ratio})")
-        print(output_video)
-        print("=" * 60)
-        return output_video
-
-    # --------------------------------------------------------
-    # FFmpeg filter
-    # Preserve original aspect ratio.
-    # --------------------------------------------------------
-
-    video_filter = (
-        f"scale={target_w}:{target_h}:force_original_aspect_ratio=decrease:flags=lanczos,"
-        f"pad={target_w}:{target_h}:(ow-iw)/2:(oh-ih)/2"
-    )
-
-    if add_captions:
-        fonts_dir = os.path.abspath("fonts").replace("\\", "/")
-        use_ass = False
-        if os.path.exists(ass_subtitles) and os.path.getsize(ass_subtitles) > 50:
-            # Prevent stale ASS file burn: verify ass_subtitles is fresh compared to audio/video
-            ass_mtime = os.path.getmtime(ass_subtitles)
-            ref_mtime = 0
-            if os.path.exists(audio_source):
-                ref_mtime = os.path.getmtime(audio_source)
-            elif os.path.exists(input_video):
-                ref_mtime = os.path.getmtime(input_video)
-            
-            # If ASS is not significantly older than the current audio/video, it belongs to this run
-            if ref_mtime == 0 or ass_mtime >= (ref_mtime - 90):
-                use_ass = True
-            else:
-                print(f"⚠️ Stale subtitles.ass detected (older than current run's audio). Removing stale ASS file.")
-                try:
-                    os.remove(ass_subtitles)
-                except Exception:
-                    pass
-
-        if use_ass:
-            subtitle_path = os.path.abspath(ass_subtitles).replace("\\", "/").replace(":", "\\:")
-            video_filter = (
-                f"scale={target_w}:{target_h}:force_original_aspect_ratio=decrease:flags=lanczos,"
-                f"pad={target_w}:{target_h}:(ow-iw)/2:(oh-ih)/2,"
-                f"ass={subtitle_path}:fontsdir={fonts_dir}"
-            )
-            print("Subtitle file: output/subtitles.ass (Word-Level Karaoke Highlight via libass)")
+    # Fast copy optimization ONLY when NO captions and NO hook overlay are needed
+    if not add_captions and not has_hook_overlay and video_has_audio:
+        if aspect_ratio == "9:16":
+            print("⏩ 9:16 Vertical Export: Re-encoding stream for Instagram Reels compliance (+faststart, 44.1kHz)...")
+            try:
+                subprocess.run([
+                    "ffmpeg", "-y", "-i", input_video,
+                    "-c:v", "libx264", "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p",
+                    "-c:a", "aac", "-b:a", "192k", "-ar", "44100", "-ac", "2",
+                    "-shortest", "-movflags", "+faststart",
+                    output_video
+                ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True, timeout=90)
+                return output_video
+            except Exception:
+                pass
         else:
-            subtitle_path = os.path.abspath(srt_subtitles).replace("\\", "/").replace(":", "\\:")
+            print("⏩ Burn Captions & Hook Overlay OFF: Copying stream with +faststart...")
+            try:
+                subprocess.run([
+                    "ffmpeg", "-y", "-i", input_video,
+                    "-c", "copy", "-movflags", "+faststart",
+                    output_video
+                ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True, timeout=60)
+            except Exception:
+                shutil.copyfile(input_video, output_video)
+            return output_video
+
+    # Build Filter Chain
+    fonts_dir = os.path.abspath("fonts").replace("\\", "/")
+    use_ass = False
+    if add_captions and os.path.exists(ass_subtitles) and os.path.getsize(ass_subtitles) > 50:
+        use_ass = True
+
+    # Assemble inputs and filter graph
+    cmd = ["ffmpeg", "-y", "-i", input_video]
+    overlay_input_idx = -1
+    audio_input_idx = -1
+
+    if has_hook_overlay:
+        cmd.extend(["-i", hook_overlay_path])
+        overlay_input_idx = 1
+
+    if not video_has_audio and os.path.exists(audio_source):
+        cmd.extend(["-i", audio_source])
+        audio_input_idx = 2 if has_hook_overlay else 1
+
+    filter_steps = []
+    # 1. Base scale + letterbox pad
+    filter_steps.append(
+        f"[0:v]scale={target_w}:{target_h}:force_original_aspect_ratio=decrease:flags=lanczos,"
+        f"pad={target_w}:{target_h}:(ow-iw)/2:(oh-ih)/2[scaled]"
+    )
+    last_v = "scaled"
+
+    # 2. Hook overlay banner on Frame 0 for first 2.0s
+    if has_hook_overlay:
+        filter_steps.append(
+            f"[{last_v}][{overlay_input_idx}:v]overlay=0:0:enable='between(t,0,2.0)'[v_hook]"
+        )
+        last_v = "v_hook"
+
+    # 3. Captions
+    if add_captions:
+        if use_ass:
+            sub_p = os.path.abspath(ass_subtitles).replace("\\", "/").replace(":", "\\:")
+            filter_steps.append(f"[{last_v}]ass={sub_p}:fontsdir={fonts_dir}[v_out]")
+            last_v = "v_out"
+            print("Subtitle file: output/subtitles.ass (Karaoke Highlight)")
+        elif os.path.exists(srt_subtitles):
+            sub_p = os.path.abspath(srt_subtitles).replace("\\", "/").replace(":", "\\:")
             srt_content = ""
             try:
-                if os.path.exists(srt_subtitles):
-                    with open(srt_subtitles, "r", encoding="utf-8") as sf:
-                        srt_content = sf.read()
+                with open(srt_subtitles, "r", encoding="utf-8") as sf:
+                    srt_content = sf.read()
             except Exception:
                 pass
             is_telugu = bool(re.search(r"[\u0C00-\u0C7F]", srt_content))
@@ -134,10 +202,10 @@ def create_final_video(add_captions=False, aspect_ratio="9:16", burn_captions=No
 
             if aspect_ratio == "9:16":
                 style = (
-                    f"force_style='FontName={font_family},FontSize=24,Bold=1,"
+                    f"force_style='FontName={font_family},FontSize=38,Bold=1,"
                     "PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,"
-                    "BorderStyle=1,Outline=2.5,Shadow=1.5,Alignment=2,"
-                    "MarginV=150,MarginR=80,MarginL=80'"
+                    "BorderStyle=1,Outline=2.8,Shadow=1.5,Alignment=2,"
+                    "MarginV=360,MarginR=80,MarginL=80'"
                 )
             elif aspect_ratio == "16:9":
                 style = (
@@ -153,102 +221,81 @@ def create_final_video(add_captions=False, aspect_ratio="9:16", burn_captions=No
                     "BorderStyle=1,Outline=2.5,Shadow=1.5,Alignment=2,"
                     "MarginV=35,MarginR=35,MarginL=35'"
                 )
-
-            video_filter = (
-                f"scale={target_w}:{target_h}:force_original_aspect_ratio=decrease:flags=lanczos,"
-                f"pad={target_w}:{target_h}:(ow-iw)/2:(oh-ih)/2,"
-                f"subtitles={subtitle_path}:fontsdir={fonts_dir}:{style}"
-            )
+            filter_steps.append(f"[{last_v}]subtitles={sub_p}:fontsdir={fonts_dir}:{style}[v_out]")
+            last_v = "v_out"
             print("Subtitle file: output/subtitles.srt (Standard)")
 
-    print("Video filter:")
-    print(video_filter)
+    filter_complex_str = ";".join(filter_steps)
+    cmd.extend(["-filter_complex", filter_complex_str])
+    cmd.extend(["-map", f"[{last_v}]"])
 
-    # Ensure input video audio is preserved or attached from voice.mp3
-    probe_cmd = [
-        "ffprobe", "-v", "error", "-select_streams", "a:0",
-        "-show_entries", "stream=codec_type", "-of", "default=nw=1:nk=1",
-        input_video
-    ]
-    p_res = subprocess.run(probe_cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
-    video_has_audio = bool(p_res.stdout.strip())
+    if video_has_audio:
+        cmd.extend(["-map", "0:a:0"])
+    elif audio_input_idx > 0:
+        print(f"🎵 Guaranteeing audio track: Attaching narration audio from input {audio_input_idx}...")
+        cmd.extend(["-map", f"{audio_input_idx}:a:0"])
 
-    audio_source = "output/mixed_audio.wav" if os.path.exists("output/mixed_audio.wav") else "output/voice.mp3"
+    audio_sample_rate = "44100" if aspect_ratio == "9:16" else "48000"
 
-    command = [
-        "ffmpeg",
-        "-y",
-        "-i",
-        input_video,
-    ]
+    # For 9:16 Shorts, strictly cap duration to exact audio length (+0.20s pad) to prevent dead-air outro
+    if is_shorts:
+        try:
+            a_probe = subprocess.run(
+                ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", audio_source],
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=5
+            )
+            a_dur = float(a_probe.stdout.strip())
+            if a_dur > 0:
+                cmd.extend(["-t", f"{a_dur + 0.20:.2f}"])
+        except Exception:
+            pass
 
-    if not video_has_audio and os.path.exists(audio_source):
-        print(f"🎵 Guaranteeing audio track: Attaching narration audio from {audio_source}...")
-        command.extend(["-i", audio_source])
-        command.extend([
-            "-vf", video_filter,
-            "-map", "0:v:0",
-            "-map", "1:a:0",
-            "-c:v", "libx264",
-            "-preset", "fast",
-            "-crf", "18",
-            "-pix_fmt", "yuv420p",
-            "-c:a", "aac",
-            "-b:a", "192k",
-            "-shortest",
-            "-movflags", "+faststart",
-            output_video,
-        ])
-    else:
-        command.extend([
-            "-vf", video_filter,
-            "-c:v", "libx264",
-            "-preset", "fast",
-            "-crf", "18",
-            "-pix_fmt", "yuv420p",
-            "-c:a", "aac",
-            "-b:a", "192k",
-            "-movflags", "+faststart",
-            output_video,
-        ])
+    cmd.extend([
+        "-colorspace", "bt709",
+        "-color_primaries", "bt709",
+        "-color_trc", "bt709",
+        "-color_range", "tv",
+        "-c:v", "libx264",
+        "-preset", "fast",
+        "-crf", "18",
+        "-pix_fmt", "yuv420p",
+        "-c:a", "aac",
+        "-b:a", "192k",
+        "-ar", audio_sample_rate,
+        "-ac", "2",
+        "-shortest",
+        "-movflags", "+faststart",
+        output_video,
+    ])
 
     print()
-    print("Running FFmpeg...")
+    print("Running FFmpeg Final Assembly...")
     print()
-
-    result = subprocess.run(
-        command,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-    )
-
-    print(result.stdout)
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=180)
 
     if result.returncode == 0 and os.path.exists(output_video):
-        if include_outro:
+        if include_outro and not is_shorts:
             from agents.video_agent import append_outro
-            outro_path = outro_clip or "assets/outro/like_share_subscribe.mp4"
-            print("🎬 Appending Like/Share/Subscribe outro...")
+            outro_path = outro_clip or "assets/outro/like_subscribe_share_comment.mp4"
+            if not os.path.exists(outro_path):
+                outro_path = "assets/outro/like_share_subscribe.mp4"
+            print("🎬 Appending 5-second Like, Subscribe, Share & Comment outro...")
             append_outro(output_video, outro_clip_path=outro_path, output_path=output_video)
+        elif is_shorts and include_outro:
+            print("ℹ️ Shorts (9:16) strict retention: Outro omitted to maximize audience completion and loops.")
 
         print("=" * 60)
         print("FINAL VIDEO CREATED!")
         print(f"{target_w}x{target_h} ({aspect_ratio})")
         print(output_video)
         print("=" * 60)
-
         return output_video
 
-    print("=" * 60)
-    print("FFmpeg failed with subtitles. Falling back to clean video without burned subtitles...")
-    print("=" * 60)
-
+    print("⚠️ FFmpeg final assembly notice. Trying clean fallback...")
     if os.path.exists(input_video):
         shutil.copyfile(input_video, output_video)
-        print(f"✅ Generated fallback video from {input_video} -> {output_video}")
         return output_video
 
-    raise RuntimeError(f"FFmpeg encoding failed with exit code {result.returncode}: {result.stdout[-300:] if result.stdout else 'unknown error'}")
-
-
+    raise RuntimeError(
+        f"FFmpeg encoding failed with exit code {result.returncode}: {result.stdout[-300:] if result.stdout else 'unknown error'}"
+    )

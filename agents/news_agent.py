@@ -1453,6 +1453,7 @@ def get_trending_news(
         "Entertainment": [
             ("Entertainment", "https://news.google.com/rss/headlines/section/topic/ENTERTAINMENT?hl=en-IN&gl=IN&ceid=IN:en"),
             ("Entertainment", "https://news.google.com/rss/search?q=cinema+movies+entertainment+when:1d&hl=en-IN&gl=IN&ceid=IN:en"),
+            ("Entertainment", "https://news.google.com/rss/search?q=Tollywood+Telugu+cinema+news+when:2d&hl=en-IN&gl=IN&ceid=IN:en"),
         ],
         "Science": [
             ("Science", "https://news.google.com/rss/headlines/section/topic/SCIENCE?hl=en-IN&gl=IN&ceid=IN:en"),

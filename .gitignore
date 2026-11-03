@@ -284,3 +284,8 @@ assets/*
 input/
 scratch/
 
+
+data/cache/
+
+data/contestant_galleries/
+reference_assets/

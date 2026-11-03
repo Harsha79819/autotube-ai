@@ -597,22 +597,12 @@ def _score_news_article(topic, title, snippet, article_text, published_at):
         for word in re.findall(r"[A-Za-z0-9]+", topic)
         if len(word) >= 3
         and word.lower() not in {
-            "latest",
-            "news",
-            "today",
-            "technology",
-            "tech",
-            "recent",
-            "breaking",
-            "current",
-            "newest",
-            "topic",
-            "your",
-            "video",
-            "create",
-            "make",
-            "about",
-            "please",
+            "latest", "news", "today", "technology", "tech", "recent", "breaking",
+            "current", "newest", "topic", "your", "video", "create", "make", "about",
+            "please", "under", "buy", "best", "top", "good", "with", "from", "which",
+            "will", "january", "february", "march", "april", "may", "june", "july",
+            "august", "september", "october", "november", "december", "2024", "2025",
+            "2026", "2027", "000", "50", "75", "30", "and", "the", "for", "india",
         }
     }
 
@@ -711,6 +701,27 @@ def _score_news_article(topic, title, snippet, article_text, published_at):
     return score
 
 
+def _extract_clean_search_query(topic: str) -> str:
+    """
+    Extracts concise, high-yield search keywords for Google News RSS.
+    Prevents complex prompts (e.g. 'Best Camera Phones to Buy in India Under Rs 30,000...')
+    from failing or returning unrelated general trending news.
+    """
+    clean_t = re.sub(r"[,\(\)\[\]\"']", " ", topic)
+    clean_t = re.sub(
+        r"\b(?:to\s+buy|under|rs|in\s+october|in\s+november|in\s+december|in\s+january|in\s+february|in\s+march|in\s+april|in\s+may|in\s+june|in\s+july|in\s+august|in\s+september)\b",
+        " ",
+        clean_t,
+        flags=re.I,
+    )
+    clean_t = re.sub(r"\b\d{2,6}\b", " ", clean_t)
+    words = [w.strip() for w in clean_t.split() if len(w.strip()) >= 2]
+    if len(words) > 6:
+        words = words[:6]
+    query = " ".join(words).strip()
+    return query if len(query) >= 5 else topic[:60]
+
+
 def verify_news_topic(topic, limit=5):
     """
     Gather source-backed context from Google News RSS.
@@ -735,8 +746,9 @@ def verify_news_topic(topic, limit=5):
             "summary": "No topic was provided.",
         }
 
+    search_query = _extract_clean_search_query(topic)
     url = RSS_URL.format(
-        query=quote_plus(topic)
+        query=quote_plus(search_query)
     )
 
     try:
@@ -950,23 +962,22 @@ def verify_news_topic(topic, limit=5):
         )
         if len(word) >= 3
         and word.lower() not in {
-            "latest",
-            "news",
-            "today",
-            "technology",
-            "tech",
-            "recent",
-            "breaking",
-            "current",
-            "newest",
-            "topic",
-            "your",
-            "video",
-            "create",
-            "make",
-            "about",
-            "please",
+            "latest", "news", "today", "technology", "tech", "recent", "breaking",
+            "current", "newest", "topic", "your", "video", "create", "make", "about",
+            "please", "under", "buy", "best", "top", "good", "with", "from", "which",
+            "will", "january", "february", "march", "april", "may", "june", "july",
+            "august", "september", "october", "november", "december", "2024", "2025",
+            "2026", "2027", "000", "50", "75", "30", "and", "the", "for", "india",
         }
+    }
+
+    category_nouns = {
+        w for w in (
+            "phone", "phones", "smartphone", "smartphones", "mobile", "mobiles",
+            "camera", "cameras", "laptop", "laptops", "tablet", "tablets",
+            "gadget", "gadgets", "car", "cars", "bike", "bikes"
+        )
+        if w in topic.lower()
     }
 
     if verification_words:
@@ -994,19 +1005,13 @@ def verify_news_topic(topic, limit=5):
                 0,
             )
 
-            # Accept the article when either:
-            #
-            # 1. A meaningful topic word is directly found
-            #    in the article content, OR
-            #
-            # 2. The article has a strong overall relevance
-            #    score from topic/location/technology/freshness.
-            #
-            # This prevents false positives such as
-            # "YOUR_TOPIC", while allowing legitimate articles
-            # whose publisher text does not repeat the exact
-            # location/topic wording.
-            if matched_words or article_score >= 40:
+            # If the topic is a product/device category, the article MUST contain at least one category keyword
+            category_ok = True
+            if category_nouns:
+                category_ok = any(cn in combined for cn in category_nouns)
+
+            # Accept the article only if it actually matches the subject matter
+            if category_ok and (len(matched_words) >= 2 or (len(matched_words) >= 1 and article_score >= 35)):
 
                 article["_matched_topic_words"] = len(
                     matched_words
@@ -1257,11 +1262,10 @@ Return ONLY a JSON object:
 If unsafe, set safe: false and category to one of ["hate_speech", "violence", "toxicity", "sexual_content", "dangerous_content"].
 """
             models_to_try = [
-                "gemini-2.5-flash",
-                "gemini-2.0-flash",
-                "gemini-1.5-flash",
-                "gemini-2.0-flash-lite",
                 "gemini-flash-lite-latest",
+                "gemini-flash-latest",
+                "gemini-3.5-flash-lite",
+                "gemini-3.8-flash",
             ]
 
             for m in models_to_try:
@@ -1398,6 +1402,17 @@ def validate_visual_assets(assets_dir=None, fallback_dir=None):
                 is_watermarked = True
                 reason = "Watermark keyword found in filename"
 
+        # Check 5: OCR Prior Season & Political Blacklist Guard
+        if not is_corrupt and not is_watermarked:
+            try:
+                from tools.ocr_guard import check_asset_prior_seasons
+                is_clean, ocr_txt, rej_reason = check_asset_prior_seasons(img_path, is_bb=True)
+                if not is_clean:
+                    is_watermarked = True
+                    reason = f"OCR Defect: {rej_reason} (Found: '{ocr_txt[:40]}')"
+            except Exception as ocr_e:
+                pass
+
         # Replacement action if defective
         if is_corrupt or is_watermarked:
             if is_corrupt:
@@ -1405,11 +1420,119 @@ def validate_visual_assets(assets_dir=None, fallback_dir=None):
             if is_watermarked:
                 watermarked_count += 1
 
-            if fallbacks:
+            # Auto-record defective image into NegativeMemoryLedger
+            try:
+                from data.negative_ledger import get_negative_ledger
+                ledger = get_negative_ledger()
+                ledger.ban_image_hash(img_path, reason=reason)
+            except Exception:
+                pass
+
+            b_num_m = re.match(r"^(\d+)\.jpg$", filename)
+            replaced_canva = False
+            if b_num_m:
+                b_num = int(b_num_m.group(1))
+                try:
+                    from agents.typography_card import generate_typography_card
+                    from agents.image_agent import find_local_contestant_image
+                    from agents.entity_harvester import find_existing_reference_portrait
+                    from data.bb10_contestants import is_bigg_boss_context
+                    import json
+                    
+                    b_ent = ""
+                    headline = ""
+                    topic_str = ""
+
+                    # 1. Try delivery_plan.json first
+                    dp_file = root / "output" / "delivery_plan.json"
+                    if dp_file.exists():
+                        try:
+                            dp_data = json.loads(dp_file.read_text(encoding="utf-8"))
+                            for b_item in dp_data:
+                                if b_item.get("beat_id") == b_num:
+                                    b_ent = b_item.get("main_entity") or b_item.get("primary_entity", "")
+                                    headline = b_item.get("spoken_text") or b_item.get("narration") or ""
+                                    break
+                        except Exception:
+                            pass
+
+                    # 2. Try visual_plan.json fallback
+                    if not b_ent or not headline:
+                        vp_file = root / "output" / "visual_plan.json"
+                        if vp_file.exists():
+                            try:
+                                vp_data = json.loads(vp_file.read_text(encoding="utf-8"))
+                                for b_item in vp_data:
+                                    if b_item.get("beat_id") == b_num:
+                                        if not b_ent:
+                                            b_ent = b_item.get("main_entity") or b_item.get("primary_entity", "")
+                                        if not headline:
+                                            headline = b_item.get("narration") or b_item.get("visual_concept") or ""
+                                        break
+                            except Exception:
+                                pass
+
+                    # 3. Read metadata for run context
+                    meta_file = root / "output" / "metadata.json"
+                    if meta_file.exists():
+                        try:
+                            m_d = json.loads(meta_file.read_text(encoding="utf-8"))
+                            topic_str = m_d.get("title", "")
+                        except Exception:
+                            pass
+
+                    if not headline:
+                        headline = f"Scene {b_num} • Key Highlight"
+
+                    # Find existing reference photo dynamically
+                    av_p = None
+                    if b_ent:
+                        loc_c = find_local_contestant_image(b_ent)
+                        if loc_c:
+                            av_p = str(loc_c[1])
+                            b_ent = loc_c[0].replace("_", " ").title()
+                        else:
+                            ref_p = find_existing_reference_portrait(b_ent)
+                            if ref_p:
+                                av_p = str(ref_p)
+
+                    # Dynamic category and badge label
+                    combined_ctx = f"{topic_str} {headline}".lower()
+                    if is_bigg_boss_context(combined_ctx):
+                        subtext = "Bigg Boss Telugu 10 • Star Maa"
+                        badge_label = f"{b_ent.upper()} • BIGG BOSS 10" if b_ent else "HIGHLIGHT • BIGG BOSS 10"
+                    elif any(k in combined_ctx for k in ["movie", "cinema", "film", "teaser", "trailer", "box office"]):
+                        subtext = "Tollywood Special • AutoTube"
+                        badge_label = f"{b_ent.upper()} • TOLLYWOOD" if b_ent else "HIGHLIGHT • TOLLYWOOD"
+                    else:
+                        subtext = "AutoTube Exclusive Update"
+                        badge_label = f"{b_ent.upper()} • EXCLUSIVE" if b_ent else "HIGHLIGHT • EXCLUSIVE"
+
+                    if generate_typography_card(
+                        headline_text=headline,
+                        output_path=str(img_path),
+                        topic_category="entertainment",
+                        aspect_ratio="9:16",
+                        badge_label=badge_label,
+                        avatar_image_path=av_p,
+                        subtext=subtext,
+                    ):
+                        from providers.image import clean_and_crop_image
+                        clean_and_crop_image(img_path, aspect_ratio="9:16")
+                        replaced_canva = True
+                        replaced.append(filename)
+                        print(f"🛡️ [Asset Safety] Replaced defective {filename} ({reason}) with Canva Editorial Card ({badge_label})")
+                        reason += f" -> replaced with Canva card ({badge_label})"
+                except Exception as canva_err:
+                    print(f"⚠️ Canva replacement note: {canva_err}")
+
+            if not replaced_canva and fallbacks:
                 clean_fb = fallbacks[fallback_idx % len(fallbacks)]
                 fallback_idx += 1
                 try:
                     shutil.copy2(clean_fb, img_path)
+                    from providers.image import clean_and_crop_image
+                    clean_and_crop_image(img_path, aspect_ratio="9:16")
                     replaced.append(filename)
                     print(f"🛡️ [Asset Safety] Replaced defective {filename} ({reason}) with fallback {clean_fb.name}")
                     reason += f" -> replaced with {clean_fb.name}"
