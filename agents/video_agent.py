@@ -1711,11 +1711,13 @@ def create_video(aspect_ratio="9:16"):
     # Auto-on when data/entities/ has curated cutouts; AUTOTUBE_CANVAS=1/0 forces it.
     # --------------------------------------------------------
     use_canvas = False
-    try:
-        from agents.canvas_ladder import canvas_enabled, build_scene_clips
-        use_canvas = canvas_enabled()
-    except Exception as canvas_import_err:
-        print(f"Creator Canvas unavailable, using legacy visuals: {canvas_import_err}")
+    # User Requirement: 16:9 Long-Form NEVER uses Creator Canvas cards (must use cinematic documentary visuals)
+    if aspect_ratio != "16:9" and target_w <= target_h:
+        try:
+            from agents.canvas_ladder import canvas_enabled, build_scene_clips
+            use_canvas = canvas_enabled()
+        except Exception as canvas_import_err:
+            print(f"Creator Canvas unavailable, using legacy visuals: {canvas_import_err}")
 
     if use_canvas:
         print("Creator Canvas Engine: ON (scene consolidation + emotion cutouts + layered 9:16 compositing)")

@@ -123,7 +123,13 @@ def build_scene_clips(
     assets_dir: Optional[Path] = None,
     overrides_path: Optional[Path] = None,
 ) -> Tuple[List[str], List[float], List[Scene]]:
-    """Plan scenes, resolve each through the ladder, render them. Returns (clips, durations, scenes)."""
+    # 16:9 Long-Form Safety Guard: Creator Canvas is strictly for vertical 9:16 Shorts
+    if width > height:
+        raise ValueError(
+            f"Creator Canvas is strictly for vertical 9:16 Shorts ({width}x{height} detected). "
+            "Horizontal 16:9 Long-Form videos must use the cinematic documentary visual engine."
+        )
+
     from agents.canvas_engine import compose_scene, render_scene_clip
 
     assets_dir = assets_dir or (ROOT / "assets")

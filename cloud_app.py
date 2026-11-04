@@ -301,13 +301,13 @@ with tab_create:
 
     with col_dur:
         dur_display = st.selectbox(
-            "Video Format & Captions Policy",
+            "Video Format & Visual Engine",
             options=[
-                "📱 Shorts (9:16) [60-90s] — Captions OFF for clean screen",
-                "📺 Long-form (16:9) [3-5m] — Full Word Karaoke Captions ON",
-                "📺 Long-form (16:9) [5-8m] — Full Word Karaoke Captions ON",
+                "📱 Shorts (9:16) [60-90s] — Creator Canvas, Captions OFF (Clean Screen)",
+                "📺 Long-form (16:9) [3-5m] — Cinematic Documentary, Chapter Slates, Captions ON (No Canva Cards)",
+                "📺 Long-form (16:9) [5-8m] — Cinematic Documentary, Chapter Slates, Captions ON (No Canva Cards)",
             ],
-            help="Shorts render clean without burned subtitles; Long-form renders with full Telugu subtitles",
+            help="Shorts: Creator Canvas with clean screen; Long-form: 100% widescreen HD documentary footage with chapter slates and Telugu subtitles",
         )
         if "3-5m" in dur_display:
             target_duration = "3-5m"

@@ -86,6 +86,12 @@ CATEGORY_FEEDS = {
         "https://tv9telugu.com/entertainment/feed",
         "https://ntvtelugu.com/entertainment/feed",
     ],
+    "Tollywood Trolls & Viral Drama": [
+        "https://news.google.com/rss/search?q=Tollywood+troll+OR+Telugu+cinema+controversy+when:1d&hl=en-IN&gl=IN&ceid=IN:en",
+        "https://news.google.com/rss/search?q=Tollywood+viral+tweets+OR+clash+when:1d&hl=en-IN&gl=IN&ceid=IN:en",
+        "https://tv9telugu.com/entertainment/feed",
+        "https://ntvtelugu.com/entertainment/feed",
+    ],
     "Tech News": [
         "https://news.google.com/rss/search?q=technology+AI+when:1d&hl=en-IN&gl=IN&ceid=IN:en",
         "https://news.google.com/rss/headlines/section/topic/TECHNOLOGY?hl=en-IN&gl=IN&ceid=IN:en",
@@ -117,6 +123,15 @@ CATEGORY_FEEDS = {
         "https://news.google.com/rss/search?q=Tollywood+OR+Telugu+cinema+when:1d&hl=en-IN&gl=IN&ceid=IN:en",
         "https://news.google.com/rss/search?q=Prabhas+OR+Pawan+Kalyan+OR+Mahesh+Babu+OR+NTR+when:1d&hl=en-IN&gl=IN&ceid=IN:en",
     ],
+    "Ground Reality AP/Telangana News": [
+        "https://news.google.com/rss/search?q=Andhra+Pradesh+OR+Telangana+breaking+news+when:1d&hl=en-IN&gl=IN&ceid=IN:en",
+        "https://news.google.com/rss/search?q=Hyderabad+OR+Amaravati+development+when:1d&hl=en-IN&gl=IN&ceid=IN:en",
+        "https://tv9telugu.com/feed",
+    ],
+    "Indian Mysteries & Ancient Engineering": [
+        "https://news.google.com/rss/search?q=Indian+temple+architecture+mystery+OR+unsolved+when:7d&hl=en-IN&gl=IN&ceid=IN:en",
+        "https://news.google.com/rss/search?q=ISRO+space+science+discovery+when:7d&hl=en-IN&gl=IN&ceid=IN:en",
+    ],
 }
 
 NOISE_PATTERNS = [
@@ -143,6 +158,12 @@ TELUGU_CONTESTANTS = [
 
 def _normalize_category_key(content_type: str) -> str:
     c_lower = str(content_type or "").strip().lower().replace("_", " ").replace("-", " ")
+    if "troll" in c_lower or "viral drama" in c_lower:
+        return "Tollywood Trolls & Viral Drama"
+    if "regional" in c_lower or "local news" in c_lower or "andhra" in c_lower or "telangana" in c_lower:
+        return "Ground Reality AP/Telangana News"
+    if "ancient" in c_lower or ("mystery" in c_lower and "history" not in c_lower):
+        return "Indian Mysteries & Ancient Engineering"
     if "bigg boss" in c_lower or "bb10" in c_lower or "bb " in c_lower or c_lower == "bb":
         return "Bigg Boss Telugu"
     if "tech" in c_lower:
@@ -157,13 +178,24 @@ def _normalize_category_key(content_type: str) -> str:
         return "Sarcastic"
     if "funny" in c_lower or "comedy" in c_lower:
         return "Funny"
-    if "review" in c_lower or "movie" in c_lower:
+    if "review" in c_lower or "movie" in c_lower or "ott" in c_lower:
         return "Movie Reviews"
     if "cinema" in c_lower or "entertainment" in c_lower:
         return "Cinema & Entertainment"
     if "deep dive" in c_lower or "custom topic" in c_lower:
         return "Custom Topic / Deep Dive"
     return "General Topic"
+
+
+def rank_topics_by_ovs(topics: List[str], category_key: str) -> List[str]:
+    """Ranks topics descending by Omni-Viral Score (OVS)."""
+    try:
+        from analytics.omni_router import calculate_omni_viral_score
+        ch_slug = "Imaginary_facts" if any(k in category_key.lower() for k in ("tech", "fact", "history", "ancient", "mystery", "regional", "ground")) else "viral_talks_me&mine"
+        return sorted(topics, key=lambda t: calculate_omni_viral_score(t, category=category_key, channel_name=ch_slug), reverse=True)
+    except Exception:
+        return topics
+
 
 
 def fetch_live_feed_items(category_key: str, limit: int = 15, max_age_hours: float = 24.0) -> List[str]:
@@ -567,14 +599,14 @@ CRITICAL RULES:
 
     # 5. If LLM produced titles, use them!
     if synthesized_titles:
-        out_topics = synthesized_titles[:count]
+        out_topics = rank_topics_by_ovs(synthesized_titles, key)[:count]
         save_daily_cached_topics(key, out_topics)
         return out_topics
 
     # 6. Deterministic live re-shaping if LLM was unavailable
     if live_headlines:
         reshaped = [_reshape_headline_deterministically(h, key) for h in live_headlines]
-        valid_reshaped = [r for r in reshaped if r.lower() not in used_set][:count]
+        valid_reshaped = rank_topics_by_ovs([r for r in reshaped if r.lower() not in used_set], key)[:count]
         if valid_reshaped:
             save_daily_cached_topics(key, valid_reshaped)
             return valid_reshaped
@@ -588,7 +620,7 @@ CRITICAL RULES:
         f"Roasting the Drama: Bigg Boss Telugu 10 Clashing Housemates and Clan Wars Analyzed!",
         f"OTT Releases This Week: Top Telugu Movies and Series You Cannot Miss!",
     ]
-    safe_out = [t for t in today_fallbacks if t.lower() not in used_set][:count]
+    safe_out = rank_topics_by_ovs([t for t in today_fallbacks if t.lower() not in used_set], key)[:count]
     return safe_out or today_fallbacks[:count]
 
 

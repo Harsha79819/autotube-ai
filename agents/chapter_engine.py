@@ -376,3 +376,62 @@ def format_youtube_chapters_description(chapters: List[Dict[str, Any]]) -> str:
         lines.append(f"{ts} - {title}")
     lines.append("")
     return "\n".join(lines)
+
+
+def render_broadcast_lower_third(
+    headline: str,
+    channel_name: str = "",
+    category: str = "general",
+    width: int = 1920,
+    height: int = 1080,
+    output_path: Optional[str] = None,
+) -> str:
+    """
+    Renders an elegant broadcast lower-third headline slate (1920x1080 transparent PNG)
+    for 16:9 Long-Format videos, displaying headline and category badge.
+    """
+    if output_path is None:
+        bumpers_dir = OUTPUT_DIR / "chapter_bumpers"
+        bumpers_dir.mkdir(parents=True, exist_ok=True)
+        output_path = str(bumpers_dir / "lower_third.png")
+
+    out_file = Path(output_path)
+    out_file.parent.mkdir(parents=True, exist_ok=True)
+
+    img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+
+    bar_h = int(height * 0.14)
+    bar_y = height - bar_h - int(height * 0.08)
+    bar_x = int(width * 0.05)
+    bar_w = width - (bar_x * 2)
+
+    cat_lower = str(category or "").lower()
+    if any(k in cat_lower for k in ("tech", "gadget", "cyber", "ai")):
+        accent = (0, 229, 255, 255)
+    elif any(k in cat_lower for k in ("history", "temple", "ancient")):
+        accent = (255, 180, 0, 255)
+    else:
+        accent = (255, 59, 92, 255)
+
+    draw.rounded_rectangle(
+        [(bar_x, bar_y), (bar_x + bar_w, bar_y + bar_h)],
+        radius=int(bar_h * 0.12),
+        fill=(12, 14, 24, 225),
+        outline=accent,
+        width=3,
+    )
+
+    is_telugu = _is_telugu_text(headline)
+    tag_text = channel_name.upper() if channel_name else ("SPECIAL REPORT" if not is_telugu else "ప్రత్యేక కథనం")
+    tag_font = _load_font(is_telugu, size=int(height * 0.024))
+    draw.text((bar_x + int(width * 0.02), bar_y + int(height * 0.015)), tag_text, font=tag_font, fill=accent)
+
+    clean_hl = headline.strip().strip('"').strip("'")
+    if len(clean_hl) > 75:
+        clean_hl = clean_hl[:72] + "..."
+    hl_font = _load_font(is_telugu, size=int(height * 0.038))
+    draw.text((bar_x + int(width * 0.02), bar_y + int(height * 0.055)), clean_hl, font=hl_font, fill=(255, 255, 255, 255))
+
+    img.save(out_file, "PNG")
+    return str(out_file)

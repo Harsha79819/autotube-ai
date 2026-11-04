@@ -335,15 +335,25 @@ def fetch_live_slot_topic(slot: Dict[str, Any]) -> str:
         used = set()
         def record_used_topic(t): pass
 
-    # 1. Bigg Boss Telugu 10 (Slots: CH2-S1, CH2-L1, CH2-S2)
+    # 1. Bigg Boss Telugu 10 / Post-Bigg Boss Pivot (Slots: CH2-S1, CH2-L1, CH2-S2)
     if "bigg boss" in category.lower() or "bigg boss" in content_type.lower():
         try:
-            from agents.topic_suggester import fetch_ai_topic_suggestions
+            from agents.topic_suggester import fetch_ai_topic_suggestions, rank_topics_by_ovs
             suggestions = fetch_ai_topic_suggestions("Bigg Boss Telugu", count=5, use_ai=True)
-            for cand in suggestions:
-                if cand.strip().lower() not in used:
-                    record_used_topic(cand)
-                    return cand
+            valid = [c for c in suggestions if c.strip().lower() not in used]
+            
+            # Post-Bigg Boss Self-Healing Pivot: If BB10 has ended or yields no fresh stories,
+            # seamlessly transition to Tollywood Trolls, OTT Reviews, and Viral Roasts!
+            if not valid:
+                log_daily("ℹ️ Post-Bigg Boss Pivot: Seamlessly transitioning slot to Tollywood Trolls & Viral Drama...")
+                pivot_suggestions = fetch_ai_topic_suggestions("Tollywood Trolls & Viral Drama", count=5, use_ai=True)
+                valid = [c for c in pivot_suggestions if c.strip().lower() not in used]
+            
+            if valid:
+                ranked = rank_topics_by_ovs(valid, "Bigg Boss Telugu")
+                chosen = ranked[0]
+                record_used_topic(chosen)
+                return chosen
         except Exception as e:
             log_daily(f"Notice: topic_suggester for BB10 returned ({e}), falling back to live RSS query.")
 
@@ -353,7 +363,7 @@ def fetch_live_slot_topic(slot: Dict[str, Any]) -> str:
             bb_news = get_trending_news(category="Entertainment", limit=6)
             for item in bb_news:
                 title = item.get("title", "")
-                if "bigg boss" in title.lower() and title.strip().lower() not in used:
+                if title and title.strip().lower() not in used:
                     record_used_topic(title)
                     return title
         except Exception:
@@ -361,19 +371,21 @@ def fetch_live_slot_topic(slot: Dict[str, Any]) -> str:
 
         # Evergreen dynamic fallback with today's date
         today_formatted = datetime.now().strftime("%d %B")
-        fallback = f"Bigg Boss Telugu 10 Shocking House Drama and Elimination Heat ({today_formatted})"
+        fallback = f"Tollywood Viral Drama & Shocking Entertainment Twists ({today_formatted})"
         record_used_topic(fallback)
         return fallback
 
     # 2. Tollywood Movie Reviews & Cinema Buzz (Slots: CH2-S3, CH2-L2)
     elif "movie" in content_type.lower() or "cinema" in category.lower():
         try:
-            from agents.topic_suggester import fetch_ai_topic_suggestions
+            from agents.topic_suggester import fetch_ai_topic_suggestions, rank_topics_by_ovs
             suggestions = fetch_ai_topic_suggestions("Movie Reviews", count=5, use_ai=True)
-            for cand in suggestions:
-                if cand.strip().lower() not in used:
-                    record_used_topic(cand)
-                    return cand
+            valid = [c for c in suggestions if c.strip().lower() not in used]
+            if valid:
+                ranked = rank_topics_by_ovs(valid, "Movie Reviews")
+                chosen = ranked[0]
+                record_used_topic(chosen)
+                return chosen
         except Exception as e:
             log_daily(f"Notice: topic_suggester for Cinema returned ({e})")
 
@@ -395,6 +407,18 @@ def fetch_live_slot_topic(slot: Dict[str, Any]) -> str:
     # 3. AP & Telangana Local Breaking News (Slot: CH1-S1)
     elif "local" in content_type.lower() or "regional" in category.lower():
         try:
+            from agents.topic_suggester import fetch_ai_topic_suggestions, rank_topics_by_ovs
+            suggestions = fetch_ai_topic_suggestions("Ground Reality AP/Telangana News", count=5, use_ai=True)
+            valid = [c for c in suggestions if c.strip().lower() not in used]
+            if valid:
+                ranked = rank_topics_by_ovs(valid, "Ground Reality AP/Telangana News")
+                chosen = ranked[0]
+                record_used_topic(chosen)
+                return chosen
+        except Exception:
+            pass
+
+        try:
             from agents.news_agent import get_trending_news
             regional_news = get_trending_news(category="Regional", limit=8)
             for item in regional_news:
@@ -412,6 +436,18 @@ def fetch_live_slot_topic(slot: Dict[str, Any]) -> str:
     # 4. Tech News & AI Innovations (Slots: CH1-L1, CH1-S2)
     elif "tech" in content_type.lower() or "technology" in category.lower():
         try:
+            from agents.topic_suggester import fetch_ai_topic_suggestions, rank_topics_by_ovs
+            suggestions = fetch_ai_topic_suggestions("Tech News", count=5, use_ai=True)
+            valid = [c for c in suggestions if c.strip().lower() not in used]
+            if valid:
+                ranked = rank_topics_by_ovs(valid, "Tech News")
+                chosen = ranked[0]
+                record_used_topic(chosen)
+                return chosen
+        except Exception:
+            pass
+
+        try:
             from agents.news_agent import get_trending_news
             tech_news = get_trending_news(category="Technology", limit=8)
             for item in tech_news:
@@ -428,6 +464,18 @@ def fetch_live_slot_topic(slot: Dict[str, Any]) -> str:
 
     # 5. History & Ancient Mysteries (Slot: CH1-L2)
     elif "history" in content_type.lower() or "history" in category.lower():
+        try:
+            from agents.topic_suggester import fetch_ai_topic_suggestions, rank_topics_by_ovs
+            suggestions = fetch_ai_topic_suggestions("Indian Mysteries & Ancient Engineering", count=5, use_ai=True)
+            valid = [c for c in suggestions if c.strip().lower() not in used]
+            if valid:
+                ranked = rank_topics_by_ovs(valid, "Indian Mysteries & Ancient Engineering")
+                chosen = ranked[0]
+                record_used_topic(chosen)
+                return chosen
+        except Exception:
+            pass
+
         unused = [t for t in CURATED_HISTORY_TOPICS if t.strip().lower() not in used]
         chosen = random.choice(unused if unused else CURATED_HISTORY_TOPICS)
         record_used_topic(chosen)
@@ -435,6 +483,18 @@ def fetch_live_slot_topic(slot: Dict[str, Any]) -> str:
 
     # 6. Interesting Facts & Strange Phenomena (Slot: CH1-S3)
     else:
+        try:
+            from agents.topic_suggester import fetch_ai_topic_suggestions, rank_topics_by_ovs
+            suggestions = fetch_ai_topic_suggestions("Interesting Facts", count=5, use_ai=True)
+            valid = [c for c in suggestions if c.strip().lower() not in used]
+            if valid:
+                ranked = rank_topics_by_ovs(valid, "Interesting Facts")
+                chosen = ranked[0]
+                record_used_topic(chosen)
+                return chosen
+        except Exception:
+            pass
+
         unused = [t for t in CURATED_FACTS_TOPICS if t.strip().lower() not in used]
         chosen = random.choice(unused if unused else CURATED_FACTS_TOPICS)
         record_used_topic(chosen)
