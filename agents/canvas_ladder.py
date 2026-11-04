@@ -145,8 +145,17 @@ def build_scene_clips(
             from utils.season_guard import is_bigg_boss_topic
             is_bb_scene = is_bigg_boss_topic(scene.narration) or bool(scene.entities)
             if is_bb_scene:
-                photo = None
-                force = "typography"
+                from tools.meme_manager import get_reaction_meme, match_emotion_from_text
+                emo_cat = match_emotion_from_text(scene.narration) or scene.emotion
+                meme_p = None
+                if emo_cat in ("shocked", "overacting", "comedy", "roast", "crying", "headache", "suspicious", "angry"):
+                    meme_p = get_reaction_meme(emo_cat, used_memes=used)
+                if meme_p and meme_p.exists():
+                    photo = meme_p
+                    force = "photo_card"
+                else:
+                    photo = None
+                    force = "typography"
             else:
                 photo = _pick_photo(scene, images, work, banned, used) if allow_photos else None
                 force = "photo_card" if photo else "typography"

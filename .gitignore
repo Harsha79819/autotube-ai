@@ -286,6 +286,8 @@ assets/*
 !assets/sfx/
 !assets/sfx/*
 !assets/sfx/**
+!assets/memes/
+!assets/memes/*
 input/
 scratch/
 

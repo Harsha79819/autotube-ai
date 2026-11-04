@@ -289,21 +289,32 @@ with tab_create:
 
     col_ch, col_dur = st.columns(2)
     with col_ch:
-        target_channel = st.selectbox(
+        ch_display = st.selectbox(
             "Target YouTube Channel",
-            options=["viral_talks_me&mine", "Imaginary_facts"],
-            help="Channel 2 is dedicated to BB10 & Tollywood; Channel 1 is Tech & Mysteries",
-        )
-    with col_dur:
-        target_duration = st.selectbox(
-            "Video Format & Duration",
             options=[
-                "60-90s",
-                "3-5m",
-                "5-8m",
+                "Channel 2 — Viral Talks (Bigg Boss, Roast, Comedy)",
+                "Channel 1 — Imaginary Facts (News, Tech, Mysteries)",
             ],
-            help="60-90s uploads to YouTube Shorts + Instagram Reels; 3-8m uploads to YouTube Long-form",
+            help="Channel 2: Energetic Voice + Memes; Channel 1: Clean News Anchor Voice",
         )
+        target_channel = "viral_talks_me&mine" if "Channel 2" in ch_display else "Imaginary_facts"
+
+    with col_dur:
+        dur_display = st.selectbox(
+            "Video Format & Captions Policy",
+            options=[
+                "📱 Shorts (9:16) [60-90s] — Captions OFF for clean screen",
+                "📺 Long-form (16:9) [3-5m] — Full Word Karaoke Captions ON",
+                "📺 Long-form (16:9) [5-8m] — Full Word Karaoke Captions ON",
+            ],
+            help="Shorts render clean without burned subtitles; Long-form renders with full Telugu subtitles",
+        )
+        if "3-5m" in dur_display:
+            target_duration = "3-5m"
+        elif "5-8m" in dur_display:
+            target_duration = "5-8m"
+        else:
+            target_duration = "60-90s"
 
     st.markdown("")
     if st.button("🚀 Generate & Publish Video Now", type="primary", use_container_width=True):

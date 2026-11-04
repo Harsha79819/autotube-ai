@@ -1322,7 +1322,20 @@ async def create_voice(
                 except Exception:
                     pass
 
-            if roast_beats and len(roast_beats) >= 2 and any(b.get("emotion") and b.get("emotion") != "neutral setup" for b in roast_beats):
+            # Check topic context to determine if this is really a roast/entertainment topic
+            topic_str = ""
+            for t_file in [Path("output/topic.txt"), Path("output/topic.json")]:
+                if t_file.exists():
+                    try:
+                        topic_str = t_file.read_text(encoding="utf-8")
+                        break
+                    except Exception:
+                        pass
+
+            is_factual_news = any(k in topic_str.lower() for k in ("cyclone", "devastation", "dead", "damaged", "andhra", "ap", "government", "policy", "tech", "technology", "facts", "fact", "incident", "accident", "police", "minister", "weather", "tragedy", "disaster"))
+            is_roast_genre = any(k in topic_str.lower() for k in ("bigg boss", "roast", "comedy", "troll", "overaction", "clown", "nomination", "eviction"))
+
+            if roast_beats and len(roast_beats) >= 2 and is_roast_genre and not is_factual_news and any(b.get("emotion") and b.get("emotion") != "neutral setup" for b in roast_beats):
                 print(f"🔥 [Voice Agent] Found Roast Delivery Plan with {len(roast_beats)} emotion beats. Running chunked roast synthesis with {edge_voice_id}...")
                 from edge_tts_generator import generate_roast_speech_with_emotions
                 output_mp3, captured_words = await generate_roast_speech_with_emotions(
@@ -1332,7 +1345,7 @@ async def create_voice(
                     sfx_enabled=True,
                 )
             elif is_telugu_text or "te-in" in edge_voice_id.lower() or "mohan" in edge_voice_id.lower() or "shruti" in edge_voice_id.lower():
-                print(f"🎙️ [Voice Agent] Running fluent stream Telugu speech synthesis with {edge_voice_id} (rate={rate or '+4%'}, pitch={pitch or '+0Hz'})...")
+                print(f"🎙️ [Voice Agent] Running clean news/fact anchor Telugu speech synthesis with {edge_voice_id} (rate={rate or '+4%'}, pitch={pitch or '+0Hz'})...")
                 from edge_tts_generator import generate_modulated_telugu_speech
                 output_mp3, captured_words = await generate_modulated_telugu_speech(
                     script_text=speech_text,

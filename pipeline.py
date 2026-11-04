@@ -608,12 +608,14 @@ def create_pipeline_video(aspect_ratio="9:16"):
 # ============================================================
 
 def create_final_video(
-    captions=True,
+    captions=None,
     aspect_ratio="9:16",
     include_outro=False,
     outro_clip=None,
 ):
     """Create final video with optional captions and outro."""
+    if captions is None:
+        captions = (aspect_ratio == "16:9")
 
     if captions:
         sub_ass = Path("output/subtitles.ass")
@@ -1110,7 +1112,7 @@ def generate_multi_media_video(
     language_style="English news style",
     voice="👨 Adam (Male Creator) - Fast & Crisp",
     voice_sample=None,
-    captions=True,
+    captions=None,
     thumbnail=True,
     metadata=True,
     youtube_upload=False,
@@ -1162,6 +1164,8 @@ def generate_multi_media_video(
         )
 
     media_files = media_files or []
+    if captions is None:
+        captions = (aspect_ratio == "16:9")
 
     # Clean lingering artifacts from previous runs
     for stale_file in (

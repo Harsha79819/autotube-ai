@@ -101,14 +101,14 @@ EMOTION_MEME_MAP = {
 }
 
 TELUGU_KEYWORD_MAP = {
-    r"మైండ్\s*బ్లాక్|షాక్|షాకై|గుండె|ఆశ్చర్యం": "shocked",
-    r"ఓవరాక్షన్|ఓవరాక్టింగ్|దరిద్రం|నాయనా|ఇదేంట్రా|టార్చర్|ఎర్రి": "overacting",
-    r"నవ్వు|నవ్వుకోవాలి|కామెడీ|రచ్చ|జాతర|ఫన్నీ": "comedy",
-    r"ఏడుపు|కన్నీళ్లు|బాధ|రోదన": "crying",
-    r"తల\s*పట్టు|తలనొప్పి|ఫ్రస్ట్రేషన్": "headache",
-    r"పీఆర్\s*స్ట్రాటజీ|కవరింగ్|ఫేక్|డబుల్\s*గేమ్|కుట్ర": "suspicious",
-    r"రోస్ట్|నుగ్గు|ఉతికి|తోలు\s*తీసి|కడిగి": "roast",
-    r"కోపం|అరిచి|దద్దరిల్లి|ఫైర్": "angry",
+    r"మైండ్|బ్లాంక్|బ్లాక్|షాక్|షాకై|ట్విస్ట్|ఎలిమినేషన్|గుండె|ఆశ్చర్యం|shock|twist|elimination|mind\s*block": "shocked",
+    r"ఓవరాక్షన్|ఓవరాక్టింగ్|దరిద్రం|నాయనా|ఇదేంట్రా|టార్చర్|ఎర్రి|రోత|overaction|overacting": "overacting",
+    r"నవ్వు|నవ్వుకోవాలి|కామెడీ|రచ్చ|జాతర|ఫన్నీ|comedy|funny|laugh": "comedy",
+    r"ఏడుపు|కన్నీళ్లు|బాధ|రోదన|వెన్నుపోటు|ఎమోషనల్|crying|sad": "crying",
+    r"తల\s*పట్టు|తలనొప్పి|ఫ్రస్ట్రేషన్|headache|frustrated": "headache",
+    r"పీఆర్\s*స్ట్రాటజీ|కవరింగ్|ఫేక్|డబుల్\s*గేమ్|కుట్ర|గేమ్\s*ప్లాన్|suspicious": "suspicious",
+    r"రోస్ట్|నుగ్గు|ఉతికి|తోలు\s*తీసి|కడిగి|చిత్తు|roast|savage": "roast",
+    r"కోపం|అరిచి|దద్దరిల్లి|ఫైర్|గ్రిల్లింగ్|angry|fight": "angry",
 }
 
 
@@ -181,13 +181,18 @@ def get_reaction_meme(
     if not MEMES_DIR.exists():
         return None
 
-    matched_cat = match_emotion_from_text(emotion_or_text)
-    if not matched_cat:
-        matched_cat = emotion_or_text.lower().strip()
+    if not emotion_or_text:
+        matched_cat = "comedy"
+    else:
+        matched_cat = match_emotion_from_text(str(emotion_or_text))
+        if not matched_cat:
+            matched_cat = str(emotion_or_text).lower().strip()
 
-    candidate_files = list(EMOTION_MEME_MAP.get(matched_cat, []))
+    candidate_files = [fn for fn in EMOTION_MEME_MAP.get(matched_cat, []) if (MEMES_DIR / fn).exists()]
     if not candidate_files:
-        candidate_files = ["sunil_laughing.jpg", "babu_mohan_shock.jpg", "ali_funny.jpg"]
+        candidate_files = [fn for fn in ["sunil_laughing.jpg", "babu_mohan_shock.jpg", "ali_funny.jpg", "brahmi_shocked.jpg", "venky_frustrated.jpg", "ms_narayana_facepalm.jpg"] if (MEMES_DIR / fn).exists()]
+    if not candidate_files:
+        candidate_files = [p.name for p in MEMES_DIR.glob("*.jpg")]
 
     # 1. Filter out candidates already used in the current run
     run_candidates = [
