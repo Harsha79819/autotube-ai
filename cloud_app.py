@@ -12,12 +12,14 @@ Allows user to:
 - 100% cloud-hosted: Works permanently from any smartphone with laptop completely off!
 """
 
+from __future__ import annotations
 import os
 import json
 import time
 import requests
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
+from typing import Tuple, List, Dict, Optional, Any
 import streamlit as st
 
 # ============================================================
@@ -31,14 +33,24 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# Configuration from Streamlit Secrets or Environment Variables
-DEFAULT_GITHUB_TOKEN = ""
+def _safe_get_secret(key: str, default: str = "") -> str:
+    """Safely retrieves a configuration key without raising StreamlitSecretNotFoundError."""
+    try:
+        val = st.secrets.get(key)
+        if val is not None and str(val).strip():
+            return str(val).strip()
+    except Exception:
+        pass
+    env_val = os.environ.get(key) or os.environ.get(f"APP_{key}") or os.environ.get(f"GITHUB_{key}")
+    if env_val and str(env_val).strip():
+        return str(env_val).strip()
+    return default
+
 DEFAULT_GITHUB_REPO = "Harsha79819/autotube-ai"
 DEFAULT_PIN = "9989"
 
-GH_TOKEN = st.secrets.get("GH_TOKEN") or os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN") or ""
-GH_REPO = st.secrets.get("GH_REPO") or os.environ.get("GITHUB_REPO") or DEFAULT_GITHUB_REPO
-APP_PIN = str(st.secrets.get("APP_PIN") or os.environ.get("APP_PIN") or DEFAULT_PIN)
+GH_REPO = _safe_get_secret("GH_REPO", DEFAULT_GITHUB_REPO)
+APP_PIN = _safe_get_secret("APP_PIN", DEFAULT_PIN)
 
 WORKFLOW_FILE = "daily_publisher.yml"
 
@@ -125,17 +137,38 @@ if not st.session_state.authenticated:
     st.stop()
 
 # ============================================================
+# TOKEN RESOLUTION
+# ============================================================
+
+if "user_token" not in st.session_state:
+    st.session_state.user_token = _safe_get_secret("GH_TOKEN", "")
+
+active_token = st.session_state.user_token
+
+if not active_token:
+    st.warning("🔑 GitHub Access Token Required")
+    with st.expander("Setup Token (One-time)", expanded=True):
+        st.write("Please paste your GitHub Token below to connect to cloud runners:")
+        token_input = st.text_input("GitHub Personal Access Token (starts with gho_ or ghp_)", type="password")
+        if st.button("Save Token", use_container_width=True):
+            if token_input.strip():
+                st.session_state.user_token = token_input.strip()
+                st.success("✅ Token saved!")
+                st.rerun()
+    st.stop()
+
+# ============================================================
 # GITHUB ACTIONS API HELPERS
 # ============================================================
 
 def get_headers():
     return {
-        "Authorization": f"token {GH_TOKEN}",
+        "Authorization": f"token {st.session_state.user_token}",
         "Accept": "application/vnd.github.v3+json",
         "User-Agent": "AutoTube-Cloud-App",
     }
 
-def trigger_workflow(custom_topic: str = "", custom_channel: str = "viral_talks_me&mine", custom_duration: str = "60-90s", slot_id: str = "RUN_ALL_PENDING"):
+def trigger_workflow(custom_topic: str = "", custom_channel: str = "viral_talks_me&mine", custom_duration: str = "60-90s", slot_id: str = "RUN_ALL_PENDING") -> Tuple[bool, str]:
     url = f"https://api.github.com/repos/{GH_REPO}/actions/workflows/{WORKFLOW_FILE}/dispatches"
     payload = {
         "ref": "main",
@@ -155,7 +188,7 @@ def trigger_workflow(custom_topic: str = "", custom_channel: str = "viral_talks_
     except Exception as e:
         return False, str(e)
 
-def get_recent_runs(limit: int = 5):
+def get_recent_runs(limit: int = 5) -> List[Dict[str, Any]]:
     url = f"https://api.github.com/repos/{GH_REPO}/actions/runs?per_page={limit}"
     try:
         r = requests.get(url, headers=get_headers(), timeout=10)
