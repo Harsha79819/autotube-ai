@@ -66,6 +66,9 @@ def scan_images_ocr(image_paths: List[Path]) -> Dict[str, str]:
     if not valid_paths:
         return {}
 
+    if sys.platform != "darwin" or not shutil.which("swift"):
+        return {}
+
     script_path = _get_swift_script()
     results = {}
     
