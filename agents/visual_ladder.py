@@ -177,11 +177,16 @@ def score_candidate_relevance(image_path: str, query_text: str) -> float:
 
 
 def download_url_to_file(url: str, dest_path: Path, timeout: int = 8) -> bool:
-    """Safely downloads an image URL to disk with verification."""
+    """Safely downloads an image URL to disk with verification and hotlink bypass."""
     try:
         import requests
+        from urllib.parse import urlparse
+        parsed = urlparse(url)
         headers = {
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Referer": f"{parsed.scheme}://{parsed.netloc}/",
+            "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
         }
         resp = requests.get(url, headers=headers, timeout=timeout)
         if resp.status_code == 200 and len(resp.content) > 3000:
@@ -338,6 +343,36 @@ def is_irrelevant_stock_asset(cand_title: str, cand_url: str, query_text: str, t
         for ct in casino_tokens:
             if ct in t_low:
                 return True
+
+    # 11. Real estate / apartments / condos / suburban buildings
+    is_about_real_estate = any(k in q_low for k in ("apartment", "flat", "real estate", "housing", "building construction"))
+    if not is_about_real_estate:
+        re_tokens = ["apartments", "condo", "building-photo", "suburban home", "property-photo"]
+        for rt in re_tokens:
+            if rt in t_low:
+                return True
+
+    # 12. Fashion dresses / evening gowns / red carpet modeling
+    is_about_fashion = any(k in q_low for k in ("fashion", "dress", "gown", "couture", "outfit", "wardrobe"))
+    if not is_about_fashion:
+        fashion_tokens = ["dress", "gown", "premiere-dress", "modeling", "fashiongonerogue"]
+        for ft in fashion_tokens:
+            if ft in t_low:
+                return True
+
+    # 13. Skeletons / skulls / Halloween clip art / cat art
+    is_about_spooky = any(k in q_low for k in ("skeleton", "skull", "halloween", "ghost", "horror", "cat"))
+    if not is_about_spooky:
+        spooky_tokens = ["skeleton", "skull", "hooded cloak", "cat-art", "clipground"]
+        for st in spooky_tokens:
+            if st in t_low:
+                return True
+
+    # 14. Fabric samples / cloth patterns
+    fabric_tokens = ["fieldsfabrics", "fabric-sample", "textile-swatch"]
+    for fbt in fabric_tokens:
+        if fbt in t_low:
+            return True
 
     return False
 

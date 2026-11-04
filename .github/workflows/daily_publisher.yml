@@ -154,5 +154,19 @@ jobs:
           git config --global user.name "AutoTube Bot"
           git config --global user.email "bot@autotube.ai"
           git add logs/daily_slot_status.json output/uploaded_videos.json data/used_topics.json logs/github_actions_usage.json 2>/dev/null || true
-          git commit -m "chore(auto): update daily slot status & uploaded video ledger [skip ci]" || echo "No state changes to commit"
-          git push || echo "Push skipped or branch protected"
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(auto): update daily slot status & uploaded video ledger [skip ci]"
+            for attempt in 1 2 3; do
+              echo "🔄 Syncing state to GitHub (Attempt $attempt)..."
+              git fetch origin main || true
+              git rebase -X ours origin/main || git rebase --abort || true
+              if git push origin main; then
+                echo "✅ Successfully synced logs and used topics to GitHub"
+                break
+              fi
+              echo "⚠️ Push failed, retrying in 5 seconds..."
+              sleep 5
+            done
+          else
+            echo "No state changes to commit"
+          fi

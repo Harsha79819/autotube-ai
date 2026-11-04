@@ -142,8 +142,14 @@ def build_scene_clips(
         photo = None
         force = None
         if scene.layout == "broll":
-            photo = _pick_photo(scene, images, work, banned, used) if allow_photos else None
-            force = "photo_card" if photo else "typography"
+            from utils.season_guard import is_bigg_boss_topic
+            is_bb_scene = is_bigg_boss_topic(scene.narration) or bool(scene.entities)
+            if is_bb_scene:
+                photo = None
+                force = "typography"
+            else:
+                photo = _pick_photo(scene, images, work, banned, used) if allow_photos else None
+                force = "photo_card" if photo else "typography"
         layers = compose_scene(scene, work, width, height, photo_path=photo, force=force)
 
         is_last = i == len(scenes) - 1
