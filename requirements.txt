@@ -19,3 +19,6 @@ google-auth-oauthlib
 google-auth-httplib2
 pyarrow<25
 selectolax<1.0.0
+certifi
+yt-dlp
+numpy

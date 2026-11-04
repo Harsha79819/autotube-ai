@@ -86,7 +86,7 @@ jobs:
           if ! command -v ffmpeg &> /dev/null; then
             sudo apt-get update -y && sudo apt-get install -y ffmpeg
           fi
-          sudo apt-get update -y && sudo apt-get install -y libsm6 libxext6 libgl1 fonts-dejavu || true
+          sudo apt-get update -y && sudo apt-get install -y libsm6 libxext6 libgl1 fonts-dejavu fonts-lohit-telu fonts-telu || true
           ffmpeg -version | head -n 1
 
       - name: 📦 Install Python Requirements

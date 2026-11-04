@@ -281,6 +281,11 @@ assets/*
 !assets/fallback/*
 !assets/outro/
 !assets/outro/*
+!assets/entities/
+!assets/entities/*
+!assets/sfx/
+!assets/sfx/*
+!assets/sfx/**
 input/
 scratch/
 
