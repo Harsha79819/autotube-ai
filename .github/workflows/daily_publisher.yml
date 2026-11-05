@@ -67,7 +67,10 @@ permissions:
 jobs:
   publish_video:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: autotube-ai
 
     steps:
       - name: 📥 Checkout Repository
@@ -80,14 +83,12 @@ jobs:
         with:
           python-version: '3.10'
           cache: 'pip'
+          cache-dependency-path: autotube-ai/requirements.txt
 
-      - name: 🎥 Verify FFmpeg & System Dependencies
+      - name: 🎥 Install FFmpeg & System Dependencies
         run: |
-          if ! command -v ffmpeg &> /dev/null; then
-            sudo apt-get update -y && sudo apt-get install -y ffmpeg
-          fi
-          sudo apt-get update -y && sudo apt-get install -y libsm6 libxext6 libgl1 fonts-dejavu fonts-lohit-telu fonts-telu || true
-          ffmpeg -version | head -n 1
+          sudo apt-get update -y
+          sudo apt-get install -y ffmpeg libsm6 libxext6 libgl1-mesa-glx fonts-dejavu
 
       - name: 📦 Install Python Requirements
         run: |
@@ -139,21 +140,22 @@ jobs:
             if [ "$INPUT_FORCE" = "true" ]; then FORCE_FLAG="--force"; fi
             python daily_scheduler.py --slot "$INPUT_SLOT" $FORCE_FLAG
           else
-            echo "⏰ Running pending scheduled slots..."
-            python daily_scheduler.py --run-pending
+            echo "⏰ Running single scheduled slot for current window..."
+            python daily_scheduler.py --run-current
           fi
 
-      - name: 📊 Display Slot Status Summary
+      - name: 📊 Display Slot Status Summary & 24/7 Channel Health
         if: always()
         run: |
           python daily_scheduler.py --status
+          python analytics/channel_monitor.py || true
 
       - name: 💾 Persist Upload Logs & State to Repository
         if: always()
         run: |
           git config --global user.name "AutoTube Bot"
           git config --global user.email "bot@autotube.ai"
-          git add logs/daily_slot_status.json output/uploaded_videos.json data/used_topics.json logs/github_actions_usage.json 2>/dev/null || true
+          git add logs/daily_slot_status.json output/uploaded_videos.json data/used_topics.json logs/github_actions_usage.json logs/channel_health_report.json 2>/dev/null || true
           if ! git diff --cached --quiet; then
             git commit -m "chore(auto): update daily slot status & uploaded video ledger [skip ci]"
             for attempt in 1 2 3; do

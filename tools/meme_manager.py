@@ -6,6 +6,7 @@ Manages iconic Telugu reaction cutaways (Brahmanandam, Sunil, Ali, MS Narayana)
 for roast, comedy, shock, and overacting beats.
 """
 
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -15,6 +16,9 @@ ROOT = Path(__file__).resolve().parent.parent
 MEMES_DIR = ROOT / "reference_assets" / "memes"
 if not MEMES_DIR.exists():
     MEMES_DIR = ROOT / "assets" / "memes"
+
+DYNAMIC_MEMES_DIR = ROOT / "assets" / "memes" / "dynamic"
+DYNAMIC_MEMES_DIR.mkdir(parents=True, exist_ok=True)
 
 USED_MEMES_FILE = ROOT / "data" / "used_memes.json"
 
@@ -48,6 +52,32 @@ def record_used_meme(filename: str) -> None:
         USED_MEMES_FILE.write_text(json.dumps(history[-100:], indent=2, ensure_ascii=False), encoding="utf-8")
     except Exception:
         pass
+
+
+TELUGU_COMEDY_ACTORS = {
+    "brahmanandam": [r"బ్రహ్మానందం", r"బ్రహ్మి", r"brahmi", r"brahmanandam"],
+    "sunil": [r"సునీల్", r"sunil"],
+    "ali": [r"అలీ", r"ali"],
+    "ms_narayana": [r"ఎంఎస్\s*నారాయణ", r"నారాయణ", r"ms\s*narayana"],
+    "venu_madhav": [r"వేణు\s*మాధవ్", r"venu\s*madhav"],
+    "dharmavarapu": [r"ధర్మవరపు", r"dharmavarapu"],
+    "babu_mohan": [r"బాబు\s*మోహన్", r"babu\s*mohan"],
+    "posani": [r"పోసాని", r"posani"],
+    "vennela_kishore": [r"వెన్నెల\s*కిషోర్", r"vennela\s*kishore"],
+    "raghu_babu": [r"రఘు\s*బాబు", r"raghu\s*babu"],
+    "kota": [r"కోట", r"కోట\s*శ్రీనివాస", r"kota"],
+}
+
+
+def detect_actor_from_text(text: str) -> Optional[str]:
+    """Detects iconic Telugu comedy actor referenced in the beat narration."""
+    if not text:
+        return None
+    for actor_key, patterns in TELUGU_COMEDY_ACTORS.items():
+        for pat in patterns:
+            if re.search(pat, text, flags=re.IGNORECASE):
+                return actor_key
+    return None
 
 
 EMOTION_MEME_MAP = {
@@ -126,8 +156,16 @@ def match_emotion_from_text(text: str) -> Optional[str]:
     return None
 
 
-def fetch_dynamic_online_meme(emotion: str) -> Optional[Path]:
-    """Dynamically harvests a fresh, unwatermarked Telugu reaction meme from the web."""
+def fetch_dynamic_online_meme(
+    emotion: str,
+    actor: Optional[str] = None,
+    used_memes: Optional[Set[str]] = None,
+    recent_history: Optional[List[str]] = None,
+) -> Optional[Path]:
+    """
+    Dynamically harvests a fresh, unwatermarked Telugu reaction meme from the web.
+    Searches specifically for actor + emotion to guarantee script context match.
+    """
     try:
         from providers.image import search_duckduckgo_images
         import requests
@@ -135,9 +173,18 @@ def fetch_dynamic_online_meme(emotion: str) -> Optional[Path]:
         from io import BytesIO
         from tools.ocr_guard import scan_images_ocr
 
-        q = f"telugu comedy reaction meme {emotion} clean hd"
-        hits = search_duckduckgo_images(q, max_results=6)
-        headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"}
+        recent_set = set(recent_history or [])
+
+        # Formulate highly specific query
+        if actor:
+            actor_clean = actor.replace("_", " ")
+            q = f"{actor_clean} {emotion} telugu comedy reaction meme template"
+        else:
+            q = f"telugu comedy reaction meme {emotion} clean hd template"
+
+        print(f"🔍 [Dynamic Meme Search] Querying web: '{q}'...")
+        hits = search_duckduckgo_images(q, max_results=8)
+        headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
 
         for hit in hits:
             u = hit.get("image_url")
@@ -146,23 +193,33 @@ def fetch_dynamic_online_meme(emotion: str) -> Optional[Path]:
             try:
                 r = requests.get(u, headers=headers, timeout=6)
                 if r.status_code == 200 and len(r.content) > 10000:
+                    h_name = hashlib.md5(r.content).hexdigest()[:10]
+                    file_stem = f"{actor or 'telugu'}_{emotion}_{h_name}.jpg"
+                    if used_memes and file_stem in used_memes:
+                        continue
+                    if file_stem in recent_set:
+                        continue
+
                     with Image.open(BytesIO(r.content)) as im:
                         w, h = im.size
-                        if w >= 320 and h >= 250:
-                            h_name = hashlib.md5(r.content).hexdigest()[:8]
-                            out_path = MEMES_DIR / f"online_{emotion}_{h_name}.jpg"
+                        if w >= 320 and h >= 240:
+                            out_path = DYNAMIC_MEMES_DIR / file_stem
                             rgb = im.convert("RGB")
                             rgb.save(out_path, "JPEG", quality=92)
+
+                            # Watermark & branding check
                             ocr = scan_images_ocr([out_path])
                             txt = ocr.get(str(out_path), "").lower()
                             if any(b in txt for b in ["kulfy", "shutterstock", "getty", "alamy", "watermark"]):
                                 out_path.unlink(missing_ok=True)
                                 continue
+
+                            print(f"✅ [Dynamic Meme Found] Fresh meme saved -> {out_path.name} ({w}x{h})")
                             return out_path
             except Exception:
                 continue
     except Exception as e:
-        print(f"Notice: Dynamic meme harvest failed: {e}")
+        print(f"Notice: Dynamic meme harvest exception: {e}")
     return None
 
 
@@ -172,46 +229,63 @@ def get_reaction_meme(
     cooldown_runs: int = 30,
 ) -> Optional[Path]:
     """
-    Returns an authentic Telugu reaction meme Path matching the emotion.
-    Respects:
-      1. Single-use deduplication per run if used_memes set is provided.
-      2. Multi-run persistent deduplication via data/used_memes.json with FIFO rotation.
-      3. Fallback to fresh dynamic online meme search if all candidates are on cooldown.
+    Returns an authentic Telugu reaction meme Path matching the script beat.
+    Priority:
+      1. Dynamic web search matching the detected Actor + Emotion of the beat.
+      2. If web search returns clean meme, save and return.
+      3. Fallback to local curated meme pool with strict anti-repetition cooldown.
     """
-    if not MEMES_DIR.exists():
-        return None
+    raw_text = str(emotion_or_text or "")
+    matched_actor = detect_actor_from_text(raw_text)
+    matched_cat = match_emotion_from_text(raw_text)
+    if not matched_cat:
+        matched_cat = raw_text.lower().strip() or "comedy"
 
-    if not emotion_or_text:
-        matched_cat = "comedy"
-    else:
-        matched_cat = match_emotion_from_text(str(emotion_or_text))
-        if not matched_cat:
-            matched_cat = str(emotion_or_text).lower().strip()
+    recent_history = load_persistent_used_memes(cooldown_runs=cooldown_runs)
 
-    candidate_files = [fn for fn in EMOTION_MEME_MAP.get(matched_cat, []) if (MEMES_DIR / fn).exists()]
+    # 1. First Priority: Dynamic live web search tailored to this exact script beat!
+    try:
+        online_p = fetch_dynamic_online_meme(
+            emotion=matched_cat,
+            actor=matched_actor,
+            used_memes=used_memes,
+            recent_history=recent_history,
+        )
+        if online_p and online_p.exists() and online_p.stat().st_size > 5000:
+            if used_memes is not None:
+                used_memes.add(online_p.name)
+            record_used_meme(online_p.name)
+            return online_p
+    except Exception as dyn_err:
+        print(f"Dynamic meme search notice: {dyn_err}")
+
+    # 2. Fallback to local curated pool with strict anti-repetition
+    candidate_files = []
+    if matched_actor:
+        candidate_files = [p.name for p in MEMES_DIR.glob(f"*{matched_actor}*.jpg")]
+
+    if not candidate_files:
+        candidate_files = [fn for fn in EMOTION_MEME_MAP.get(matched_cat, []) if (MEMES_DIR / fn).exists()]
+
     if not candidate_files:
         candidate_files = [fn for fn in ["sunil_laughing.jpg", "babu_mohan_shock.jpg", "ali_funny.jpg", "brahmi_shocked.jpg", "venky_frustrated.jpg", "ms_narayana_facepalm.jpg"] if (MEMES_DIR / fn).exists()]
-    if not candidate_files:
+
+    if not candidate_files and MEMES_DIR.exists():
         candidate_files = [p.name for p in MEMES_DIR.glob("*.jpg")]
 
-    # 1. Filter out candidates already used in the current run
+    # Filter out current run
     run_candidates = [
         fn for fn in candidate_files
         if used_memes is None or fn not in used_memes
     ]
 
-    # 2. Check persistent cross-run history for anti-repetition rotation
-    recent_history = load_persistent_used_memes(cooldown_runs=cooldown_runs)
     recent_set = set(recent_history[-cooldown_runs:] if len(recent_history) >= cooldown_runs else recent_history)
-
-    # Prioritize candidates not used recently across past runs
     fresh_candidates = [fn for fn in run_candidates if fn not in recent_set]
-    
+
     selected_fn = None
     if fresh_candidates:
         selected_fn = fresh_candidates[0]
     elif run_candidates:
-        # Check stalest candidate
         def _last_used_index(fn: str) -> int:
             try:
                 for idx in range(len(recent_history) - 1, -1, -1):
@@ -229,14 +303,6 @@ def get_reaction_meme(
                 used_memes.add(selected_fn)
             record_used_meme(selected_fn)
             return p
-
-    # 3. Dynamic online search fallback if all local candidates are exhausted
-    online_p = fetch_dynamic_online_meme(matched_cat)
-    if online_p and online_p.exists():
-        if used_memes is not None:
-            used_memes.add(online_p.name)
-        record_used_meme(online_p.name)
-        return online_p
 
     return None
 

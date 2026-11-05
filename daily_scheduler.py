@@ -19,7 +19,7 @@ import json
 import random
 import argparse
 import traceback
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Tuple
 
@@ -66,6 +66,7 @@ DAILY_SLOT_CONFIGS: List[Dict[str, Any]] = [
         "instagram_upload": True,
         "language_style": DEFAULT_LANGUAGE_STYLE,
         "voice": DEFAULT_TELUGU_VOICE,
+        "tone": "informative",
     },
     {
         "slot_id": "CH2-S1",
@@ -80,6 +81,7 @@ DAILY_SLOT_CONFIGS: List[Dict[str, Any]] = [
         "instagram_upload": True,
         "language_style": DEFAULT_LANGUAGE_STYLE,
         "voice": DEFAULT_TELUGU_VOICE,
+        "tone": "roast",
     },
     {
         "slot_id": "CH1-L1",
@@ -94,6 +96,7 @@ DAILY_SLOT_CONFIGS: List[Dict[str, Any]] = [
         "instagram_upload": False,
         "language_style": DEFAULT_LANGUAGE_STYLE,
         "voice": DEFAULT_TELUGU_VOICE,
+        "tone": "informative",
     },
     {
         "slot_id": "CH2-L1",
@@ -108,6 +111,7 @@ DAILY_SLOT_CONFIGS: List[Dict[str, Any]] = [
         "instagram_upload": False,
         "language_style": DEFAULT_LANGUAGE_STYLE,
         "voice": DEFAULT_TELUGU_VOICE,
+        "tone": "roast",
     },
     {
         "slot_id": "CH1-S2",
@@ -122,6 +126,7 @@ DAILY_SLOT_CONFIGS: List[Dict[str, Any]] = [
         "instagram_upload": True,
         "language_style": DEFAULT_LANGUAGE_STYLE,
         "voice": DEFAULT_TELUGU_VOICE,
+        "tone": "informative",
     },
     {
         "slot_id": "CH2-S2",
@@ -136,6 +141,7 @@ DAILY_SLOT_CONFIGS: List[Dict[str, Any]] = [
         "instagram_upload": True,
         "language_style": DEFAULT_LANGUAGE_STYLE,
         "voice": DEFAULT_TELUGU_VOICE,
+        "tone": "roast",
     },
     {
         "slot_id": "CH2-S3",
@@ -150,6 +156,7 @@ DAILY_SLOT_CONFIGS: List[Dict[str, Any]] = [
         "instagram_upload": True,
         "language_style": DEFAULT_LANGUAGE_STYLE,
         "voice": DEFAULT_TELUGU_VOICE,
+        "tone": "conversational",
     },
     {
         "slot_id": "CH1-S3",
@@ -164,6 +171,7 @@ DAILY_SLOT_CONFIGS: List[Dict[str, Any]] = [
         "instagram_upload": True,
         "language_style": DEFAULT_LANGUAGE_STYLE,
         "voice": DEFAULT_TELUGU_VOICE,
+        "tone": "informative",
     },
     {
         "slot_id": "CH2-L2",
@@ -178,6 +186,7 @@ DAILY_SLOT_CONFIGS: List[Dict[str, Any]] = [
         "instagram_upload": False,
         "language_style": DEFAULT_LANGUAGE_STYLE,
         "voice": DEFAULT_TELUGU_VOICE,
+        "tone": "conversational",
     },
     {
         "slot_id": "CH1-L2",
@@ -192,6 +201,7 @@ DAILY_SLOT_CONFIGS: List[Dict[str, Any]] = [
         "instagram_upload": False,
         "language_style": DEFAULT_LANGUAGE_STYLE,
         "voice": DEFAULT_TELUGU_VOICE,
+        "tone": "informative",
     },
 ]
 
@@ -565,6 +575,29 @@ class MultiSlotDailyScheduler:
             log_daily(f"⚠️ Slot '{slot_id}' reached maximum retry attempts (2) today. Skipping.")
             return False
 
+        # Check Daily Channel Upload Cap (Max 3 Shorts, Max 1 Long-form per channel/day)
+        if not force:
+            shorts_today = 0
+            long_today = 0
+            is_ch1 = "channel 1" in slot_conf["channel"].lower()
+            for sid, s_st in status_data.get("slots", {}).items():
+                if s_st.get("status") == "success":
+                    matching_c = next((c for c in DAILY_SLOT_CONFIGS if c["slot_id"] == sid), None)
+                    if matching_c and (("channel 1" in matching_c["channel"].lower()) == is_ch1):
+                        if matching_c["format_type"] == "short":
+                            shorts_today += 1
+                        elif matching_c["format_type"] == "long-form":
+                            long_today += 1
+
+            target_fmt = slot_conf.get("format_type", "short")
+            ch_name = "Channel 1" if is_ch1 else "Channel 2"
+            if target_fmt == "short" and shorts_today >= 3:
+                log_daily(f"ℹ️ Daily upload cap reached for {ch_name}: {shorts_today} shorts already published today (Max 3). Skipping '{slot_id}' to protect YouTube algorithm velocity.")
+                return True
+            if target_fmt == "long-form" and long_today >= 1:
+                log_daily(f"ℹ️ Daily upload cap reached for {ch_name}: {long_today} long-form video already published today (Max 1). Skipping '{slot_id}' to protect YouTube algorithm velocity.")
+                return True
+
         # 1. Mutual Exclusion Check
         active_lock = PipelineLock.get_active_lock_info()
         if active_lock:
@@ -590,6 +623,7 @@ class MultiSlotDailyScheduler:
         log_daily(f"   Channel     : {channel}")
         log_daily(f"   Format      : {fmt_type.upper()} | Aspect: {aspect} | Target: {duration}")
         log_daily(f"   Voice       : {slot_conf['voice']}")
+        log_daily(f"   Tone        : {slot_conf.get('tone', 'default')}")
         log_daily(f"   Privacy     : {self.upload_privacy}")
         log_daily(f"   Instagram   : {'ENABLED (Shorts)' if is_ig_eligible else 'BLOCKED (Long-form / Excluded)'}")
         log_daily("=" * 65)
@@ -618,6 +652,7 @@ class MultiSlotDailyScheduler:
                 content_type=slot_conf["content_type"],
                 language_style=slot_conf["language_style"],
                 voice=slot_conf["voice"],
+                tone=slot_conf.get("tone"),
                 captions=(aspect == "16:9"),
                 thumbnail=True,
                 metadata=True,
@@ -784,6 +819,60 @@ class MultiSlotDailyScheduler:
 
         return success_count
 
+    def run_current_slot(self) -> Optional[str]:
+        """
+        Executes strictly ONE single slot that matches the current time window.
+        Prevents batch bursts and adheres to YouTube daily pacing limits.
+        """
+        try:
+            from zoneinfo import ZoneInfo
+            now = datetime.now(ZoneInfo("Asia/Kolkata"))
+        except Exception:
+            # Fallback: UTC + 5h 30m
+            now = datetime.utcnow() + timedelta(hours=5, minutes=30)
+
+        now_mins = now.hour * 60 + now.minute
+        status_data = load_daily_slot_status()
+
+        # Find the pending slot whose scheduled time is closest to now (within 90 mins)
+        best_slot = None
+        min_diff = 999999
+
+        for conf in DAILY_SLOT_CONFIGS:
+            s_id = conf["slot_id"]
+            slot_st = status_data.get("slots", {}).get(s_id, {})
+            current_status = slot_st.get("status", "pending")
+            if current_status == "success":
+                continue
+
+            sched_str = conf.get("scheduled_time", "08:00")
+            parts = sched_str.split(":")
+            s_mins = int(parts[0]) * 60 + int(parts[1])
+
+            # Slot must be past its scheduled time, but within 90 mins
+            diff = now_mins - s_mins
+            if 0 <= diff <= 90:
+                if diff < min_diff:
+                    min_diff = diff
+                    best_slot = s_id
+
+        if not best_slot:
+            # If no slot is within (0, 90] minutes, look for the earliest due pending slot
+            for conf in DAILY_SLOT_CONFIGS:
+                s_id = conf["slot_id"]
+                slot_st = status_data.get("slots", {}).get(s_id, {})
+                if slot_st.get("status") == "pending" and self.is_slot_due(conf, now):
+                    best_slot = s_id
+                    break
+
+        if best_slot:
+            log_daily(f"🎯 [Single Slot Pacing] Selected slot for current window ({now.strftime('%H:%M')} IST): '{best_slot}'. Launching...")
+            ok = self.execute_slot(best_slot, force=False)
+            return best_slot if ok else None
+        else:
+            log_daily(f"ℹ️ [Single Slot Pacing] No pending slot due for the current window ({now.strftime('%H:%M')} IST).")
+            return None
+
     def start_daemon(self, poll_interval_seconds: int = 60):
         """
         Runs 24/7 background worker loop.
@@ -854,6 +943,7 @@ def main():
     parser.add_argument("--custom-aspect", type=str, default=None, help="Aspect ratio for custom topic (9:16 or 16:9)")
     parser.add_argument("--slot", type=str, default=None, help="Execute a specific slot ID immediately (e.g. CH2-S1, CH1-L1)")
     parser.add_argument("--run-pending", action="store_true", help="Execute all currently due and pending slots")
+    parser.add_argument("--run-current", action="store_true", help="Execute strictly ONE slot due for the current time window")
     parser.add_argument("--force", action="store_true", help="Force execution even if slot already succeeded today")
     parser.add_argument("--status", action="store_true", help="Print table of today's 10 slots and their statuses")
     args = parser.parse_args()
@@ -876,6 +966,11 @@ def main():
     if args.slot:
         ok = scheduler.execute_slot(args.slot, force=args.force)
         sys.exit(0 if ok else 1)
+
+    if args.run_current:
+        executed_slot = scheduler.run_current_slot()
+        print(f"✅ Processed current window slot: {executed_slot or 'None due'}")
+        return
 
     if args.run_pending:
         count = scheduler.run_pending_slots()

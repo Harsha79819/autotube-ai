@@ -2256,6 +2256,7 @@ def generate_script(
     ct_str = str(content_type).lower()
     is_history = "history" in ct_str or "historical" in ct_str
     is_facts = "fact" in ct_str or "curiosity" in ct_str
+    is_news = "news" in ct_str or "local" in ct_str or "tech" in ct_str or "politics" in ct_str or "regional" in ct_str
     is_roast = "roast" in ct_str
     is_sarcastic = "sarcas" in ct_str
     is_funny = "funny" in ct_str or "comedy" in ct_str
@@ -2265,8 +2266,12 @@ def generate_script(
 
     from config.settings import get_setting
     tone_arg = tone or kwargs.get("tone")
-    configured_tone = get_setting("TONE_DEFAULT", "roast")
-    raw_tone = str(tone_arg if tone_arg is not None else configured_tone).lower().strip()
+    if tone_arg is not None:
+        raw_tone = str(tone_arg).lower().strip()
+    elif is_news or is_facts or is_history:
+        raw_tone = "informative"
+    else:
+        raw_tone = str(get_setting("TONE_DEFAULT", "informative")).lower().strip()
 
     is_longform = (
         "6-9" in dur_str
@@ -2286,6 +2291,7 @@ def generate_script(
         (raw_tone == "roast" or is_roast or is_sarcastic or is_funny or "bigg boss" in topic_str)
         and not is_neutral_tone
         and not is_longform
+        and not (is_news and raw_tone != "roast")
         and not (is_facts and raw_tone != "roast")
         and not (is_history and raw_tone != "roast")
     )

@@ -598,7 +598,17 @@ def search_all_sources_parallel(
                 if sq and sq not in stock_queries:
                     stock_queries.append(sq)
             if not stock_queries:
-                stock_queries = ["dramatic reality television studio lights", "shocked face reaction"]
+                tc = str(topic_category or "").lower()
+                if "tech" in tc or "ai" in tc:
+                    stock_queries = ["modern artificial intelligence datacenter", "futuristic digital technology circuits"]
+                elif "fact" in tc or "history" in tc:
+                    stock_queries = ["mysterious cosmos galaxy space", "ancient historic architecture drone shot"]
+                elif "news" in tc or "politics" in tc or "regional" in tc:
+                    stock_queries = ["breaking news studio backdrop", "press conference live broadcast"]
+                elif is_bigg_boss_topic(tc):
+                    stock_queries = ["dramatic reality television studio lights", "shocked face reaction"]
+                else:
+                    stock_queries = ["cinematic documentary background", "dramatic atmospheric lighting"]
 
             for q in stock_queries[:2]:
                 v_info = search_pexels_videos(q, pexels_key=key, orientation=orientation, per_page=3)
@@ -642,7 +652,18 @@ def search_all_sources_parallel(
                 if sq and sq not in stock_queries:
                     stock_queries.append(sq)
             if not stock_queries:
-                stock_queries = ["dramatic reality television studio lights"]
+                from utils.season_guard import is_bigg_boss_topic
+                tc = str(topic_category or "").lower()
+                if "tech" in tc or "ai" in tc:
+                    stock_queries = ["modern artificial intelligence datacenter", "futuristic digital technology circuits"]
+                elif "fact" in tc or "history" in tc:
+                    stock_queries = ["mysterious cosmos galaxy space", "ancient historic architecture drone shot"]
+                elif "news" in tc or "politics" in tc or "regional" in tc:
+                    stock_queries = ["breaking news studio backdrop", "press conference live broadcast"]
+                elif is_bigg_boss_topic(tc):
+                    stock_queries = ["dramatic reality television studio lights"]
+                else:
+                    stock_queries = ["cinematic documentary background", "dramatic atmospheric lighting"]
 
             for q in stock_queries[:2]:
                 res = search_pixabay(q, orientation="vertical" if orientation == "portrait" else "horizontal", max_results=4)

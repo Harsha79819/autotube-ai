@@ -4391,11 +4391,16 @@ def download_images_from_visual_plan(
 
             if not healed:
                 try:
-                    bb_house = ROOT / "assets" / "entities" / "bigg_boss_telugu" / "image.jpg"
-                    fb_img = (ROOT / "assets" / "fallback" / "fallback_1.jpg")
-                    cand_bg = bb_house if bb_house.exists() else fb_img
-                    cand_h = image_hash(cand_bg) if cand_bg.exists() else None
-                    if cand_bg.exists() and cand_h and (cand_h not in used_hashes):
+                    if is_bb_mode:
+                        bb_house = ROOT / "assets" / "entities" / "bigg_boss_telugu" / "image.jpg"
+                        fb_img = (ROOT / "assets" / "fallback" / "fallback_1.jpg")
+                        cand_bg = bb_house if bb_house.exists() else fb_img
+                    else:
+                        # STRICT NON-BIGG BOSS FALLBACK: Never touch bigg boss house or stage!
+                        cand_bg = ROOT / "assets" / "fallback" / "fallback_1.jpg"
+
+                    cand_h = image_hash(cand_bg) if cand_bg and cand_bg.exists() else None
+                    if cand_bg and cand_bg.exists() and cand_h and (cand_h not in used_hashes):
                         used_hashes.add(cand_h)
                         shutil.copy2(cand_bg, m_dest)
                         clean_and_crop_image(m_dest, aspect_ratio=aspect_ratio)

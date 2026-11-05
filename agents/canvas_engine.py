@@ -103,9 +103,23 @@ def _stage_frames() -> List[Path]:
     return sorted(p for p in STAGE_DIR.iterdir() if p.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp"))
 
 
-def make_background(w: int, h: int, emotion: str, seed: int, tint: Optional[str] = None) -> Image.Image:
+def _is_bigg_boss_context() -> bool:
+    try:
+        for t_p in [ROOT / "output" / "topic.txt", ROOT / "output" / "topic.json"]:
+            if t_p.exists():
+                txt = t_p.read_text(encoding="utf-8").lower()
+                if "bigg boss" in txt or "bb10" in txt or "star maa" in txt:
+                    return True
+    except Exception:
+        pass
+    return False
+
+
+def make_background(w: int, h: int, emotion: str, seed: int, tint: Optional[str] = None, allow_stage_frames: Optional[bool] = None) -> Image.Image:
     accent = _hex(tint or EMOTION_COLORS.get(emotion, EMOTION_COLORS["neutral"]))
-    frames = _stage_frames()
+    if allow_stage_frames is None:
+        allow_stage_frames = _is_bigg_boss_context()
+    frames = _stage_frames() if allow_stage_frames else []
     if frames:
         base = _cover(Image.open(frames[seed % len(frames)]), w, h)
         base = base.filter(ImageFilter.GaussianBlur(26))
