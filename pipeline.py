@@ -2535,9 +2535,11 @@ def generate_multi_media_video(
                     public_base = "https://smokeless-waking-remote.ngrok-free.dev"
 
                 public_url = f"{public_base.rstrip('/')}/output/final_video.mp4"
+                from agents.instagram_agent import format_reels_caption
+                reels_caption = format_reels_caption(title, topic=topic, tags=tags)
                 res = upload_to_instagram_reels(
                     video_source=str(final_vid) if final_vid.exists() else None,
-                    caption=f"{title}\n\n{description[:300]}",
+                    caption=reels_caption,
                     public_video_url=public_url,
                 )
                 instagram_status["result"] = res

@@ -6,6 +6,7 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
+from typing import Optional, List, Dict, Any, Tuple
 
 
 # ============================================================
@@ -174,6 +175,38 @@ def should_upload_to_instagram(video_duration_seconds, user_enabled_instagram, a
     if str(aspect_ratio).strip() != "9:16":
         return False, "Reels requires 9:16 vertical format"
     return True, "Eligible for Instagram upload"
+
+
+def format_reels_caption(title: str, topic: str = "", tags: Optional[List[str]] = None) -> str:
+    """
+    Formats a clean, high-engagement Instagram Reels caption.
+    Includes viral Telugu hashtags and respects Instagram's 2,200 char limit.
+    """
+    clean_title = (title or topic or "Trending Reel").strip()
+    base_hashtags = ["#reels", "#telugureels", "#trending", "#viral", "#telugu", "#shorts", "#explore"]
+
+    # Category-specific hashtags
+    t_lower = f"{clean_title} {topic}".lower()
+    if any(k in t_lower for k in ("bigg boss", "bb10", "star maa")):
+        base_hashtags.extend(["#biggboss", "#biggbosstelugu", "#bb10", "#starmaa"])
+    elif any(k in t_lower for k in ("news", "andhra", "telangana", "govt", "cm", "tdp", "ysrcp")):
+        base_hashtags.extend(["#telugunews", "#andhranews", "#breakingnews"])
+    elif any(k in t_lower for k in ("tech", "ai", "mobile", "phone", "apple", "google")):
+        base_hashtags.extend(["#telugutech", "#technews", "#gadgets"])
+    elif any(k in t_lower for k in ("movie", "film", "cinema", "tollywood")):
+        base_hashtags.extend(["#tollywood", "#telugucinema", "#moviereview"])
+    else:
+        base_hashtags.extend(["#facts", "#telugufacts", "#knowledge"])
+
+    if tags:
+        for t in tags[:5]:
+            ht = "#" + re.sub(r"[^a-zA-Z0-9_]", "", str(t))
+            if len(ht) > 2 and ht.lower() not in [h.lower() for h in base_hashtags]:
+                base_hashtags.append(ht)
+
+    hashtags_str = " ".join(base_hashtags[:12])
+    caption = f"{clean_title}\n\nFollow for daily updates! 🔥\n\n{hashtags_str}"
+    return caption[:2150]
 
 
 # ============================================================
