@@ -141,7 +141,7 @@ if not st.session_state.authenticated:
 # ============================================================
 
 if "user_token" not in st.session_state:
-    st.session_state.user_token = _safe_get_secret("GH_TOKEN", "")
+    st.session_state.user_token = _safe_get_secret("GH_TOKEN", "") or _safe_get_secret("GITHUB_TOKEN", "")
 
 active_token = st.session_state.user_token
 
