@@ -109,61 +109,36 @@ st.markdown(
 )
 
 # ============================================================
-# AUTHENTICATION
+# ZERO-FRICTION MOBILE DASHBOARD ACCESS
 # ============================================================
 
-if "authenticated" not in st.session_state:
-    st.session_state.authenticated = False
+# Read token from URL query params (e.g. ?token=...)
+query_token = ""
+try:
+    if hasattr(st, "query_params") and "token" in st.query_params:
+        query_token = st.query_params.get("token", "")
+    elif hasattr(st, "experimental_get_query_params"):
+        params = st.experimental_get_query_params()
+        if "token" in params and params["token"]:
+            query_token = params["token"][0]
+except Exception:
+    pass
 
-if not st.session_state.authenticated:
-    st.markdown(
-        """
-        <div class="header-card">
-            <h2>🎬 AutoTube AI Mobile</h2>
-            <p style="color: #94a3b8;">24/7 Cloud Automation Dashboard</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
+if "user_token" not in st.session_state or not st.session_state.user_token:
+    st.session_state.user_token = (
+        query_token
+        or _safe_get_secret("GH_TOKEN", "")
+        or _safe_get_secret("GITHUB_TOKEN", "")
     )
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        pin_input = st.text_input("🔑 Enter Security PIN", type="password", max_chars=6)
-        if st.button("Unlock Dashboard", use_container_width=True):
-            if pin_input.strip() == APP_PIN:
-                st.session_state.authenticated = True
-                st.rerun()
-            else:
-                st.error("❌ Incorrect PIN. Please try again.")
-    st.stop()
-
-# ============================================================
-# TOKEN RESOLUTION
-# ============================================================
-
-if "user_token" not in st.session_state:
-    st.session_state.user_token = _safe_get_secret("GH_TOKEN", "") or _safe_get_secret("GITHUB_TOKEN", "")
-
-active_token = st.session_state.user_token
-
-if not active_token:
-    st.warning("🔑 GitHub Access Token Required")
-    with st.expander("Setup Token (One-time)", expanded=True):
-        st.write("Please paste your GitHub Token below to connect to cloud runners:")
-        token_input = st.text_input("GitHub Personal Access Token (starts with gho_ or ghp_)", type="password")
-        if st.button("Save Token", use_container_width=True):
-            if token_input.strip():
-                st.session_state.user_token = token_input.strip()
-                st.success("✅ Token saved!")
-                st.rerun()
-    st.stop()
 
 # ============================================================
 # GITHUB ACTIONS API HELPERS
 # ============================================================
 
 def get_headers():
+    token = st.session_state.get("user_token", "")
     return {
-        "Authorization": f"token {st.session_state.user_token}",
+        "Authorization": f"token {token}",
         "Accept": "application/vnd.github.v3+json",
         "User-Agent": "AutoTube-Cloud-App",
     }
@@ -317,9 +292,21 @@ with tab_create:
             target_duration = "60-90s"
 
     st.markdown("")
+    if not st.session_state.get("user_token"):
+        with st.expander("🔑 One-Time Cloud Dispatch Setup", expanded=True):
+            st.caption("Paste your GitHub Token once below to connect to 16GB cloud runners (or open the app link with `?token=...`):")
+            t_in = st.text_input("GitHub Token", type="password", key="inline_token_box", placeholder="gho_... or ghp_...")
+            if st.button("Connect Token", use_container_width=True):
+                if t_in.strip():
+                    st.session_state.user_token = t_in.strip()
+                    st.success("✅ Connected to Cloud Runners!")
+                    st.rerun()
+
     if st.button("🚀 Generate & Publish Video Now", type="primary", use_container_width=True):
         if not custom_topic.strip():
             st.error("⚠️ Please select or type a video topic first.")
+        elif not st.session_state.get("user_token"):
+            st.error("🔑 Please connect your GitHub Token in the box above to trigger cloud runners.")
         else:
             with st.spinner("Dispatching video production to Cloud Runner..."):
                 ok, msg = trigger_workflow(
