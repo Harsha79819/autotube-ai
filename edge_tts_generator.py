@@ -699,13 +699,14 @@ async def generate_roast_speech_with_emotions(
             if idx == 1:
                 pause_ms = 0
 
-            # 1. Insert pause silence before beat if requested
-            if pause_ms > 0:
-                pause_sec = round(min(pause_ms, 600) / 1000.0, 3)
+            # 1. Smooth, continuous speech pacing (eliminate dead silence gaps)
+            if pause_ms > 150:
+                # Cap pause to max 100ms (0.10s) natural breath for seamless flow
+                pause_sec = 0.10
                 silence_wav = temp_dir / f"pause_{idx}.wav"
                 cmd_sil = [
                     "ffmpeg", "-y",
-                    "-f", "lavfi", "-i", f"anullsrc=r=24000:cl=mono",
+                    "-f", "lavfi", "-i", "anullsrc=r=24000:cl=mono",
                     "-t", str(pause_sec),
                     "-c:a", "pcm_s16le",
                     str(silence_wav)

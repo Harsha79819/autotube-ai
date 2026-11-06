@@ -411,18 +411,21 @@ Return ONLY the expanded spoken narration in native Telugu script (తెలు�
             exp_words = cleaned.split()
             if len(exp_words) >= min_required:
                 if len(exp_words) > max_allowed:
-                    # Keep hook (first 2 sentences) and closing sentences, condensing to max_allowed
+                    # Intelligently condense while ALWAYS preserving the opening hook AND closing CTA/punchline
                     sents = [s.strip() for s in re.split(r"(?<=[.!?।])\s+", cleaned) if s.strip()]
-                    kept = []
-                    curr_w = 0
-                    for s in sents:
-                        s_w = len(s.split())
-                        if curr_w + s_w <= max_allowed or len(kept) < 3:
-                            kept.append(s)
-                            curr_w += s_w
-                        else:
-                            break
-                    cleaned = " ".join(kept)
+                    if len(sents) > 3:
+                        hook_sents = sents[:2]
+                        closing_sent = sents[-1]
+                        middle_sents = sents[2:-1]
+                        kept = list(hook_sents)
+                        curr_w = sum(len(s.split()) for s in kept) + len(closing_sent.split())
+                        for s in middle_sents:
+                            s_w = len(s.split())
+                            if curr_w + s_w <= max_allowed:
+                                kept.append(s)
+                                curr_w += s_w
+                        kept.append(closing_sent)
+                        cleaned = " ".join(kept)
                 script = cleaned
                 words = script.split()
                 word_count = len(words)
@@ -435,24 +438,36 @@ Return ONLY the expanded spoken narration in native Telugu script (తెలు�
     if len(words) < min_required:
         missing = min_required - len(words)
         print(f"⚡ Applying deterministic comedic elaboration (+{missing} words needed)...")
-        # Extract pure Telugu context or clean reference to avoid injecting raw English headlines into spoken Telugu
         from utils.season_guard import is_bigg_boss_topic
         is_bb_exp = is_bigg_boss_topic(topic)
-        telugu_words = [w for w in re.findall(r"[\u0C00-\u0C7F]+", str(topic)) if len(w) > 1]
-        if telugu_words:
-            clean_topic_ref = " ".join(telugu_words[:3])
-        elif is_bb_exp:
-            clean_topic_ref = "బిగ్ బాస్"
-        else:
-            clean_topic_ref = "ఈ రచ్చ"
+        t_low = (topic or "").lower()
 
-        roast_blocks = [
-            f"అసలు ఈ {clean_topic_ref} విషయంలో జరుగుతున్న కామెడీ డ్రామా చూస్తుంటే నవ్వాలో ఏడ్వాలో అర్థం కావడం లేదు బాస్.",
-            "ప్రతి ఒక్కరూ ఏదో పెద్ద మైండ్ గేమ్ ఆడుతున్నట్లు భారీగా బిల్డప్ ఇవ్వడమే తప్ప కంటెంట్ లో పస లేదు.",
-            "కెమెరాలు ఉన్నాయని తెలిసి కూడా చేసే ఈ ఓవరాక్షన్ చూసి ఆడియన్స్ మైండ్ బ్లాంక్ అయిపోతోంది.",
-            "ఇంత పచ్చిగా అబద్ధాలు చెబుతూ అమాయకంగా ముఖం పెట్టడం వీళ్ళకే చెల్లింది బాస్.",
-            "మొత్తానికి ఈ సీన్ చూసిన తర్వాత మనకి అర్థమయ్యేది ఒక్కటే, ఇదంతా ప్యూర్ టిఆర్పీ స్టంట్ తప్ప మరొకటి కాదు.",
-        ]
+        if is_bb_exp:
+            roast_blocks = [
+                "అసలు హౌస్‌లో జరుగుతున్న ఈ గేమ్ స్ట్రాటజీ చూస్తుంటే ఆడియన్స్‌కి నవ్వాలో ఏడ్వాలో అర్థం కావడం లేదు బాస్.",
+                "కెమెరాలు ఉన్నాయని తెలిసి కూడా చేసే ఈ హై ఓవరాక్షన్ చూసి అందరి మైండ్ బ్లాంక్ అయిపోతోంది.",
+                "నామినేషన్లలో ఇంత పచ్చిగా డ్రామాలు ఆడుతూ సేఫ్ గేమ్ ప్లాన్ చేయడం వీళ్ళకే చెల్లింది బాస్.",
+                "మొత్తానికి ఈ వీక్ ఎలిమినేషన్ ఎవరు అవుతారో చూడాలి కానీ, ఇదంతా ప్యూర్ టిఆర్పీ స్టంట్ తప్ప మరొకటి కాదు.",
+            ]
+        elif any(k in t_low for k in ["tech", "ai", "phone", "iphone", "apple", "samsung", "gadget", "software", "google"]):
+            roast_blocks = [
+                "టెక్నాలజీ రంగంలో ఇలాంటి క్రేజీ డెవలప్‌మెంట్స్ చూస్తుంటే భవిష్యత్తు ఎలా ఉండబోతోందో అర్థం చేసుకోవచ్చు బాస్.",
+                "కొత్త ఫీచర్లు వినడానికి చాలా బాగున్నా, నిజ జీవితంలో యూజర్లకి ఎంతవరకు ఉపయోగపడతాయో వేచి చూడాలి.",
+                "ఈ రేంజ్ టెక్ వార్ చూస్తుంటే రాబోయే రోజుల్లో మార్కెట్లో కాంపిటీషన్ నెక్స్ట్ లెవెల్ ఉండబోతోంది.",
+            ]
+        elif any(k in t_low for k in ["movie", "cinema", "film", "teaser", "trailer", "tollywood"]):
+            roast_blocks = [
+                "టాలీవుడ్ సినిమా ఇండస్ట్రీలో ఇలాంటి సర్ప్రైజ్‌లు ఎప్పుడూ ఆడియన్స్‌ని విపరీతంగా ఆకట్టుకుంటూనే ఉంటాయి బాస్.",
+                "హైప్ పెంచడంలో మూవీ టీమ్ సక్సెస్ అయినా, థియేటర్లలో అసలు రిజల్ట్ ఎలా ఉంటుందో వేచి చూడాల్సిందే.",
+                "ఈ క్రేజీ కాంబినేషన్ బాక్సాఫీస్ దగ్గర ఎలాంటి రికార్డులు సృష్టిస్తుందో చూడటం చాలా ఆసక్తికరంగా మారింది.",
+            ]
+        else:
+            roast_blocks = [
+                "ఇలాంటి ఆసక్తికరమైన విషయాలు విన్నప్పుడు ఎవరికైనా ఆశ్చర్యం కలగడం చాలా సహజం బాస్.",
+                "మనం ఊహించిన దానికంటే నిజాలు చాలా భిన్నంగా, ఆలోచింపజేసేలా ఉంటాయి.",
+                "ఈ అంశంపై మీ ఆలోచనలు, నిజాలు ఏంటో కామెంట్లలో పంచుకోవడం మర్చిపోకండి.",
+            ]
+
         added = []
         curr_w = len(words)
         for block in roast_blocks:
