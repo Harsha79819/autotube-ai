@@ -117,10 +117,8 @@ def run_app():
             if mod.startswith("agents.") or mod in ("telugu_phonetic_normalizer", "pipeline", "supervisor", "liquid_ui"):
                 sys.modules.pop(mod, None)
 
-        # Detect if running on Streamlit Community Cloud (where video rendering crashes due to 1GB RAM limit)
-        is_cloud = os.path.exists("/mount/src") or "STREAMLIT_SHARING_MODE" in os.environ or os.environ.get("IS_CLOUD") == "true"
-        target_script = "cloud_app.py" if is_cloud else "dashboard.py"
-        runpy.run_path(str(ROOT / target_script), run_name="__main__")
+        # Run the full studio dashboard
+        runpy.run_path(str(ROOT / "dashboard.py"), run_name="__main__")
 
     except BaseException as fatal_error:
         # Streamlit control-flow exceptions MUST NOT be intercepted

@@ -3599,11 +3599,43 @@ with st.container():
                     st.rerun()
             else:
                 try:
-                    with PipelineLock(source="dashboard", topic=topic.strip()):
-                        with st.spinner(
-                            "AutoTube AI is creating your video..."
-                        ):
-                            result = generate_multi_media_video(
+                        is_cloud = os.path.exists("/mount/src") or "STREAMLIT_SHARING_MODE" in os.environ
+                        gh_token = ""
+                        try:
+                            gh_token = (
+                                (st.secrets.get("GH_TOKEN", "") if hasattr(st, "secrets") else "")
+                                or os.environ.get("GH_TOKEN", "")
+                                or st.session_state.get("user_token", "")
+                            )
+                        except Exception:
+                            pass
+
+                        if is_cloud and gh_token:
+                            import requests
+                            with st.spinner("🚀 Dispatched to 16GB High-Speed Cloud Runner! Video is rendering in the cloud..."):
+                                url = "https://api.github.com/repos/Harsha79819/autotube-ai/actions/workflows/daily_publisher.yml/dispatches"
+                                ch_val = "viral_talks_me&mine" if "viral" in str(selected_yt_channel).lower() else "Imaginary_facts"
+                                payload = {
+                                    "ref": "main",
+                                    "inputs": {
+                                        "custom_topic": topic.strip(),
+                                        "custom_channel": ch_val,
+                                        "custom_duration": target_duration,
+                                        "slot_id": "RUN_ALL_PENDING",
+                                        "force": True,
+                                    }
+                                }
+                                headers = {"Authorization": f"token {gh_token}", "Accept": "application/vnd.github.v3+json"}
+                                r = requests.post(url, json=payload, headers=headers, timeout=15)
+                                if r.status_code in (200, 204):
+                                    st.success("🎉 Video Production Triggered in 16GB Cloud! Your video is being composed with zero memory limits and will upload to YouTube & Instagram.")
+                                    result = {"status": "success", "note": "Dispatched to 16GB runner"}
+                                else:
+                                    st.error(f"GitHub Runner Dispatch error: {r.status_code} - {r.text}")
+                                    result = None
+                        else:
+                            with st.spinner("AutoTube AI is creating your video..."):
+                                result = generate_multi_media_video(
                                 topic=topic.strip(),
                                 media_files=media_paths,
                                 content_type=content_type,

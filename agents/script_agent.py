@@ -2431,31 +2431,46 @@ TRANSLATE AND ADAPT ALL NEWS/TOPIC FACTS DIRECTLY INTO ENGAGING TELUGU SPOKEN CR
 
         language_rules = """LANGUAGE & SCRIPT RULES:
 
-- Write the TITLE and SCRIPT narration in natural, energetic, conversational spoken Telugu (తెలుగు లిపి).
+- SARALAMAINA TELUGU VAADUKA BHASHA (సరళమైన సహజ వాడుక భాష - 100% NATURAL CONVERSATIONAL TELUGU):
+  Write the TITLE and SCRIPT narration strictly in fluent, natural, spoken conversational Telugu (తెలుగు లిపి).
+  It MUST sound like an authentic, energetic Telugu YouTube creator talking face-to-face with an audience—NEVER like a robotic teleprompter or someone reading a textbook!
+
+- STRICT BAN ON LITERAL WORD-BY-WORD TRANSLATION:
+  DO NOT translate English news or facts literally into Telugu! Mechanical word-for-word translation creates awkward, unnatural sentences that ruin audience retention.
+  * STRICTLY FORBIDDEN: "యూపీ ఎందుకు బ్యాక్ ఉంది", "ఏపీ ఎందుకు ర్యాంక్ అని ఉంది", "షాకింగ్ గా ఉంది", "ఇది బ్రేకింగ్ గా ఉంది".
+  * ALWAYS ADAPT THE MEANING INTO NATURAL TELUGU:
+    ❌ BAD (Literal): "యూపీ ఎందుకు బ్యాక్ ఉంది ఏపీ ఎందుకు ర్యాంక్ అని ఉంది"
+    ✅ GOOD (Natural): "చూడండి ఫ్రెండ్స్, నేషనల్ వెహికల్ ఇండెక్స్‌లో మన ఆంధ్రప్రదేశ్ టాప్ ర్యాంక్ సాధించి రికార్డ్ సృష్టించింది! పెద్ద పెద్ద రాష్ట్రాలైన ఉత్తరప్రదేశ్ లాంటివి కూడా వెనుకబడిపోయాయి!"
+    ❌ BAD (Literal): "ఇది మార్కెట్ కి బిగ్ షాక్ గా ఉంది"
+    ✅ GOOD (Natural): "బాస్, ఈ న్యూస్ వింటే ఎవరైనా మైండ్ బ్లాంక్ అవ్వాల్సిందే!"
+
 - VOCAL PERSONA & DELIVERY GUIDELINES:
-  "Speak in the tone of an energetic, candid Telugu film reviewer. Sound spontaneous, dramatic, and expressive rather than robotic or formal. Add subtle vocal emphasis on contrasting words and punchlines."
+  "Speak in the tone of an energetic, candid Telugu creator/reviewer. Sound spontaneous, dramatic, lively, and expressive rather than robotic or formal. Add subtle vocal emphasis on contrasting words, punchlines, and key reveals."
+
 - PUNCTUATION-DRIVEN CADENCE:
-  Text-to-speech engines rely heavily on punctuation for inflection. Break long, dramatic lines into short punchy fragments using commas (,), dashes (—), and ellipsis (...) to create organic breathing room and build anticipation before major reveals.
+  Text-to-speech engines rely heavily on punctuation for inflection. Break long lines into short punchy fragments (6-10 words) using commas (,), dashes (—), and ellipsis (...) to create organic breathing room and natural cadence.
+
 - 100% TELUGU SCRIPT FOR ALL LOANWORDS:
-  Avoid phonetic Telugu written in loose English script. Write 100% in native Telugu script (తెలుగు లిపి). Write English loanwords in Telugu script (e.g. 'బిగ్ బాస్', 'పాన్ ఇండియా', 'ట్విస్ట్', 'మైండ్ బ్లాంక్', 'రివ్యూ', 'ఎలిమినేషన్') to prevent neural TTS from switching to an American/robotic accent.
-- TITLE: Must be in Telugu script with English model/brand name (e.g. "గెలాక్సీ ఎస్ 27 లీక్స్: 6000mAh బ్యాటరీ & మైండ్ బ్లోయింగ్ ఫీచర్లు!").
+  Avoid phonetic Telugu written in loose English script. Write 100% in native Telugu script (తెలుగు లిపి). Write English loanwords in Telugu script (e.g. 'బిగ్ బాస్', 'పాన్ ఇండియా', 'ట్విస్ట్', 'మైండ్ బ్లాంక్', 'రివ్యూ', 'ఎలిమినేషన్', 'రికార్డ్', 'వైరల్') to prevent neural TTS from switching to an American/robotic accent.
+
 - AUTHENTIC TELUGU CREATOR CONVERSATIONAL CONNECTORS:
   Naturally weave in conversational creator slang connectors between beats:
   * "చూడండి ఫ్రెండ్స్..."
-  * "కానీ ఇక్కడ ట్విస్ట్ ఏంటంటే..."
+  * "కానీ ఇక్కడ అసలు ట్విస్ట్ ఏంటంటే..."
   * "బాస్, నిజం చెప్పాలంటే..."
   * "అసలు విషయం ఏంటంటే..."
-  * "ఇక పెర్ఫార్మెన్స్ విషయానికి వస్తే..."
-  * "ఇందులో అదిరిపోయే ఫీచర్ ఏంటంటే..."
+  * "ఇక ఈ విషయం గురించి చూస్తే..."
+  * "ఇందులో అదిరిపోయే పాయింట్ ఏంటంటే..."
   * "ఒక్కసారి ఆలోచించండి..."
-- CRITICAL CREATOR PRONUNCIATION RULE (TELUGLISH TECH):
-  When discussing tech models, specs, numbers, and features, ALWAYS write them phonetically in Telugu script using their conversational English pronunciations, NOT bookish formal Telugu numbers!
-  * Phone models: Write "గెలాక్సీ ఎస్ ట్వంటీ సెవెన్" (Galaxy S27), "ఐఫోన్ ఎయిటీన్ ప్రో" (iPhone 18 Pro), "ఎస్ ట్వంటీ సిక్స్" (S26). NEVER write formal Telugu numbers like "గెలాక్సీ ఇరవై ఏడు" or "పద్దెనిమిది".
-  * Storage & RAM: Write "యూఎఫ్ఎస్ ఫైవ్ పాయింట్ వన్" (UFS 5.1), "యూఎఫ్ఎస్ ఫైవ్" (UFS 5), "టూ ఫిఫ్టీ సిక్స్ జీబీ" (256GB), "ట్వెల్వ్ జీబీ ర్యామ్" (12GB RAM), "సిక్స్టీన్ జీబీ ర్యామ్" (16GB RAM). NEVER write "ఐదు", "రెండు వందల యాభై ఆరు", or "పన్నెండు".
-  * Specs & Units: Write "సిక్స్టీ వాట్ల ఫాస్ట్ ఛార్జింగ్" (60W), "ఫైవ్ థౌసండ్ ఎంఏహెచ్ బ్యాటరీ" (5000mAh), "సిక్స్ థౌసండ్ ఎంఏహెచ్ బ్యాటరీ" (6000mAh), "వన్ ట్వంటీ హెర్ట్జ్ డిస్‌ప్లే" (120Hz), "ఫోర్ కే వీడియో" (4K).
-- DYNAMIC KEY SPEC TAGGING: Wrap standout specs and numbers in double asterisks (e.g. **6000mAh**, **120Hz**, **UFS 5.1**, **Galaxy S27**, **₹19,999**, **12GB RAM**).
+
+- CRITICAL CREATOR PRONUNCIATION RULE (TELUGLISH TECH & NUMBERS):
+  When discussing models, specs, numbers, and features, ALWAYS write them phonetically in Telugu script using their conversational English pronunciations, NOT bookish formal Telugu numbers!
+  * Models: "గెలాక్సీ ఎస్ ట్వంటీ సెవెన్" (Galaxy S27), "ఐఫోన్ ఎయిటీన్ ప్రో" (iPhone 18 Pro), "ఎస్ ట్వంటీ సిక్స్" (S26). NEVER write formal Telugu numbers like "గెలాక్సీ ఇరవై ఏడు" or "పద్దెనిమిది".
+  * Specs: "యూఎఫ్ఎస్ ఫైవ్ పాయింట్ వన్" (UFS 5.1), "టూ ఫిఫ్టీ సిక్స్ జీబీ" (256GB), "ట్వెల్వ్ జీబీ ర్యామ్" (12GB RAM), "సిక్స్ థౌసండ్ ఎంఏహెచ్ బ్యాటరీ" (6000mAh), "వన్ ట్వంటీ హెర్ట్జ్ డిస్‌ప్లే" (120Hz).
+  * Dynamic Key Spec Tagging: Wrap standout specs in double asterisks (e.g. **6000mAh**, **120Hz**, **UFS 5.1**, **₹19,999**).
+
 - PACING: Each beat must be speakable in 2.0-3.5 seconds (6-12 words) for maximum retention.
-- CRITICAL VISUAL RULE: All VISUAL descriptions MUST be written strictly in concise ENGLISH keywords (e.g. "Samsung Galaxy S27 smartphone hands on display | futuristic smartphone chassis | mobile processor macro shot"), because stock video search engines query in English. Do NOT write visual descriptions in Telugu."""
+- CRITICAL VISUAL RULE: All VISUAL descriptions MUST be written strictly in concise ENGLISH keywords (e.g. "traffic highway india | modern electric vehicle charging station drone"), because stock video search engines query in English. Do NOT write visual descriptions in Telugu."""
     elif is_hindi:
         role_desc = "You are a professional Hindi YouTube script writer and visual-content planning director."
         hook_instruction = """- CURIOSITY-GAP HOOK RULE (First 2-3 seconds):
