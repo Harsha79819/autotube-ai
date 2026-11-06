@@ -1126,7 +1126,14 @@ def generate_multi_media_video(
     progress_callback=None,
     generation_mode="stock",
     tone=None,
+    **kwargs,
 ):
+    if "channel" in kwargs:
+        youtube_channel = kwargs["channel"]
+    if "upload_youtube" in kwargs:
+        youtube_upload = kwargs["upload_youtube"]
+    if "upload_instagram" in kwargs:
+        instagram_upload = kwargs["upload_instagram"]
     """
     Topic-first AutoTube AI pipeline with a maximum of 3 AI review
     attempts.
