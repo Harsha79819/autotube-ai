@@ -106,6 +106,16 @@ def run_app():
     import streamlit as st
 
     try:
+        st.set_page_config(
+            page_title="AutoTube Controller",
+            page_icon="🎬",
+            layout="wide",
+            initial_sidebar_state="collapsed",
+        )
+    except Exception:
+        pass
+
+    try:
         from agents.env_loader import sync_secrets_to_env
         sync_secrets_to_env()
     except Exception:

@@ -15,6 +15,16 @@ from importlib import import_module
 st = import_module("streamlit")
 
 try:
+    st.set_page_config(
+        page_title="AutoTube Controller",
+        page_icon="🎬",
+        layout="wide",
+        initial_sidebar_state="collapsed",
+    )
+except Exception:
+    pass
+
+try:
     from agents.env_loader import get_gemini_api_key, get_pexels_api_key, sync_secrets_to_env
     sync_secrets_to_env()
 except Exception:
@@ -2173,12 +2183,15 @@ import json
 # LIQUID GLASS UI
 # ============================================================
 
-st.set_page_config(
-    page_title="AutoTube Controller",
-    page_icon="🎬",
-    layout="wide",
-    initial_sidebar_state="collapsed",
-)
+try:
+    st.set_page_config(
+        page_title="AutoTube Controller",
+        page_icon="🎬",
+        layout="wide",
+        initial_sidebar_state="collapsed",
+    )
+except Exception:
+    pass
 
 from auth_guard import (
     require_pin_authentication,
