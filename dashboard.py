@@ -2832,16 +2832,23 @@ with st.container():
                 )
 
             if refresh_ai_topics:
-                with st.spinner(f"Generating fresh AI ideas for {content_type}..."):
+                with st.spinner(f"Generating fresh breaking AI ideas for {content_type}..."):
+                    try:
+                        from agents.topic_suggester import invalidate_category_cache
+                        invalidate_category_cache(content_type)
+                    except Exception:
+                        pass
                     fresh_ideas = fetch_ai_topic_suggestions(
                         content_type=content_type,
                         count=8,
                         use_ai=True,
+                        force_refresh=True,
                     )
                     if fresh_ideas:
                         st.session_state[topics_cache_key] = fresh_ideas
                         st.session_state[f"ai_topic_picker_{content_type}"] = fresh_ideas[0]
                         st.session_state["topic_input"] = fresh_ideas[0]
+                        st.toast(f"🔥 Loaded {len(fresh_ideas)} fresh breaking topics from today!", icon="✨")
                         st.rerun()
 
             current_suggestions = st.session_state.get(topics_cache_key, [])

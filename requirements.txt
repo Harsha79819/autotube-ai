@@ -22,3 +22,4 @@ selectolax<1.0.0
 certifi
 yt-dlp
 numpy
+playwright>=1.40.0

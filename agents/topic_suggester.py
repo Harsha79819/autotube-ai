@@ -329,6 +329,23 @@ def save_daily_cached_topics(category_key: str, topics: List[str]) -> None:
         pass
 
 
+def invalidate_category_cache(category_key: str) -> None:
+    """Invalidates cached daily topics for a category to force fresh live news fetching."""
+    if not DAILY_CACHE_FILE.exists():
+        return
+    try:
+        norm_key = _normalize_category_key(category_key)
+        today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        cache = json.loads(DAILY_CACHE_FILE.read_text(encoding="utf-8"))
+        cache_key = f"{today_str}_{norm_key}"
+        if cache_key in cache:
+            del cache[cache_key]
+            DAILY_CACHE_FILE.write_text(json.dumps(cache, indent=2, ensure_ascii=False), encoding="utf-8")
+            print(f"🔄 [Cache Invalidation] Cleared daily topic cache for '{cache_key}'")
+    except Exception as e:
+        print(f"⚠️ Cache invalidation notice: {e}")
+
+
 # ============================================================
 # SMART VIRAL TOPIC RE-SHAPER (Deterministic Fallback)
 # ============================================================

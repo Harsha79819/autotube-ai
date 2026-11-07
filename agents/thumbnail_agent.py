@@ -411,7 +411,18 @@ def _fit_to_aspect_ratio(image, aspect_ratio="16:9"):
     return cropped
 
 
-def create_thumbnail(title, aspect_ratio="16:9", assets_dir=None, output_dir=None):
+def create_thumbnail(title, aspect_ratio="16:9", assets_dir=None, output_dir=None, use_playwright=False):
+
+    if use_playwright:
+        try:
+            return create_playwright_canva_thumbnail(
+                title=title,
+                aspect_ratio=aspect_ratio,
+                assets_dir=assets_dir,
+                output_dir=output_dir,
+            )
+        except Exception as pw_err:
+            print(f"⚠️ Playwright thumbnail generation notice: {pw_err}. Falling back to native canvas.")
 
     out_dir = Path(output_dir) if output_dir else OUTPUT_DIR
     out_dir.mkdir(
@@ -769,6 +780,90 @@ def create_thumbnail(title, aspect_ratio="16:9", assets_dir=None, output_dir=Non
     print("=" * 60)
 
     return output
+
+
+def create_playwright_canva_thumbnail(title, aspect_ratio="16:9", assets_dir=None, output_dir=None) -> Path:
+    """
+    Renders a Canva-grade high-CTR YouTube thumbnail using Playwright Chromium with HTML5/CSS3.
+    Features:
+    - Google Fonts Noto Sans Telugu (zero conjunct distortion).
+    - Glowing outer rim on cutout.
+    - Obsidian dark badge pill with electric yellow and gold/red borders.
+    - Safe area protection (bottom-right 100% free of text on 16:9; bottom safe zone on 9:16).
+    - Automatic fallback to create_thumbnail (Pillow/CoreText) if Playwright fails.
+    """
+    out_dir = Path(output_dir) if output_dir else OUTPUT_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    try:
+        from tools.playwright_renderer import render_canva_pro_thumbnail
+        from tools.person_cutout import extract_person_cutout
+
+        is_telugu_topic = bool(
+            re.search(r"[\u0C00-\u0C7F]", str(title))
+            or ((OUTPUT_DIR / "topic.txt").exists() and re.search(r"[\u0C00-\u0C7F]|bigg boss|biggboss", (OUTPUT_DIR / "topic.txt").read_text(encoding="utf-8").lower()))
+            or re.search(r"bigg\s*boss|aman|trigun|jhansi|rohit|sudheer", str(title).lower())
+        )
+
+        badge_text = _clean_title(title, is_telugu=is_telugu_topic)
+        border_color = "#E63946" if any(w in badge_text for w in ["షాక్", "ఎలిమినేషన్", "ఫైర్", "రచ్చ", "ELIMINATION", "DRAMA", "SHOCK"]) else "#FFD700"
+
+        # Background candidate
+        bg_path = _find_best_background(aspect_ratio=aspect_ratio, assets_dir=assets_dir)
+
+        # Cutout candidate
+        cutout_path = None
+        ent_slug = _find_contestant_slug(title)
+        if not ent_slug:
+            t_file = (out_dir / "topic.txt") if (out_dir / "topic.txt").exists() else (OUTPUT_DIR / "topic.txt")
+            if t_file.exists():
+                ent_slug = _find_contestant_slug(t_file.read_text(encoding="utf-8"))
+        if not ent_slug:
+            m_file = (out_dir / "metadata.json") if (out_dir / "metadata.json").exists() else (OUTPUT_DIR / "metadata.json")
+            if m_file.exists():
+                ent_slug = _find_contestant_slug(m_file.read_text(encoding="utf-8"))
+
+        if ent_slug:
+            cand_paths = []
+            slug_variants = [ent_slug, f"{ent_slug}_naidu", f"{ent_slug}_reddy", f"{ent_slug}_sounderajan", f"{ent_slug}_contestant", f"{ent_slug}_bb"]
+            emotion_stems = ["shocked", "angry", "laughing", "smug", "reaction", "surprised", "crying", "neutral", "image"]
+            for em in emotion_stems:
+                for sv in slug_variants:
+                    cand_paths.append(ROOT / "data" / "entities" / sv / f"{em}.jpg")
+                    cand_paths.append(ROOT / "data" / "entities" / sv / f"{em}.png")
+                    cand_paths.append(ROOT / "assets" / "entities" / sv / f"{em}.jpg")
+                    cand_paths.append(ROOT / "assets" / "entities" / sv / "image.jpg")
+            person_img_path = next((p for p in cand_paths if p.exists() and p.stat().st_size > 1000), None)
+            if person_img_path:
+                raw_cutout = extract_person_cutout(person_img_path)
+                if raw_cutout and Path(raw_cutout).exists():
+                    cutout_path = Path(raw_cutout)
+
+        out_png = out_dir / f"thumbnail_playwright_{aspect_ratio.replace(':', '_')}.png"
+        res = render_canva_pro_thumbnail(
+            badge_text=badge_text,
+            aspect_ratio=aspect_ratio,
+            bg_image_path=Path(bg_path) if bg_path else None,
+            cutout_path=cutout_path,
+            border_color=border_color,
+            output_path=str(out_png),
+        )
+
+        if res and Path(res).exists():
+            final_jpg = out_dir / "thumbnail.jpg"
+            global_jpg = OUTPUT_DIR / "thumbnail.jpg"
+            with Image.open(res) as img:
+                img.convert("RGB").save(final_jpg, "JPEG", quality=95, optimize=True)
+                if final_jpg.resolve() != global_jpg.resolve():
+                    img.convert("RGB").save(global_jpg, "JPEG", quality=95, optimize=True)
+            print(f"✅ [Playwright Canva] High-CTR thumbnail created: {final_jpg}")
+            return final_jpg
+
+    except Exception as exc:
+        print(f"⚠️ Playwright Canva thumbnail rendering notice: {exc}. Falling back to PIL/CoreText.")
+
+    return create_thumbnail(title=title, aspect_ratio=aspect_ratio, assets_dir=assets_dir, output_dir=output_dir, use_playwright=False)
 
 
 # ============================================================
