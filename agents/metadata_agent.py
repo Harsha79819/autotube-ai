@@ -67,6 +67,8 @@ def get_client():
 # ============================================================
 
 METADATA_MODELS = [
+    "gemini-3.8-flash",
+    "gemini-3.5-flash-lite",
     "gemini-flash-lite-latest",
     "gemini-flash-latest",
 ]
