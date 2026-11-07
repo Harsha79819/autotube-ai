@@ -377,8 +377,8 @@ CRITICAL SCHEMA REQUIREMENTS:
                         item["main_entity"] = det_person
                         used_scene_persons.add(det_person)
                     elif any(w in scenes[i] for w in ["వీళ్ల", "వీరు", "వీళ్లిద్దరు", "వీరి"]):
-                        # Contextual pronoun reference: pick another contestant from current context
-                        remaining_contestants = [cp for cp in ["Jhansi", "Apoorva"] if cp not in used_scene_persons]
+                        # Contextual pronoun reference: pick another active contestant from current context
+                        remaining_contestants = [cp for cp in ["Temper Vamsi", "Aman Masud", "Thrigun Eswaran", "Sudheer Reddy", "Auto Ram Prasad"] if cp not in used_scene_persons]
                         if remaining_contestants:
                             item["person_name"] = remaining_contestants[0]
                             item["main_entity"] = remaining_contestants[0]

@@ -62,7 +62,11 @@ def render_html_to_image(
                 device_scale_factor=device_scale_factor,
             )
             page = context.new_page()
-            page.set_content(html_content, wait_until="networkidle", timeout=12000)
+            try:
+                page.set_content(html_content, wait_until="load", timeout=8000)
+            except Exception:
+                page.set_content(html_content, wait_until="domcontentloaded", timeout=5000)
+            page.wait_for_timeout(250)
             page.screenshot(
                 path=str(out_file),
                 omit_background=transparent,

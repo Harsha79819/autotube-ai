@@ -383,8 +383,8 @@ def mix_audio_with_ducking(voice_path, bgm_path=None, output_audio_path=None):
     output_p.parent.mkdir(parents=True, exist_ok=True)
 
     duck_filter = (
-        "[1:a]volume=0.22[bgm_base]; "
-        "[bgm_base][0:a]sidechaincompress=threshold=0.10:ratio=6:attack=50:release=400[ducked_bgm]; "
+        "[1:a]volume=0.10[bgm_base]; "
+        "[bgm_base][0:a]sidechaincompress=threshold=0.07:ratio=7:attack=40:release=350[ducked_bgm]; "
         "[0:a][ducked_bgm]amix=inputs=2:duration=first:weights=1.0 1.0,loudnorm=I=-14:LRA=11:TP=-1.5[aout]"
     )
 

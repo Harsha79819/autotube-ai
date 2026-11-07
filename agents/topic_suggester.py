@@ -149,9 +149,9 @@ HINDI_BB_MARKERS = [
 
 TELUGU_CONTESTANTS = [
     "varshini", "debjani", "ram prasad", "potti naresh", "mukesh",
-    "thrigun", "trigun", "temper vamsi", "vamsi", "krishnudu", "sudheer",
-    "jhansi", "rohit", "shalini", "aman", "srishti", "charan", "nagarjuna",
-    "chaithra", "neethu", "dakkshi", "mithilesh",
+    "thrigun", "trigun", "temper vamsi", "vamsi", "sudheer",
+    "rohit", "shalini", "aman", "nagarjuna",
+    "neethu", "dakkshi",
     "star maa", "hotstar", "housemates", "ntv", "tv9", "sakshi"
 ]
 

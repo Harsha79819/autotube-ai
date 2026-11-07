@@ -489,6 +489,8 @@ def build_structured_visual_plan(sections, visual_plan, topic: str = ""):
             pass
 
     structured_plan = []
+    last_assigned_entity = ""
+    consecutive_entity_count = 0
     for idx, sec in enumerate(sections, start=1):
         narr = (sec.get("narration") or sec.get("spoken_text") or "") if isinstance(sec, dict) else str(sec)
         v_idx = idx - 1
@@ -622,6 +624,49 @@ def build_structured_visual_plan(sections, visual_plan, topic: str = ""):
             else:
                 primary_entity = topic_person or topic.split(":")[0].strip() or "News Headline"
 
+        # Smart B-roll Diversity & Anti-Monotony Guard
+        # 1. Outro / CTA beat: Never show a contestant face on subscribe outro
+        is_cta_beat = (idx >= len(sections) - 1) and any(k in narr_lower for k in ["లైక్", "సబ్‌స్క్రైబ్", "కామెంట్", "subscribe", "like", "share", "సపోర్ట్", "ఫాలో"])
+        if is_cta_beat:
+            primary_entity = "YouTube Channel Subscribe Outro"
+            contestant_names = []
+            incident_context = "Audience Discussion Outro"
+        # 2. Voting / TRP / Strategy beat
+        elif any(k in narr_lower for k in ["ఓటింగ్", "గ్రాఫ్", "టింగ్", "శాతం", "పోల్", "voting", "poll", "percentage", "రేటింగ్స్", "trp"]) and not any(k in narr_lower for k in ["నామినేషన్"]):
+            if is_bb:
+                primary_entity = "Bigg Boss Telugu 10 Elimination Voting Poll"
+                incident_context = "Audience Elimination Voting"
+        # 3. Late Night / House Atmosphere beat
+        elif any(k in narr_lower for k in ["తెల్లవారుజాము", "రాత్రి", "మూడు గంటలు", "లాక్‌డౌన్", "ఫర్నిచర్", "గడియారం", "బెడ్‌రూమ్", "గార్డెన్"]) and not sec_main_ent:
+            if is_bb:
+                primary_entity = "Bigg Boss Telugu 10 Living Room & Garden Area"
+                incident_context = "House Atmosphere"
+        # 4. Host Nagarjuna grilling beat
+        elif any(k in narr_lower for k in ["నాగార్జున", "నాగ్", "హోస్ట్", "దిగిపోయారు", "ఆడుకున్నారు"]):
+            primary_entity = "Nagarjuna Akkineni"
+            contestant_names = ["Nagarjuna Akkineni"]
+
+        # 5. Anti-Monotony Consecutive Entity Cap (Max 2 consecutive scenes of the same person)
+        if primary_entity and primary_entity.lower() == last_assigned_entity.lower() and primary_entity != "YouTube Channel Subscribe Outro":
+            consecutive_entity_count += 1
+        else:
+            consecutive_entity_count = 1
+
+        if consecutive_entity_count > 2 and is_bb:
+            # Rotate to an active housemate, host, or house interior to prevent repetitive visuals!
+            rotation_candidates = [
+                "Temper Vamsi", "Thrigun Eswaran", "Aman Masud", "Sudheer Reddy",
+                "Auto Ram Prasad", "Nagarjuna Akkineni", "Bigg Boss Telugu 10 Living Room"
+            ]
+            for cand in rotation_candidates:
+                if cand.lower() != primary_entity.lower():
+                    primary_entity = cand
+                    contestant_names = [cand]
+                    consecutive_entity_count = 1
+                    break
+
+        last_assigned_entity = primary_entity
+
         # Determine emotion_or_action:
         emotion_or_action = (sec.get("emotion") if isinstance(sec, dict) else "") or ""
         if not emotion_or_action:
@@ -698,7 +743,8 @@ def build_structured_visual_plan(sections, visual_plan, topic: str = ""):
                     break
 
         # 5. Clean, sanitize and disallow generic queries
-        raw_queries = [q.strip() for q in raw_v.split("|") if q.strip()]
+        raw_v_str = (raw_v.get("query") or raw_v.get("concept") or "") if isinstance(raw_v, dict) else str(raw_v or "")
+        raw_queries = [q.strip() for q in raw_v_str.split("|") if q.strip()]
         cleaned_queries = [strict_query, fallback_promo_query]
 
         for q in raw_queries:
@@ -736,10 +782,11 @@ def build_structured_visual_plan(sections, visual_plan, topic: str = ""):
             on_screen_text = " ".join(on_screen_text.split()[:4])
 
         # Script-Level Visual Planning: main_entity, emotion, and clean keyword search_query
-        main_ent = sec.get("main_entity") or primary_entity
-        emo = sec.get("emotion") or emotion_or_action
+        sec_dict = sec if isinstance(sec, dict) else {}
+        main_ent = sec_dict.get("main_entity") or primary_entity
+        emo = sec_dict.get("emotion") or emotion_or_action
 
-        sq = sec.get("search_query")
+        sq = sec_dict.get("search_query")
         if not sq or sq.strip() == narr.strip() or len(str(sq).split()) > 7 or (bool(re.search(r"[\u0C00-\u0C7F]", str(sq))) and len(str(sq)) > 30):
             if is_bb and content_type == "reality_tv":
                 sq = f"{main_ent} bigg boss".strip()

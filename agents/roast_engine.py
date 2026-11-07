@@ -85,6 +85,23 @@ TONE & COMEDY PHILOSOPHY:
 6. VIRAL RETENTION HOOK & COMMENT TRIGGER: Open with a shocking 0-3 second curiosity claim or disbelief observation that grabs the viewer instantly without intro pleasantries. Right before the closing CTA, include 1 polarizing opinion question inviting viewers to share their opinion or prediction in the comments.
 """
 
+def _sanitize_awkward_loanwords(text: str) -> str:
+    """Replaces awkward English transliterated words with natural conversational Telugu idioms."""
+    replacements = [
+        (r"సింకోఫాంట్[లాల్వాని]*", "భజన బ్యాచ్"),
+        (r"సికోఫాంట్[లాల్వాని]*", "భజన బ్యాచ్"),
+        (r"స్పానియెనిటీ", "సొంత తెలివి"),
+        (r"స్పాంటానియెటీ", "సొంత తెలివి"),
+        (r"మానిప్యులేషన్", "మైండ్ గేమ్"),
+        (r"పారాడైమ్", "పద్ధతి"),
+        (r"యాంబిగ్విటీ", "కన్ఫ్యూజన్"),
+        (r"ఎమోషనల్ బ్లాక్‌మెయిల్", "సెంటిమెంట్ డ్రామా"),
+    ]
+    for pat, rep in replacements:
+        text = re.sub(pat, rep, text, flags=re.IGNORECASE)
+    return text
+
+
 def load_roast_examples(topic: str = "") -> str:
     ex_file = ROOT / "config" / "roast_examples.json"
     if not ex_file.exists():
@@ -151,7 +168,7 @@ Context:
 {context_text or "Latest Bigg Boss Telugu house events, nominations, voting flips, and housemate conflicts"}
 
 MANDATORY RULES:
-- MUST name specific ACTIVE housemates (e.g. Rohit, Jhansi, Thrigun, Aman, Sudheer, or Host Nagarjuna). STRICT: DO NOT name eliminated housemates (Charan Mahadev was eliminated).
+- MUST name specific ACTIVE housemates (e.g. Temper Vamsi, Rohit Patnam, Thrigun Eswaran, Aman Masud, Sudheer Reddy, or Host Akkineni Nagarjuna). STRICT: DO NOT name eliminated housemates (Gundeboina Jhansi, Chaithra Rai, Krishna Alluri, Srishti, and Charan Mahadev were eliminated).
 - MUST describe concrete events: heated nomination arguments, captaincy betrayal, secret room twist, shocking voting trend change, or weekend host grilling.
 - STRICTLY FORBIDDEN: Do NOT write generic empty filler like 'creators made claims', 'fake tears', or 'high voltage drama'. Give REAL actions, who said what, and why it exploded!
 Return ONLY a bulleted list of 5-7 concrete facts in English or Tanglish, one per line."""
@@ -315,6 +332,7 @@ Anchored Facts to Roast:
 {bb_constraint}
 
 CRITICAL CADENCE & SCRIPT RULES:
+- STRICT PROHIBITION ON ALIEN TRANSLITERATIONS: NEVER phonetically transliterate obscure English words into Telugu (e.g. NEVER write 'సింకోఫాంట్', 'స్పానియెనిటీ', 'పారాడైమ్', 'మానిప్యులేషన్'). ALWAYS use natural Telugu colloquial idioms that real Telugu people speak (e.g. use 'భజన బ్యాచ్' or 'చంచాగిరీ' instead of sycophant; use 'సొంత తెలివి' or 'ఓన్ గేమ్' instead of spontaneity; use 'మైండ్ గేమ్' or 'ఎత్తుగడలు' instead of manipulation).
 - Punctuation-Driven Cadence: Break long lines into short punchy fragments using commas, dashes (—), and ellipsis (...) for organic breathing room, natural inflection, and anticipation.
 - 100% Telugu Script for All Loanwords: NEVER write English alphabet letters (do NOT write 'Mind blank', 'Scene cut', 'PR', 'TRP'). ALWAYS write loanwords in pure Telugu script (e.g. {loanword_samples}). English characters break neural TTS into an American/robotic accent.
 - Natural Conversational Expressions: Weave in lively creator spoken markers ('అసలు...', 'చూశారా!', 'అబ్బా!', 'ఏంటో భయ్యా...', 'నెక్స్ట్ లెవెల్ అండి బాబు...', 'బాబోయ్!') so narration feels like a friendly friend gossip, not robotic dubbing.
@@ -327,6 +345,7 @@ CRITICAL CADENCE & SCRIPT RULES:
         cleaned = ensure_telugu_script(cleaned)
     except Exception:
         pass
+    cleaned = _sanitize_awkward_loanwords(cleaned)
     return cleaned
 
 
@@ -367,6 +386,7 @@ Return ONLY the punched-up Telugu script (తెలుగు లిపి) narra
             cleaned = ensure_telugu_script(cleaned)
         except Exception:
             pass
+        cleaned = _sanitize_awkward_loanwords(cleaned)
         words_c = len(cleaned.split())
         words_d = len(draft.split())
 

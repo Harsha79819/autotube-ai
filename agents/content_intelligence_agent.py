@@ -36,7 +36,7 @@ CONTENT_PILLARS = {
         "keywords": [
             "bigg boss", "bigg boss telugu", "housemate", "nomination", "eviction", "secret room",
             "unseen footage", "shooting floor", "bts", "behind the scenes", "set secrets",
-            "nagarjuna", "thrigun", "vamsi", "shalini", "apoorva", "aman", "jhansi", "sudheer",
+            "nagarjuna", "thrigun", "vamsi", "shalini", "apoorva", "aman", "rohit", "sudheer", "ram prasad",
             "voting leak", "task controversy", "elimination shock", "anchor", "reality show"
         ],
     },
