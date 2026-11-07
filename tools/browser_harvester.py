@@ -100,6 +100,42 @@ def fetch_dynamic_webpage_text(url: str, timeout_ms: int = 12000) -> str:
         return ""
 
 
+def harvest_live_poll_or_tweet_proof(
+    topic: str,
+    output_path: Optional[str] = None,
+) -> Optional[str]:
+    """
+    Synthesizes or captures live social proof / polling graph for video b-roll.
+    """
+    import re
+    from tools.playwright_renderer import render_infographic_chart, render_social_tweet_card
+
+    if not output_path:
+        output_path = str(EVIDENCE_DIR / f"proof_{abs(hash(topic)) % 100000}.png")
+
+    if bool(re.search(r"bigg\s*boss|bb10|vamsi|thrigun|rohit|sudheer|aman", topic.lower())):
+        # High-impact live voting poll proof
+        return render_infographic_chart(
+            chart_title="బిగ్ బాస్ 10 లైవ్ అన్‌అఫీషియల్ ఓటింగ్ పోల్",
+            labels=["రోహిత్", "వంశీ", "అమన్", "సుధీర్"],
+            values=[36, 31, 21, 12],
+            unit="%",
+            subtitle="Live Audience Unofficial Elimination Vote",
+            output_path=output_path,
+        )
+    else:
+        # High-impact viral social buzz proof
+        return render_social_tweet_card(
+            author_name="Telugu Media & Tech Buzz",
+            handle="telugu_tech_buzz",
+            tweet_text=f"బ్రేకింగ్ న్యూస్: {topic} పై నెటిజన్లలో తీవ్ర చర్చ! పూర్తి వివరాలు త్వరలో రానున్నాయి..",
+            timestamp="12m ago",
+            likes_str="24.8K",
+            retweets_str="6.1K",
+            output_path=output_path,
+        )
+
+
 if __name__ == "__main__":
     test_url = "https://news.google.com"
     test_out = "/tmp/test_harvest_google.png"

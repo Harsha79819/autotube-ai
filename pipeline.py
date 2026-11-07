@@ -871,6 +871,13 @@ def create_metadata(
     except Exception:
         pass
 
+    # Auto-generate viral YouTube Community Tab Poll
+    try:
+        from tools.community_post_generator import generate_community_poll
+        generate_community_poll(topic=topic, script_content=script, output_dir=out_dir)
+    except Exception as poll_e:
+        print(f"⚠️ Community poll auto-generation notice: {poll_e}")
+
     # --------------------------------------------------------
     # OPTIONAL YOUTUBE UPLOAD
     # --------------------------------------------------------
