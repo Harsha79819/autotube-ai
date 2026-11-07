@@ -1,8 +1,10 @@
-from PIL import Image, ImageDraw, ImageFont, ImageFilter
+from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
 import os
 import re
 import textwrap
 from pathlib import Path
+import json
+from typing import Optional, List, Dict, Tuple
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -186,6 +188,27 @@ def _find_best_background(aspect_ratio="16:9", assets_dir=None):
                 pass
 
     if not candidates:
+        # Before returning a flat slate, attempt to generate an AI backdrop (Pollinations Sana 8k)
+        ai_thumb_path = (ASSETS_DIR / f"ai_thumb_bg_{aspect_ratio.replace(':', '_')}.jpg")
+        try:
+            topic_str = ""
+            if (OUTPUT_DIR / "topic.txt").exists():
+                topic_str = (OUTPUT_DIR / "topic.txt").read_text(encoding="utf-8").strip()
+            topic_clean = re.sub(r"[\u0C00-\u0C7F]", " ", topic_str).strip()
+            if not topic_clean:
+                topic_clean = "dramatic television studio glowing stage neon lights cinematic 8k"
+            else:
+                topic_clean = f"{topic_clean} dramatic stage neon lights cinematic 8k studio"
+
+            from providers.image import generate_pollinations_image
+            success = generate_pollinations_image(topic_clean, ai_thumb_path, aspect_ratio=aspect_ratio, force=True)
+            if success and ai_thumb_path.exists() and ai_thumb_path.stat().st_size > 5000:
+                candidates.append((90, ai_thumb_path))
+                print(f"✨ [AI Generative Backdrop] Created photorealistic AI background: {ai_thumb_path.name}")
+        except Exception as ai_bg_err:
+            print(f"⚠️ AI backdrop generation notice: {ai_bg_err}")
+
+    if not candidates:
         # Guarantee background is NEVER None: Generate branded high-contrast slate image
         slate_path = (ASSETS_DIR / "thumbnail_slate.jpg")
         try:
@@ -341,6 +364,35 @@ def _clean_title(title, is_telugu=False):
     return "SHOCKING TWIST?!"
 
 
+def _find_contestant_slug(text: str) -> Optional[str]:
+    """Finds a matching contestant slug from text using contestants.json and entity library."""
+    t_low = str(text or "").lower()
+    c_json = ROOT / "contestants.json"
+    if c_json.exists():
+        try:
+            data = json.loads(c_json.read_text(encoding="utf-8"))
+            for slug, c_info in data.items():
+                if slug in ("bigg_boss_telugu", "host"):
+                    continue
+                aliases = c_info.get("aliases", []) + [slug.replace("_", " "), c_info.get("nickname", "")]
+                for a in aliases:
+                    if a and len(str(a).strip()) >= 3 and str(a).lower() in t_low:
+                        return slug
+        except Exception:
+            pass
+
+    try:
+        from tools.build_entity_library import match_entities_in_text
+        ents = match_entities_in_text(text)
+        for e in ents:
+            eid = e.get("id") or e.get("slug")
+            if eid and eid not in ("bigg_boss_telugu", "host_nagarjuna"):
+                return eid
+    except Exception:
+        pass
+    return None
+
+
 def _fit_to_aspect_ratio(image, aspect_ratio="16:9"):
     """
     Fits and sizes the image to the specified aspect ratio using full-bleed cinema framing.
@@ -406,6 +458,30 @@ def create_thumbnail(title, aspect_ratio="16:9", assets_dir=None, output_dir=Non
         except Exception as exc:
             print(f"⚠️ Failed to open background: {exc}")
 
+    # If background is missing or is just a flat slate, generate photorealistic AI backdrop (Pollinations Sana 8k)
+    if image is None or getattr(background_path, "name", "") in ("thumbnail_slate.jpg", "branded_slate.jpg"):
+        try:
+            ai_dest = out_dir / f"ai_backdrop_{aspect_ratio.replace(':', '_')}.jpg"
+            clean_title_prompt = re.sub(r"[\u0C00-\u0C7F]", " ", str(title)).strip()
+            t_file = OUTPUT_DIR / "topic.txt"
+            if t_file.exists():
+                topic_raw = t_file.read_text(encoding="utf-8").strip()
+                clean_topic = re.sub(r"[\u0C00-\u0C7F]", " ", topic_raw).strip()
+                if clean_topic:
+                    clean_title_prompt = f"{clean_topic} {clean_title_prompt}"
+            if not clean_title_prompt or len(clean_title_prompt) < 4:
+                clean_title_prompt = "reality show stage dramatic glowing lights dark cinematic 8k studio"
+            else:
+                clean_title_prompt = f"{clean_title_prompt} dramatic stage neon studio lighting cinematic 8k"
+
+            from providers.image import generate_pollinations_image
+            if generate_pollinations_image(clean_title_prompt, ai_dest, aspect_ratio=aspect_ratio, force=True):
+                image = Image.open(ai_dest).convert("RGB")
+                background_name = ai_dest.name
+                print(f"🎨 [AI Backdrop] Loaded photorealistic AI backdrop: {ai_dest.name}")
+        except Exception as ai_e:
+            print(f"⚠️ AI backdrop generation fallback notice: {ai_e}")
+
     if image is None:
         print("ℹ️ Synthesizing branded high-contrast slate background for thumbnail...")
         canvas_w = 1080 if aspect_ratio == "9:16" else 1280
@@ -439,192 +515,216 @@ def create_thumbnail(title, aspect_ratio="16:9", assets_dir=None, output_dir=Non
     )
 
     # --------------------------------------------------------
-    # DARK GRADIENT / SAFE ZONE OVERLAY
+    # PRASAD TECH IN TELUGU STYLE: REAL CUTOUT COMPOSITING (IF ENTITY DETECTED)
     # --------------------------------------------------------
-
-    image = image.convert("RGBA")
-
-    overlay = Image.new(
-        "RGBA",
-        image.size,
-        (0, 0, 0, 0),
-    )
-
-    overlay_draw = ImageDraw.Draw(
-        overlay
-    )
-
-    if aspect_ratio == "9:16":
-        # Subtle gradient/soft darkening banner for vertical shorts
-        overlay_draw.rectangle(
-            (0, 920, canvas_w, 1380),
-            fill=(0, 0, 0, 95),
-        )
-        overlay_draw.rectangle(
-            (0, 0, canvas_w, 120),
-            fill=(0, 0, 0, 30),
-        )
-        font_size = 78
-        line_height = 92
-        target_center_y = 1140
-        max_text_width = canvas_w - 140
-    elif aspect_ratio == "1:1":
-        overlay_draw.rectangle(
-            (0, 720, canvas_w, canvas_h),
-            fill=(0, 0, 0, 95),
-        )
-        overlay_draw.rectangle(
-            (0, 0, canvas_w, 90),
-            fill=(0, 0, 0, 30),
-        )
-        font_size = 66
-        line_height = 80
-        target_center_y = 880
-        max_text_width = canvas_w - 120
-    else:  # 16:9
-        overlay_draw.rectangle(
-            (0, 420, canvas_w, canvas_h),
-            fill=(0, 0, 0, 95),
-        )
-        overlay_draw.rectangle(
-            (0, 0, canvas_w, 90),
-            fill=(0, 0, 0, 30),
-        )
-        font_size = 68
-        line_height = 80
-        target_center_y = 560
-        max_text_width = canvas_w - 160
-
-    image = Image.alpha_composite(
-        image,
-        overlay,
-    )
-
-    draw = ImageDraw.Draw(image)
-
-    # --------------------------------------------------------
-    # TITLE (High-CTR Curiosity Badge)
-    # --------------------------------------------------------
-
     is_telugu_topic = bool(
         re.search(r"[\u0C00-\u0C7F]", str(title))
         or ((OUTPUT_DIR / "topic.txt").exists() and re.search(r"[\u0C00-\u0C7F]|bigg boss|biggboss", (OUTPUT_DIR / "topic.txt").read_text(encoding="utf-8").lower()))
         or re.search(r"bigg\s*boss|aman|trigun|jhansi|rohit|sudheer", str(title).lower())
     )
 
+    context_text = f"{title} "
+    t_file = OUTPUT_DIR / "topic.txt"
+    if t_file.exists():
+        context_text += t_file.read_text(encoding="utf-8") + " "
+    m_file = OUTPUT_DIR / "metadata.json"
+    if m_file.exists():
+        context_text += m_file.read_text(encoding="utf-8")
+
+    ent_slug = _find_contestant_slug(context_text)
+
+    cutout_applied = False
+    if ent_slug:
+        try:
+            from tools.person_cutout import extract_person_cutout
+            cand_paths = [
+                ROOT / "data" / "entities" / ent_slug / "neutral.jpg",
+                ROOT / "data" / "entities" / ent_slug / "neutral.png",
+                ROOT / "data" / "entities" / f"{ent_slug}_naidu" / "neutral.jpg",
+                ROOT / "data" / "entities" / f"{ent_slug}_reddy" / "neutral.jpg",
+                ROOT / "data" / "entities" / f"{ent_slug}_sounderajan" / "neutral.jpg",
+                ROOT / "assets" / "entities" / ent_slug / "image.jpg",
+            ]
+            person_img_path = next((p for p in cand_paths if p.exists() and p.stat().st_size > 1000), None)
+            if person_img_path:
+                cutout_path = extract_person_cutout(person_img_path)
+                if cutout_path and Path(cutout_path).exists():
+                    cutout_img = Image.open(cutout_path).convert("RGBA")
+                    cw, ch = cutout_img.size
+
+                    # Scale cutout to dominate canvas
+                    if aspect_ratio == "9:16":
+                        target_ch = int(canvas_h * 0.62)
+                        target_cw = int(cw * (target_ch / ch))
+                        cutout_img = cutout_img.resize((target_cw, target_ch), Image.Resampling.LANCZOS)
+                        cx = (canvas_w - target_cw) // 2
+                        cy = int(canvas_h * 0.12)
+                    elif aspect_ratio == "1:1":
+                        target_ch = int(canvas_h * 0.72)
+                        target_cw = int(cw * (target_ch / ch))
+                        cutout_img = cutout_img.resize((target_cw, target_ch), Image.Resampling.LANCZOS)
+                        cx = (canvas_w - target_cw) // 2
+                        cy = int(canvas_h * 0.10)
+                    else:  # 16:9 (Prasad Tech layout: Subject stands on the right)
+                        target_ch = int(canvas_h * 0.90)
+                        target_cw = int(cw * (target_ch / ch))
+                        cutout_img = cutout_img.resize((target_cw, target_ch), Image.Resampling.LANCZOS)
+                        cx = canvas_w - target_cw - 40
+                        cy = canvas_h - target_ch
+
+                    # Golden outer rim glow (Prasad Tech signature pop)
+                    r, g, b, a = cutout_img.split()
+                    glow_color = Image.new("RGBA", cutout_img.size, (255, 175, 0, 220))
+                    glow_color.putalpha(a)
+                    glow_expanded = glow_color.filter(ImageFilter.GaussianBlur(radius=18))
+
+                    # Blend background and cutout
+                    base_rgba = image.convert("RGBA")
+                    # Slightly dim background so cutout pops
+                    enhancer = ImageEnhance.Brightness(base_rgba)
+                    base_rgba = enhancer.enhance(0.85)
+
+                    base_rgba.paste(glow_expanded, (cx, cy), glow_expanded)
+                    base_rgba.paste(cutout_img, (cx, cy), cutout_img)
+                    image = base_rgba
+                    cutout_applied = True
+                    print(f"🌟 [Prasad Tech Style] Blended person cutout for {ent_slug} with vibrant rim glow!")
+        except Exception as cutout_err:
+            print(f"⚠️ Person cutout blend notice: {cutout_err}")
+
+    # --------------------------------------------------------
+    # LOWER-THIRD / SPLIT-SCREEN VIGNETTE OVERLAY
+    # --------------------------------------------------------
+
+    image = image.convert("RGBA")
+    overlay = Image.new("RGBA", image.size, (0, 0, 0, 0))
+    overlay_draw = ImageDraw.Draw(overlay)
+
+    if aspect_ratio == "16:9" and cutout_applied:
+        # Subtle dark gradient on left 50% for split-screen text readability
+        overlay_draw.rectangle(
+            (0, 0, int(canvas_w * 0.52), canvas_h),
+            fill=(0, 0, 0, 110),
+        )
+    else:
+        # Soft dark gradient at bottom 24% for bottom badge readability
+        vignette_y = int(canvas_h * 0.74)
+        overlay_draw.rectangle(
+            (0, vignette_y, canvas_w, canvas_h),
+            fill=(0, 0, 0, 160),
+        )
+
+    image = Image.alpha_composite(image, overlay)
+
+    # --------------------------------------------------------
+    # TITLE (High-CTR Curiosity Badge)
+    # --------------------------------------------------------
+
     thumbnail_title = _clean_title(
         title,
         is_telugu=is_telugu_topic,
     )
 
-    is_telugu_title = bool(re.search(r"[\u0C00-\u0C7F]", thumbnail_title))
-    font = _load_font(font_size, is_telugu=is_telugu_title)
+    badge_drawn = False
+    # Attempt native CoreText Telugu badge rendering (Flawless Apple typography)
+    if is_telugu_topic:
+        try:
+            from tools.native_typography import render_native_telugu_badge
+            badge_font_size = 72 if aspect_ratio == "9:16" else (52 if aspect_ratio == "16:9" else 64)
+            native_badge_path = render_native_telugu_badge(thumbnail_title, font_size=badge_font_size)
+            if native_badge_path and Path(native_badge_path).exists():
+                badge_img = Image.open(native_badge_path).convert("RGBA")
+                bw, bh = badge_img.size
 
-    # Wrap based on pixel width rather than blindly using a fixed word count.
-    words = thumbnail_title.split()
+                # Auto-scale if badge width exceeds max allowed width
+                if aspect_ratio == "16:9" and cutout_applied:
+                    max_bw = int(canvas_w * 0.52)
+                else:
+                    max_bw = int(canvas_w * 0.92)
 
-    lines = []
-    current = ""
+                if bw > max_bw:
+                    scale_factor = max_bw / float(bw)
+                    badge_img = badge_img.resize((max_bw, int(bh * scale_factor)), Image.Resampling.LANCZOS)
+                    bw, bh = badge_img.size
 
-    for word in words:
-        test = (
-            f"{current} {word}"
-            if current
-            else word
-        )
+                # Position strictly at the BOTTOM (lower third) or LEFT split-screen so faces are NEVER covered!
+                if aspect_ratio == "9:16":
+                    bx = (canvas_w - bw) // 2
+                    by = canvas_h - bh - 150  # Anchored cleanly at bottom, leaving face completely free!
+                elif aspect_ratio == "1:1":
+                    bx = (canvas_w - bw) // 2
+                    by = canvas_h - bh - 80
+                else:  # 16:9 Landscape
+                    if cutout_applied:
+                        # Prasad Tech split-screen: Subject on RIGHT, Badge on LEFT
+                        bx = 50
+                        by = (canvas_h - bh) // 2
+                    else:
+                        bx = (canvas_w - bw) // 2
+                        by = canvas_h - bh - 55
 
-        bbox = draw.textbbox(
-            (0, 0),
-            test,
-            font=font,
-            stroke_width=0,
-        )
+                image.paste(badge_img, (bx, by), badge_img)
+                badge_drawn = True
+                print(f"✍️ [Native Typography] Rendered native CoreText Telugu badge at ({bx}, {by}): '{thumbnail_title}'")
+        except Exception as nat_err:
+            print(f"⚠️ Native typography notice: {nat_err}")
 
-        text_width = (
-            bbox[2] - bbox[0]
-        )
+    # Fallback to standard Pillow text rendering if native renderer was not used
+    if not badge_drawn:
+        draw = ImageDraw.Draw(image)
+        font_size = 78 if aspect_ratio == "9:16" else (52 if aspect_ratio == "16:9" else 66)
+        line_height = int(font_size * 1.18)
+        font = _load_font(font_size, is_telugu=is_telugu_topic)
 
-        if (
-            text_width <= max_text_width
-            and len(lines) < 2
-        ):
-            current = test
+        words = thumbnail_title.split()
+        lines = []
+        current = ""
+        max_text_width = int(canvas_w * 0.50) if (aspect_ratio == "16:9" and cutout_applied) else (canvas_w - 140)
+
+        for word in words:
+            test = f"{current} {word}" if current else word
+            bbox = draw.textbbox((0, 0), test, font=font, stroke_width=0)
+            if (bbox[2] - bbox[0]) <= max_text_width and len(lines) < 2:
+                current = test
+            else:
+                if current:
+                    lines.append(current)
+                current = word
+        if current:
+            lines.append(current)
+        lines = lines[:2]
+
+        total_height = len(lines) * line_height
+        if aspect_ratio == "16:9" and cutout_applied:
+            # Left split-screen
+            y = (canvas_h - total_height) // 2
+            base_x = 50
         else:
-            if current:
-                lines.append(current)
-            current = word
+            # Bottom anchor
+            bottom_anchor_y = canvas_h - total_height - (160 if aspect_ratio == "9:16" else 60)
+            y = bottom_anchor_y
+            base_x = None
 
-    if current:
-        lines.append(current)
+        for idx, line in enumerate(lines):
+            bbox = draw.textbbox((0, 0), line, font=font, stroke_width=4)
+            text_width = bbox[2] - bbox[0]
+            x = (canvas_w - text_width) // 2 if base_x is None else base_x
 
-    lines = lines[:2]  # Keep strictly 1-2 lines for maximum impact
+            pad_x, pad_y = 26, 8
+            pill_left = max(10, x - pad_x)
+            pill_top = max(10, y - pad_y)
+            pill_right = min(canvas_w - 10, x + text_width + pad_x)
+            pill_bottom = min(canvas_h - 10, y + line_height - 6)
 
-    # --------------------------------------------------------
-    # CENTER TITLE VERTICALLY IN TARGET ZONE WITH HIGH-CONTRAST PILL BADGES
-    # --------------------------------------------------------
-
-    total_height = (
-        len(lines) * line_height
-    )
-
-    y = target_center_y - (
-        total_height // 2
-    )
-
-    for idx, line in enumerate(lines):
-        bbox = draw.textbbox(
-            (0, 0),
-            line,
-            font=font,
-            stroke_width=4,
-        )
-
-        text_width = (
-            bbox[2] - bbox[0]
-        )
-
-        x = (
-            canvas_w - text_width
-        ) // 2
-
-        # Draw High-CTR Pill Badge behind the line
-        pad_x, pad_y = 26, 8
-        pill_left = max(10, x - pad_x)
-        pill_top = max(10, y - pad_y)
-        pill_right = min(canvas_w - 10, x + text_width + pad_x)
-        pill_bottom = min(canvas_h - 10, y + line_height - 6)
-
-        # Drop shadow for pill
-        draw.rounded_rectangle(
-            (pill_left + 4, pill_top + 6, pill_right + 4, pill_bottom + 6),
-            radius=16,
-            fill=(0, 0, 0, 180),
-        )
-
-        # Pill background with contrasting border
-        pill_border = "#FFCC00" if idx == 0 else "#E63946"
-        draw.rounded_rectangle(
-            (pill_left, pill_top, pill_right, pill_bottom),
-            radius=16,
-            fill=(12, 14, 24, 230),
-            outline=pill_border,
-            width=3,
-        )
-
-        # Vibrant high-CTR color: Golden yellow for first line, crisp white for second
-        text_color = "#FFE600" if idx == 0 else "#FFFFFF"
-
-        # High-contrast text with deep outline
-        draw.text(
-            (x, y),
-            line,
-            font=font,
-            fill=text_color,
-            stroke_width=4,
-            stroke_fill="black",
-        )
-
-        y += line_height
+            # Drop shadow
+            draw.rounded_rectangle((pill_left + 4, pill_top + 6, pill_right + 4, pill_bottom + 6), radius=16, fill=(0, 0, 0, 180))
+            # Pill background
+            pill_border = "#FFCC00" if idx == 0 else "#E63946"
+            draw.rounded_rectangle((pill_left, pill_top, pill_right, pill_bottom), radius=16, fill=(12, 14, 24, 230), outline=pill_border, width=3)
+            # Text
+            text_color = "#FFE600" if idx == 0 else "#FFFFFF"
+            draw.text((x, y), line, font=font, fill=text_color, stroke_width=4, stroke_fill="black")
+            y += line_height
 
     # --------------------------------------------------------
     # SAVE
