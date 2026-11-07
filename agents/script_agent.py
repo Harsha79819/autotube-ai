@@ -2363,9 +2363,13 @@ You are an expert Telugu comedic creator and savage roaster (funny, high-energy 
 EVERY SINGLE SENTENCE OF THE SCRIPT NARRATION AND TITLE MUST BE WRITTEN IN NATURAL SPOKEN TELUGU (తెలుగు లిపి).
 Roast the subject hilariously with punchy Telugu comedic timing, witty insults, and devastating punchlines!"""
             hook_instruction = """- SAVAGE ROAST HOOK RULE (First 2-3 seconds) - TELUGU ROAST STYLE:
-  Open with a hilarious, savage burn or provocative question in Telugu that immediately grabs attention!"""
-            cta_instruction = """- SAVAGE ROAST CTA (Final beat):
-  End with a funny, roasting call-to-action asking viewers if they agree with the roast!"""
+  * NEVER open with flat questions like "నిన్న రాత్రి జరిగిన ఎపిసోడ్ చూశారా" or generic greetings.
+  * Open directly with a hilarious, savage disbelief observation or reality-check!
+    Example: "నిన్న రాత్రి బిగ్ బాస్ హౌస్‌లో జరిగిన డ్రామా చూశాక... వీళ్లు హౌస్‌లో ఉన్నారా లేక సీరియల్ సెట్‌లో ఉన్నారా అని డౌట్ వస్తుంది!"
+  * Middle beats MUST use vivid comedic hyperbole (e.g. "లగ్జరీ బడ్జెట్ పోయేసరికి అమన్ బాబు గార్డెన్ ఏరియాలో ఏకంగా ఆస్కార్ రేంజ్ ఓవర్ యాక్షన్ తో వీధి నాటకం స్టార్ట్ చేశాడు!")."""
+            cta_instruction = """- SAVAGE ROAST CTA & POLARIZING DEBATE (Final beat):
+  * End with a provocative, polarizing debate question that forces viewers to type a response in the comments!
+    Example: "ఈ వారం బిగ్ బాస్ హౌస్‌లో అసలైన కవర్ డ్రైవర్ ఎవరు? మీ అభిప్రాయం ఏమిటో కింద కామెంట్ చేయండి! మరిన్ని సాలిడ్ రోస్ట్‌ల కోసం లైక్, షేర్, సబ్‌స్క్రైబ్ చేసుకోండి!" """
         elif is_sarcastic:
             role_desc = """🚨 CRITICAL MANDATORY LANGUAGE DIRECTIVE:
 You are an expert Telugu satirical creator (deadpan sarcasm, biting irony, mock praise, and cynical Telugu wit).

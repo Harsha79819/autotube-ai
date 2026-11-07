@@ -207,9 +207,9 @@ def generate_quirky_cta(topic: str, draft: str = "") -> str:
     is_bb = is_bigg_boss_topic(topic)
 
     if is_bb:
-        comment_rule = '- COMMENT TRIGGER QUESTION: Ask viewers for their prediction or opinion about Bigg Boss housemates/nominations/eliminations (e.g. "నెక్స్ట్ ఎవరి ఎలిమినేషన్ జరుగుతుందో కామెంట్ చేయండి!").'
+        comment_rule = '- COMMENT TRIGGER QUESTION: Ask viewers a provocative, polarizing debate question that forces them to comment (e.g. "ఈ వారం బిగ్ బాస్ హౌస్‌లో అసలైన కవర్ డ్రైవర్ ఎవరు? మీ అభిప్రాయం ఏమిటో కింద కామెంట్ చేయండి!").'
     else:
-        comment_rule = f'- COMMENT TRIGGER QUESTION: Ask viewers their opinion or prediction specifically about {topic} (e.g. "దీనిపై మీ ఒపీనియన్ ఏంటో కామెంట్ చేయండి!"). STRICTLY DO NOT mention Bigg Boss, elimination, or reality show housemates.'
+        comment_rule = f'- COMMENT TRIGGER QUESTION: Ask viewers a provocative, polarizing opinion or prediction specifically about {topic} (e.g. "దీనిపై మీ ఒపీనియన్ ఏంటో కామెంట్ చేయండి!"). STRICTLY DO NOT mention Bigg Boss, elimination, or reality show housemates.'
 
     prompt = f"""You are a master comedy scriptwriter for Telugu YouTube Shorts.
 Write ONE funny, engaging Call-To-Action (CTA) in spoken Telugu (తెలుగు లిపి) for this video topic that triggers viewer comments and subscriber conversions.
@@ -237,7 +237,7 @@ RULES:
     # Resilient curated topic fallbacks with high-engagement comment triggers
     t_low = topic.lower()
     if is_bb:
-        return "నెక్స్ట్ ఎవరి ఎలిమినేషన్ జరుగుతుందో కామెంట్ చేయండి! మరిన్ని బిగ్ బాస్ మసాలా అప్‌డేట్స్ కోసం లైక్, షేర్, సబ్‌స్క్రైబ్ చేసుకోండి!"
+        return "ఈ వారం బిగ్ బాస్ హౌస్‌లో అసలైన కవర్ డ్రైవర్ ఎవరు? మీ అభిప్రాయం కింద కామెంట్ చేయండి! మరిన్ని సాలిడ్ రోస్ట్‌ల కోసం లైక్, షేర్, సబ్‌స్క్రైబ్ చేసుకోండి!"
     elif any(k in t_low for k in ["movie", "cinema", "film", "teaser", "trailer", "box office"]):
         return "ఈ సినిమాపై మీ అభిప్రాయాన్ని కామెంట్లో చెప్పండి! జెన్యూన్ సినిమా రివ్యూల కోసం లైక్, షేర్, సబ్‌స్క్రైబ్ చేసుకోండి బాస్!"
     elif any(k in t_low for k in ["phone", "apple", "samsung", "tech", "5g", "camera", "ultra", "pro", "gta", "xbox", "game", "code"]):
@@ -264,18 +264,30 @@ def generate_roast_draft(topic: str, facts: List[str], target_duration_sec: int 
     is_bb = is_bigg_boss_topic(topic)
     if is_bb:
         struct_text = """Structure:
-- Hook (0-3s): High-curiosity news reveal or provocative question about a specific person/incident (e.g. "బిగ్ బాస్ హౌస్‌లో నిన్న రాత్రి జరిగిన నామినేషన్లలో అసలు ఏం జరిగిందో తెలుసా?"). No greetings, straight into the action at 0.0s.
-- Beat 1 & 2: The concrete event/incident mentioning specific housemates + absurd comedic contrast or mock praise.
-- Beat 3: The escalation or reaction of other contestants / Host Nagarjuna + witty sarcastic breakdown.
+- Hook (0-3s): SAVAGE HIGH-VOLTAGE OBSERVATIONAL HOOK (0.0s START):
+  * STRICTLY FORBIDDEN: NEVER open with flat questions like "నిన్న రాత్రి జరిగిన ఎపిసోడ్ చూశారా", "అసలు ఏం జరిగిందో తెలుసా", or flat greetings.
+  * MANDATORY: Open directly with a hilarious disbelief reality-check or witty hyperbole that shocks the viewer!
+    Example: "నిన్న రాత్రి బిగ్ బాస్ హౌస్‌లో జరిగిన డ్రామా చూశాక... వీళ్లు హౌస్‌లో ఉన్నారా లేక సీరియల్ సెట్‌లో ఉన్నారా అని డౌట్ వస్తుంది!"
+- Beat 1 & 2 (DRAMATIC OVERACTION SATIRE):
+  * Describe the concrete drama using vivid comedic hyperbole and contestant antics.
+    Example: "లగ్జరీ బడ్జెట్ పోయేసరికి అమన్ బాబు గార్డెన్ ఏరియాలో ఏకంగా ఆస్కార్ రేంజ్ ఓవర్ యాక్షన్ తో వీధి నాటకం స్టార్ట్ చేశాడు!"
+- Beat 3 (COVERING & REACTIONS):
+  * Roast the hypocrisies, fake alliances, and excuses.
+    Example: "టాస్క్ పోగానే కవరింగ్ మాస్టర్లు రంగంలోకి దిగారు... తప్పు ఒప్పుకోవడం తప్ప మిగతావన్నీ మాట్లాడేశారు బాస్!"
 - Beat 4 / Ending: Savage punchline summarizing the comedy/hypocrisy.
-- Comment Trigger & CTA: Engagement question provoking viewer comments (e.g. "మరి ఈ వారం ఎవరు ఎలిమినేట్ అవుతారో కింద కామెంట్ చేయండి!") followed by witty లైక్, షేర్, సబ్‌స్క్రైబ్."""
+- Comment Trigger & CTA (Final Beat):
+  * End with a provocative, polarizing debate question (e.g. "ఈ వారం బిగ్ బాస్ హౌస్‌లో అసలైన కవర్ డ్రైవర్ ఎవరు? మీ అభిప్రాయం ఏమిటో కింద కామెంట్ చేయండి!") followed by witty లైక్, షేర్, సబ్‌స్క్రైబ్."""
         bb_constraint = ""
         loanword_samples = "'బిగ్ బాస్', 'మైండ్ బ్లాంక్', 'సీన్ కట్', 'పీఆర్ స్ట్రాటజీ', 'టీఆర్పీ రేటింగ్స్', 'సీక్రెట్ రూమ్', 'ఎలిమినేషన్', 'ఓటింగ్'"
     else:
         struct_text = f"""Structure:
-- Hook (0-3s): High-curiosity shocking reveal or provocative observation about {topic}. No greetings, straight into the action at 0.0s.
-- Beat 1 & 2: The concrete phenomenon/facts about {topic} + sharp comedic contrast, ironic observation, or mock praise.
-- Beat 3: The extreme reaction, physical/practical consequence, or chain reaction regarding {topic} + witty sarcastic breakdown.
+- Hook (0-3s): SAVAGE HIGH-VOLTAGE OBSERVATIONAL HOOK (0.0s START):
+  * STRICTLY FORBIDDEN: NEVER open with flat questions or "ఈ రోజు మనం X గురించి మాట్లాడుకుందాం".
+  * MANDATORY: Open directly with a shocking curiosity gap, funny comparison, or disbelief reality check!
+- Beat 1 & 2 (DRAMATIC COMEDIC CONTRAST):
+  * The concrete facts about {topic} + sharp comedic contrast, ironic observation, or mock praise.
+- Beat 3 (REACTIONS & CHAIN REACTION):
+  * The extreme reaction, consequence, or absurdity regarding {topic} with witty sarcastic breakdown.
 - Beat 4 / Ending: Savage punchline summarizing the ironic truth or reality check.
 - Comment Trigger & CTA: Polarizing question provoking viewer opinions in the comments about {topic} followed by creator లైక్, షేర్, సబ్‌స్క్రైబ్."""
         bb_constraint = f"""STRICT TOPIC ISOLATION:
