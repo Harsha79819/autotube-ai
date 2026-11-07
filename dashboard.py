@@ -42,8 +42,9 @@ UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 # ============================================================
 
 VOICE_IDS = {
-    "👨 Mohan (Telugu Creator / Anchor) - Natural Spoken Delivery": "te-IN-MohanNeural",
+    "🔥 👩 Shruti (Telugu Female - Sarcastic & Roasting)": "te-IN-ShrutiNeural-Roast",
     "👩 Shruti (Telugu Creator / Anchor) - Conversational": "te-IN-ShrutiNeural",
+    "👨 Mohan (Telugu Creator / Anchor) - Natural Spoken Delivery": "te-IN-MohanNeural",
     "👨 Adam (Male Creator) - Fast, Crisp & Natural": "am_adam",
     "👩 Heart (Female Creator) - Smooth & Conversational": "af_heart",
     "👨 Michael (News Anchor) - Professional & Authoritative": "am_michael",
@@ -67,6 +68,9 @@ VOICE_IDS = {
     "omnivoice": "omnivoice",
     "te-in-mohanneural": "te-IN-MohanNeural",
     "te-in-shrutineural": "te-IN-ShrutiNeural",
+    "te-in-shrutineural-roast": "te-IN-ShrutiNeural-Roast",
+    "te-IN-ShrutiNeural-Roast": "te-IN-ShrutiNeural-Roast",
+    "shruti-roast": "te-IN-ShrutiNeural-Roast",
     "hi-in-madhurneural": "hi-IN-MadhurNeural",
     "hi-in-swaraneural": "hi-IN-SwaraNeural",
     "te-IN-MohanNeural": "te-IN-MohanNeural",
@@ -107,6 +111,9 @@ VOICE_TUNING = {
     "👩 Swara (Hindi Female Anchor) - Edge-TTS": ("+0%", "+0Hz"),
     "🎙️ Use My Own Voice Recording (Upload Audio)": ("+0%", "+0Hz"),
     "🤖 Clone My Voice with AI (Local XTTS-v2)": ("+0%", "+0Hz"),
+    "🔥 👩 Shruti (Telugu Female - Sarcastic & Roasting)": ("+7%", "+0Hz"),
+    "te-IN-ShrutiNeural-Roast": ("+7%", "+0Hz"),
+    "shruti-roast": ("+7%", "+0Hz"),
     "te-IN-MohanNeural": ("+4%", "+0Hz"),
     "te-IN-ShrutiNeural": ("+4%", "+0Hz"),
     "hi-IN-MadhurNeural": ("+0%", "+0Hz"),
@@ -290,16 +297,20 @@ def create_voice_for_script(
                 tts_p.write_text(clean_script_narration(updated_s), encoding="utf-8")
                 s_text = updated_s
 
-            if is_indic and voice_id in ("am_adam", "af_heart", "am_michael", "af_bella"):
-                print("🎙️ [Voice Agent] Detected Telugu script narration - auto-selecting te-IN-MohanNeural for authentic Telugu creator delivery.")
-                voice_id = "te-IN-MohanNeural"
+            if is_indic:
+                if voice_id in ("af_heart", "af_bella"):
+                    print("🎙️ [Voice Agent] Detected Telugu script narration - auto-selecting te-IN-ShrutiNeural (Female) for authentic Telugu creator delivery.")
+                    voice_id = "te-IN-ShrutiNeural"
+                elif voice_id in ("am_adam", "am_michael"):
+                    print("🎙️ [Voice Agent] Detected Telugu script narration - auto-selecting te-IN-MohanNeural (Male) for authentic Telugu creator delivery.")
+                    voice_id = "te-IN-MohanNeural"
         except Exception:
             pass
 
     from agents.voice_agent import create_voice
 
     rate, pitch = VOICE_TUNING.get(voice, VOICE_TUNING.get(voice_id, ("-5%", "+0Hz")))
-    if voice_id in ("te-IN-MohanNeural", "te-IN-ShrutiNeural", "mohan", "shruti") and rate in ("-5%", "+0%"):
+    if voice_id in ("te-IN-MohanNeural", "te-IN-ShrutiNeural", "te-IN-ShrutiNeural-Roast", "mohan", "shruti", "shruti-roast") and rate in ("-5%", "+0%"):
         rate, pitch = ("+4%", "+0Hz")
 
     # Resolve audio sample if using direct own voice recording or cloning

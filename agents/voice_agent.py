@@ -364,6 +364,7 @@ def generate_cloned_voice_xtts(
     top_k: int = 50,
     top_p: float = 0.85,
     speed: float = 1.0,
+    base_voice: str = "te-IN-ShrutiNeural",
 ):
     """
     Clone user's voice using Coqui XTTS-v2 with high-fidelity reference audio sample
@@ -374,14 +375,14 @@ def generate_cloned_voice_xtts(
     safe_text = normalize_telugu_tech_script(text) if re.search(r"[\u0C00-\u0C7F]", text) else text
 
     if language.lower() in ("te", "telugu"):
-        print("ℹ️ Note: XTTS-v2 natively supports ['en', 'hi', ...]. Routing Telugu ('te') through cross-lingual FreeVC24 engine...")
+        print(f"ℹ️ Note: XTTS-v2 natively supports ['en', 'hi', ...]. Routing Telugu ('te') through cross-lingual FreeVC24 engine (base={base_voice})...")
         import asyncio
         asyncio.run(
             generate_cross_lingual_cloned_voice(
                 text=safe_text,
                 speaker_wav=speaker_wav,
                 output_wav=output_wav,
-                base_voice="te-IN-MohanNeural",
+                base_voice=base_voice,
             )
         )
         return output_wav
@@ -443,7 +444,7 @@ async def generate_cross_lingual_cloned_voice(
     text: str,
     speaker_wav: str,
     output_wav: str,
-    base_voice: str = "te-IN-MohanNeural",
+    base_voice: str = "te-IN-ShrutiNeural",
 ):
     """
     Zero-shot cross-lingual voice cloning for Telugu and non-Latin/Devanagari scripts:
@@ -989,6 +990,8 @@ async def create_voice(
         or "madhur" in voice_lower
         or "swara" in voice_lower
         or "edge-tts" in voice_lower
+        or "roast" in voice_lower
+        or "sarcastic" in voice_lower
         or (is_telugu_text and not is_clone)
         or (is_hindi_text and not is_clone)
     )
@@ -1281,7 +1284,7 @@ async def create_voice(
             )
             used_mode = "Kokoro Fallback (am_adam)"
     elif not used_mode and is_edge_voice:
-        if "shruti" in voice_lower:
+        if "shruti" in voice_lower or "roast" in voice_lower or "sarcastic" in voice_lower or "te-in-shrutineural-roast" in voice_lower:
             edge_voice_id = "te-IN-ShrutiNeural"
         elif "swara" in voice_lower:
             edge_voice_id = "hi-IN-SwaraNeural"
@@ -1332,11 +1335,57 @@ async def create_voice(
                     except Exception:
                         pass
 
-            is_factual_news = any(k in topic_str.lower() for k in ("cyclone", "devastation", "dead", "damaged", "andhra", "ap", "government", "policy", "tech", "technology", "facts", "fact", "incident", "accident", "police", "minister", "weather", "tragedy", "disaster"))
-            is_roast_genre = any(k in topic_str.lower() for k in ("bigg boss", "roast", "comedy", "troll", "overaction", "clown", "nomination", "eviction"))
+            is_explicit_roast = bool(
+                "roast" in voice_lower
+                or "sarcastic" in voice_lower
+                or "te-in-shrutineural-roast" in voice_lower
+            )
+            is_factual_news = (
+                not is_explicit_roast
+                and any(k in topic_str.lower() for k in ("cyclone", "devastation", "dead", "damaged", "government", "policy", "minister", "weather", "tragedy", "disaster"))
+            )
+            is_roast_delivery = bool(
+                is_explicit_roast
+                or any(k in topic_str.lower() for k in ("bigg boss", "roast", "comedy", "troll", "overaction", "clown", "nomination", "eviction"))
+            )
 
-            if roast_beats and len(roast_beats) >= 2 and is_roast_genre and not is_factual_news and any(b.get("emotion") and b.get("emotion") != "neutral setup" for b in roast_beats):
-                print(f"🔥 [Voice Agent] Found Roast Delivery Plan with {len(roast_beats)} emotion beats. Running chunked roast synthesis with {edge_voice_id}...")
+            if is_roast_delivery and not is_factual_news:
+                if not roast_beats or len(roast_beats) < 1:
+                    # Auto-split speech_text sentences into the 6 emotion beats
+                    sentences = [s.strip() for s in re.split(r"[।!?.\n]+", speech_text) if len(s.strip()) > 2]
+                    if len(sentences) < 2:
+                        sentences = [s.strip() for s in re.split(r"[,;]+", speech_text) if len(s.strip()) > 2]
+                    if not sentences:
+                        sentences = [speech_text.strip()]
+
+                    emotion_cycle = [
+                        ("neutral setup", 0, None),
+                        ("fake_shock", 350, "record_scratch"),
+                        ("smug", 350, None),
+                        ("mock", 400, "rimshot"),
+                        ("dramatic_question", 450, "crowd_ooh"),
+                        ("hype", 350, None),
+                    ]
+                    roast_beats = []
+                    for s_idx, sentence in enumerate(sentences):
+                        em, pause, sfx = emotion_cycle[s_idx % len(emotion_cycle)]
+                        if s_idx == 0:
+                            pause = 0
+                            sfx = None
+                        elif s_idx == len(sentences) - 1 and len(sentences) > 2:
+                            em = "hype"
+                            sfx = None
+                        b_dict = {
+                            "spoken_text": sentence,
+                            "emotion": em,
+                            "pause_before_ms": pause,
+                        }
+                        if sfx:
+                            b_dict["sfx"] = sfx
+                        roast_beats.append(b_dict)
+
+            if roast_beats and is_roast_delivery and not is_factual_news:
+                print(f"🔥 [Voice Agent] Running chunked multi-emotion roast synthesis with {edge_voice_id} ({len(roast_beats)} beats)...")
                 from edge_tts_generator import generate_roast_speech_with_emotions
                 output_mp3, captured_words = await generate_roast_speech_with_emotions(
                     beats=roast_beats,

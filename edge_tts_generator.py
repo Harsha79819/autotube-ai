@@ -659,13 +659,13 @@ EMOTION_PRESETS = {
 async def generate_roast_speech_with_emotions(
     beats: list,
     output_path: str = "output/voice.mp3",
-    voice: str = "te-IN-MohanNeural",
+    voice: str = "te-IN-ShrutiNeural",
     sfx_enabled: bool = True,
 ) -> tuple:
     """
     Synthesize multi-emotion chunked roast narration:
     1. Synthesizes each beat chunk with its emotion preset (rate, pitch, volume)
-    2. Inserts intentional comedic pauses (400-500ms before punchline)
+    2. Inserts intentional comedic pauses (350-450ms before punchline)
     3. Mixes up to 3 comedic CC0 SFX hits (~100ms after punchlines)
     4. Produces unified voice.mp3 and continuous word timings for subtitles
     """
@@ -678,6 +678,15 @@ async def generate_roast_speech_with_emotions(
     out_dir = out_p.parent
     temp_dir = out_dir / "temp_roast_chunks"
     temp_dir.mkdir(parents=True, exist_ok=True)
+
+    # Clean voice identifier if alias passed (e.g. te-IN-ShrutiNeural-Roast -> te-IN-ShrutiNeural)
+    clean_voice = str(voice or "").strip()
+    if "shruti" in clean_voice.lower():
+        clean_voice = "te-IN-ShrutiNeural"
+    elif "mohan" in clean_voice.lower():
+        clean_voice = "te-IN-MohanNeural"
+    elif not clean_voice:
+        clean_voice = "te-IN-ShrutiNeural"
 
     chunk_files = []
     all_word_timings = []
@@ -699,10 +708,9 @@ async def generate_roast_speech_with_emotions(
             if idx == 1:
                 pause_ms = 0
 
-            # 1. Smooth, continuous speech pacing (eliminate dead silence gaps)
-            if pause_ms > 150:
-                # Cap pause to max 100ms (0.10s) natural breath for seamless flow
-                pause_sec = 0.10
+            # 1. Comedic pauses (350-450ms) for punchline delivery
+            if pause_ms > 0:
+                pause_sec = min(0.45, max(0.10, pause_ms / 1000.0))
                 silence_wav = temp_dir / f"pause_{idx}.wav"
                 cmd_sil = [
                     "ffmpeg", "-y",
@@ -720,7 +728,7 @@ async def generate_roast_speech_with_emotions(
             safe_text = prepare_script_for_tts(text)
             comm = edge_tts.Communicate(
                 text=safe_text,
-                voice=voice,
+                voice=clean_voice,
                 rate=preset["rate"],
                 pitch=preset["pitch"],
                 volume=preset["volume"],
