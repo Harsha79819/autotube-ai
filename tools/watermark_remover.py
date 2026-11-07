@@ -98,38 +98,61 @@ def clean_and_remove_watermarks(
             w, h = img.size
             orig_mode = img.mode
 
-            # Crop outer margins (default 8%) where website stamps live
-            margin_x = int(w * crop_margin_pct)
-            margin_y = int(h * crop_margin_pct)
+            # Multi-level crop: try crop_margin_pct (e.g. 8% or 13% if boss.world)
+            margins_to_try = [crop_margin_pct]
+            if "boss" in wm_match.lower() or "world" in wm_match.lower() or crop_margin_pct < 0.13:
+                margins_to_try.append(0.14)
 
-            cropped = img.crop((margin_x, margin_y, w - margin_x, h - margin_y))
-            cleaned_img = cropped.resize((w, h), Image.Resampling.LANCZOS)
-            cleaned_img = cleaned_img.filter(ImageFilter.UnsharpMask(radius=1, percent=105, threshold=3))
+            success = False
+            for try_margin in margins_to_try:
+                margin_x = int(w * try_margin)
+                margin_y = int(h * min(0.06, try_margin))
 
-            temp_dest = outp.parent / f"temp_wm_clean_{outp.name}"
-            if orig_mode in ("RGBA", "P"):
-                cleaned_img.convert("RGB").save(temp_dest, "JPEG", quality=92)
-            else:
-                cleaned_img.save(temp_dest, "JPEG", quality=92)
+                # If boss.world watermark, it's concentrated on the left edge (x <= 12%)
+                if "boss" in wm_match.lower() or "world" in wm_match.lower():
+                    left_crop = int(w * 0.135)
+                    top_crop = int(h * 0.02)
+                    right_crop = int(w * 0.985)
+                    bottom_crop = int(h * 0.96)
+                    cropped = img.crop((left_crop, top_crop, right_crop, bottom_crop))
+                else:
+                    cropped = img.crop((margin_x, margin_y, w - margin_x, h - margin_y))
 
-        # Verify whether the watermark was successfully eliminated
-        try:
-            from tools.ocr_guard import scan_images_ocr
-            re_scan = scan_images_ocr([temp_dest])
-            re_text = re_scan.get(str(temp_dest), "")
-            still_wm, remaining = has_watermark_text(re_text)
-        except Exception:
-            still_wm = False
-            remaining = ""
+                cleaned_img = cropped.resize((w, h), Image.Resampling.LANCZOS)
+                cleaned_img = cleaned_img.filter(ImageFilter.UnsharpMask(radius=1, percent=105, threshold=3))
 
-        if still_wm:
-            print(f"❌ [Watermark Remover] Watermark '{remaining}' is still present (centrally embedded) in {inp.name} - rejecting image.")
-            temp_dest.unlink(missing_ok=True)
-            return False, inp
+                temp_dest = outp.parent / f"temp_wm_clean_{outp.name}"
+                is_png = outp.suffix.lower() == ".png" or orig_mode in ("RGBA", "LA")
+                if is_png:
+                    cleaned_img.save(temp_dest, "PNG", optimize=True)
+                else:
+                    if cleaned_img.mode in ("RGBA", "P"):
+                        cleaned_img = cleaned_img.convert("RGB")
+                    cleaned_img.save(temp_dest, "JPEG", quality=95)
 
-        os.replace(temp_dest, outp)
-        print(f"✅ [Watermark Remover] Successfully cropped and cleaned '{wm_match}' from {outp.name}")
-        return True, outp
+                # Verify whether the watermark was successfully eliminated
+                try:
+                    from tools.ocr_guard import scan_images_ocr
+                    re_scan = scan_images_ocr([temp_dest])
+                    re_text = re_scan.get(str(temp_dest), "")
+                    still_wm, remaining = has_watermark_text(re_text)
+                except Exception:
+                    still_wm = False
+                    remaining = ""
+
+                if not still_wm:
+                    os.replace(temp_dest, outp)
+                    print(f"✅ [Watermark Remover] Successfully cropped ({try_margin*100:.0f}%) and cleaned '{wm_match}' from {outp.name}")
+                    success = True
+                    break
+                else:
+                    temp_dest.unlink(missing_ok=True)
+
+            if not success:
+                print(f"❌ [Watermark Remover] Watermark '{remaining}' is still present (centrally embedded) in {inp.name} - rejecting image.")
+                return False, inp
+
+            return True, outp
 
     except Exception as e:
         print(f"⚠️ Watermark removal failed: {e}")

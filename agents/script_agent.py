@@ -846,9 +846,9 @@ def synthesize_beat_visual_plan(delivery_plan: List[Dict[str, Any]], topic: str 
         "- STRICT TOPIC ADHERENCE: Constrain all visuals solely to this specific topic. Do NOT mention Bigg Boss, reality show housemates, or unrelated contestants."
         if not is_bb
         else (
-            "- MANDATORY REALITY SHOW FORMAT: Format search_query strictly as '[Contestant Name] [Season Name]' (e.g. 'Thrigun Bigg Boss Telugu 10', 'Shiv Bigg Boss 10', 'Aman Masud Bigg Boss Telugu 10').\n"
-            "- STRICT GROUND TRUTH: ONLY reference official Bigg Boss Telugu 10 active housemates: Thrigun Eswaran, Shiv (Anchor Shiva), Aman Masud, Potti Naresh, Sudheer Reddy (Sudheer Talks), Gundeboina Jhansi (Singer Jhansi), Debjani Modak, Chaithra Rai, Auto Ram Prasad, Shalini Patel, Temper Vamsi, Srishti Vyakaranam, Krishna Alluri (Krishnudu), Varshini Sounderajan, Rohit Patnam, Mukesh Gowda, Host Akkineni Nagarjuna.\n"
-            "- ELIMINATED HOUSEMATES: Charan Mahadev has been eliminated. STRICT: DO NOT feature Charan in current active house tasks or voting arguments unless the topic is specifically about his elimination!\n"
+            "- MANDATORY REALITY SHOW FORMAT: Format search_query strictly as '[Contestant Name] [Season Name]' (e.g. 'Thrigun Bigg Boss Telugu 10', 'Temper Vamsi Bigg Boss 10', 'Aman Masud Bigg Boss Telugu 10').\n"
+            "- STRICT GROUND TRUTH: Active Season 10 housemates: Temper Vamsi, Thrigun Eswaran, Rohit Patnam, Aman Masud, Sudheer Reddy (Sudheer Talks), Auto Ram Prasad, Potti Naresh, Debjani Modak, Mukesh Gowda, Varshini Sounderajan, Shalini Patel, Neethu Natraj, Dakkshi Guttikonda, Host Akkineni Nagarjuna.\n"
+            "- ELIMINATED CONTESTANTS: Gundeboina Jhansi (Singer Jhansi), Chaithra Rai, Krishna Alluri (Krishnudu), Srishti Vyakaranam, Charan Mahadev, Mithilesh Reddy. STRICT: DO NOT feature eliminated contestants in active house tasks, immunity, or nominations unless the topic specifically covers their eviction episode!\n"
             "- STRICT PROHIBITION: NEVER use past contestants or unrelated stars: NO Sudigali Sudheer, NO Rohit Sahni, NO Anchor Jhansi, NO Ram Charan.\n"
             "- FORBIDDEN GENERIC QUERIES: NEVER output generic search queries like 'Bigg Boss Telugu drama', 'Bigg Boss emotional scene', 'Bigg Boss Telugu stage', or 'Bigg Boss housemates'."
         )
@@ -2681,30 +2681,33 @@ CRITICAL VIRALITY RULES:
 ============================================================
 Host: Akkineni Nagarjuna
 Official Season 10 Active Housemates:
-- Aman Masud (Actor)
-- Potti Naresh (Jabardasth Naresh)
-- Sudheer Reddy (Sudheer Talks YouTuber) [STRICT: NOT Sudigali Sudheer!]
-- Gundeboina Jhansi (Singer Jhansi) [STRICT: NOT Anchor Jhansi!]
-- Rohit Patnam (Rohit Naidu Patnam) [STRICT: NOT Rohit Sahni!]
-- Thrigun Eswaran (Actor Thrigun / Adith Arun)
-- Debjani Modak
-- Chaithra Rai
-- Auto Ram Prasad (Jabardasth Ram Prasad)
-- Shalini Patel
 - Vamsi Krishna (Temper Vamsi)
-- Srishti Vyakaranam
-- Krishna Alluri (Krishnudu)
-- Varshini Sounderajan
+- Thrigun Eswaran (Actor Thrigun / Adith Arun)
+- Rohit Patnam (Rohit Naidu Patnam) [STRICT: NOT Rohit Sahni!]
+- Aman Masud (Actor)
+- Sudheer Reddy (Sudheer Talks YouTuber) [STRICT: NOT Sudigali Sudheer!]
+- Auto Ram Prasad (Jabardasth Ram Prasad)
+- Potti Naresh (Jabardasth Naresh)
+- Debjani Modak
 - Mukesh Gowda
-Later Entrants: Neethu Natraj, Dakkshi Guttikonda, Bebakka, Mithilesh Reddy.
+- Varshini Sounderajan
+- Shalini Patel
+- Neethu Natraj
+- Dakkshi Guttikonda
+
 Eliminated Contestants:
-- Charan Mahadev (ELIMINATED - DO NOT feature in active house tasks, nominations, or voting clashes!)
+- Gundeboina Jhansi (Singer Jhansi) [ELIMINATED / EVICTED]
+- Chaithra Rai [ELIMINATED / EVICTED (WEEK 1)]
+- Krishna Alluri (Krishnudu) [ELIMINATED / EVICTED (WEEK 2)]
+- Srishti Vyakaranam [ELIMINATED / EVICTED]
+- Charan Mahadev [ELIMINATED / EVICTED]
+- Mithilesh Reddy [WALKED OUT]
 
 STRICT ACCURACY RULES:
-1. ONLY refer to contestants from the above official Season 10 list!
-2. NEVER mention or write scenes for Sudigali Sudheer (use Sudheer Reddy / Sudheer Talks), Rohit Sahni (use Rohit Patnam), Anchor Jhansi (use Singer Gundeboina Jhansi), or Mega Power Star Ram Charan (use Charan Mahadev).
-3. ELIMINATED CONTESTANTS: Charan Mahadev is ELIMINATED. DO NOT write active house scenes, nominations, or fights for him unless the video topic specifically covers his eviction episode.
-4. In VISUAL_PLAN: ALWAYS include the contestant's full name and context (e.g. 'Aman Masud bigg boss telugu 10 | Aman Masud actor still', 'Potti Naresh bigg boss 10 | Jabardasth Naresh photo').
+1. ONLY write active in-house scenes, captaincy, task battles, and immunity for ACTIVE housemates!
+2. NEVER describe eliminated contestants (Jhansi, Chaithra, Krishnudu, Srishti, Charan) as staying in the house, competing in tasks, or receiving immunity! Only mention them in past-tense eviction context if the episode topic directly discusses their elimination.
+3. NEVER mention or write scenes for Sudigali Sudheer (use Sudheer Reddy / Sudheer Talks), Rohit Sahni (use Rohit Patnam), Anchor Jhansi (use Singer Gundeboina Jhansi), or Mega Power Star Ram Charan (use Charan Mahadev).
+4. In VISUAL_PLAN: ALWAYS include the contestant's full name and context (e.g. 'Aman Masud bigg boss telugu 10 | Aman Masud actor still', 'Temper Vamsi bigg boss 10 | Temper Vamsi photo').
 ============================================================
 """
     except Exception:

@@ -16,7 +16,7 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Tuple, List, Dict, Optional
+from typing import Tuple, List, Dict, Optional, Any
 
 SWIFT_OCR_SCRIPT = """
 import Foundation
@@ -59,12 +59,13 @@ def _get_swift_script() -> str:
     return _swift_script_path
 
 
-def scan_images_ocr(image_paths: List[Path]) -> Dict[str, str]:
+def scan_images_ocr(image_paths: List[Any]) -> Dict[str, str]:
     """
     Scans a batch of images with macOS Vision OCR.
     Returns a dict of {str(path): detected_text}.
     """
-    valid_paths = [str(p) for p in image_paths if p.exists() and p.is_file() and p.stat().st_size > 1000]
+    path_objs = [Path(p) for p in image_paths]
+    valid_paths = [str(p) for p in path_objs if p.exists() and p.is_file() and p.stat().st_size > 1000]
     if not valid_paths:
         return {}
 

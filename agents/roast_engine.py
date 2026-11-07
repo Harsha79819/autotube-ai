@@ -180,11 +180,11 @@ Return ONLY a bulleted list of 5-8 facts in English or Tanglish, one per line. N
     # Fallback default facts anchored to real entities rather than generic filler
     if is_bb:
         return [
-            "Bigg Boss Telugu nomination war triggered intense heated arguments between Rohit and Aman",
-            "Anchor Jhansi's sudden tactical captaincy game move shocked housemates and split group alliances",
-            "Host Akkineni Nagarjuna's savage weekend reality checks left contestants completely speechless",
-            "Unexpected voting trend flip placed top popular contestants in the danger zone for elimination",
-            "Over-the-top dramatic reactions and emotional speeches during nominations sparked massive social media banter",
+            "Bigg Boss Telugu heated nomination clash broke out between Rohit Patnam and Aman Masud",
+            "Temper Vamsi's controversial captaincy decisions and biased task judgements sparked intense house rebellion",
+            "Thrigun Eswaran and Sudheer Reddy went head-to-head challenging house game strategies",
+            "Host Akkineni Nagarjuna's weekend reality check exposed secret voting pacts and overacting",
+            "Voting trend shockwaves created panic across housemates facing danger zone nominations",
         ]
     return [
         f"Verified core principles and physical mechanisms behind {topic}",
@@ -277,7 +277,10 @@ def generate_roast_draft(topic: str, facts: List[str], target_duration_sec: int 
 - Beat 4 / Ending: Savage punchline summarizing the comedy/hypocrisy.
 - Comment Trigger & CTA (Final Beat):
   * End with a provocative, polarizing debate question (e.g. "ఈ వారం బిగ్ బాస్ హౌస్‌లో అసలైన కవర్ డ్రైవర్ ఎవరు? మీ అభిప్రాయం ఏమిటో కింద కామెంట్ చేయండి!") followed by witty లైక్, షేర్, సబ్‌స్క్రైబ్."""
-        bb_constraint = ""
+        bb_constraint = """BIGG BOSS TELUGU 10 ROSTER RULES:
+- ACTIVE HOUSEMATES: Temper Vamsi, Thrigun Eswaran, Rohit Patnam, Aman Masud, Sudheer Reddy, Auto Ram Prasad, Potti Naresh, Debjani Modak, Mukesh Gowda, Varshini Sounderajan, Shalini Patel, Neethu Natraj, Dakkshi Guttikonda.
+- ELIMINATED CONTESTANTS: Gundeboina Jhansi (Singer Jhansi), Chaithra Rai, Krishna Alluri (Krishnudu), Srishti Vyakaranam, Charan Mahadev.
+- CRITICAL ACCURACY RULE: Jhansi, Chaithra, Krishnudu, Srishti, and Charan are ALREADY ELIMINATED! DO NOT describe them inside the house, in captaincy, getting immunity, or performing weekly tasks! Focus strictly on active housemates."""
         loanword_samples = "'బిగ్ బాస్', 'మైండ్ బ్లాంక్', 'సీన్ కట్', 'పీఆర్ స్ట్రాటజీ', 'టీఆర్పీ రేటింగ్స్', 'సీక్రెట్ రూమ్', 'ఎలిమినేషన్', 'ఓటింగ్'"
     else:
         struct_text = f"""Structure:
@@ -612,18 +615,20 @@ def markup_roast_delivery(script: str, topic: str = "") -> List[Dict[str, Any]]:
         if len(w) > 3 and w.lower() not in ("roast", "the", "and", "with", "from", "this", "that", "telugu")
     ]
     DYNAMIC_EMOTION_BADGES = {
-        "fake_shock": ["WAIT WHAT?!", "SHOCKING TRUTH", "BREAKING NEWS", "HOLD ON!", "SERIOUSLY?!", "MIND BLOWN"],
-        "hype": ["GAME CHANGER", "BIG PROMISE", "NEXT LEVEL", "THE FUTURE", "TECH STORM", "MASSIVE HYPE"],
-        "mock": ["REALITY CHECK", "COME ON!", "EXPOSED", "CAN'T EVEN", "EXCUSES", "COMEDY SHOW"],
-        "deadpan": ["GROUND REALITY", "THE TRUTH", "NO FILTER", "SERIOUS TALK", "FACT CHECK", "UNFILTERED"],
-        "smug": ["MIC DROP", "SAVAGE TRUTH", "BOTTOM LINE", "FINAL VERDICT", "THE CATCH", "BRUTAL FACT"],
-        "dramatic_question": ["BIG QUESTION?", "COMMUNITY POLL", "YOUR CALL?", "THE MYSTERY", "WAIT A MINUTE"],
+        "fake_shock": ["షాకింగ్ ట్విస్ట్?!", "ఓవరాక్షన్ పీక్స్!", "అదిరిపోయే ట్విస్ట్!", "ఇదేం డ్రామా?!", "బిగ్ బాస్ షాక్!", "నమ్మలేకపోతున్నాం!"],
+        "hype": ["గేమ్ చేంజర్!", "మాస్ వార్ మొదలైంది!", "హౌస్‌లో రచ్చ రచ్చ!", "ఫైర్ బ్రాండ్!", "టాస్క్ కింగ్!", "నెక్స్ట్ లెవెల్ ప్లాన్!"],
+        "mock": ["ఫేక్ డ్రామా బయటపడింది!", "వెన్నుపోటు ప్లాన్!", "డ్రామా క్వీన్!", "ఎవరిని మోసం చేస్తున్నారు?!", "అసలు స్కెచ్ ఇదే!", "ఓవరాక్షన్ ఆపు!"],
+        "deadpan": ["అసలు నిజం ఇదీ!", "మాస్ ఆడియన్స్ తీర్పు!", "నిజాలు నిలకడగా!", "ఎవరి గేమ్ ఎక్కడ?!", "నో ఫిల్టర్ టాక్!", "పచ్చి నిజాలు!"],
+        "smug": ["నాగార్జున ఫైర్!", "అడ్డంగా దొరికిపోయారు!", "ఫైనల్ పంచ్!", "ఇక ముగిసిన ఆట!", "బండారం బయటపడింది!", "ఆట ఖతం!"],
+        "dramatic_question": ["ఎవరు ఎలిమినేట్ అవుతారు?!", "మీ ఓటు ఎవరికి?!", "హౌస్‌లో నెక్స్ట్ ఏంటి?!", "ఇది న్యాయమా?!", "మీరేమంటారు?!"],
     }
-    OUTRO_BADGES = ["YOUR THOUGHTS?", "COMMUNITY POLL", "DROP A COMMENT", "SHARE & LIKE"]
+    OUTRO_BADGES = ["మీ కామెంట్ ఏంటి?!", "మీ ఓటు ఎవరికి?!", "లైక్ & షేర్ చేయండి!", "కామెంట్ల వర్షం కురిపించండి!"]
 
-    primary_topic_tag = topic_keywords[0] if topic_keywords else "ROAST"
+    primary_topic_tag = topic_keywords[0] if topic_keywords else "బిగ్ బాస్"
     used_badges: set = set()
     total_beats = len(merged_beats)
+
+    CONTESTANT_BADGE_VARIANTS = ["గేమ్!", "ప్లాన్!", "రియాక్షన్!", "డ్రామా!", "షాక్!"]
 
     for idx, sentence in enumerate(merged_beats, 1):
         # Determine emotion preset
@@ -657,37 +662,31 @@ def markup_roast_delivery(script: str, topic: str = "") -> List[Dict[str, Any]]:
             pause_ms = 300
             sfx = None
 
-        # Universal Entity / Badge Extraction with strict non-repetition
+        # Universal Entity / Badge Extraction with pure Telugu punchlines (Zero debug #numbers)
         matched_sentence = match_entities_in_text(sentence)
-        sent_words = [w.upper() for w in re.findall(r"[A-Za-z0-9]+", sentence) if len(w) > 2 and w.lower() not in {"and", "the", "for", "with"}]
 
         badge = ""
         if matched_sentence:
             cand = matched_sentence[0]["canonical_name"].upper()
-            badge = cand if cand not in used_badges else f"{cand} #{idx}"
-        elif sent_words:
-            unused_words = [w for w in sent_words if w not in used_badges]
-            if unused_words:
-                badge = unused_words[0]
+            if cand not in used_badges:
+                badge = cand
             else:
-                badge = f"{sent_words[0]} #{idx}"
+                variant_suffix = CONTESTANT_BADGE_VARIANTS[(idx - 1) % len(CONTESTANT_BADGE_VARIANTS)]
+                badge = f"{cand} {variant_suffix}"
 
         if not badge:
             if idx >= total_beats - 1:
                 available_outro = [b for b in OUTRO_BADGES if b not in used_badges]
-                badge = available_outro[0] if available_outro else OUTRO_BADGES[idx % len(OUTRO_BADGES)]
+                badge = available_outro[0] if available_outro else OUTRO_BADGES[(idx - 1) % len(OUTRO_BADGES)]
             else:
-                pool = DYNAMIC_EMOTION_BADGES.get(emotion, ["REALITY CHECK", "THE TRUTH", "NEXT LEVEL"])
+                pool = DYNAMIC_EMOTION_BADGES.get(emotion, ["అసలు నిజం ఇదీ!", "షాకింగ్ ట్విస్ట్?!", "ఓవరాక్షన్ పీక్స్!"])
                 available_pool = [b for b in pool if b not in used_badges]
                 if available_pool:
                     badge = available_pool[0]
-                elif topic_keywords and (idx % 2 == 0):
-                    kw_cand = f"{primary_topic_tag} #{idx}"
-                    badge = kw_cand
                 else:
-                    badge = f"{pool[idx % len(pool)]} #{idx}"
+                    badge = pool[(idx - 1) % len(pool)]
 
-        badge = badge[:25].strip()
+        badge = badge[:28].strip()
         used_badges.add(badge)
 
         from utils.transliterate_telugu import ensure_telugu_script

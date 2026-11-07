@@ -121,15 +121,15 @@ VOICE_TUNING = {
     "👩 Swara (Hindi Female Anchor) - Edge-TTS": ("+0%", "+0Hz"),
     "🎙️ Use My Own Voice Recording (Upload Audio)": ("+0%", "+0Hz"),
     "🤖 Clone My Voice with AI (Local XTTS-v2)": ("+0%", "+0Hz"),
-    "🔥 👩 Shruti (Telugu Female - Sarcastic & Roasting)": ("+7%", "+0Hz"),
-    "te-IN-ShrutiNeural-Roast": ("+7%", "+0Hz"),
-    "shruti-roast": ("+7%", "+0Hz"),
-    "te-IN-MohanNeural": ("+4%", "+0Hz"),
-    "te-IN-ShrutiNeural": ("+4%", "+0Hz"),
+    "🔥 👩 Shruti (Telugu Female - Sarcastic & Roasting)": ("+14%", "+0Hz"),
+    "te-IN-ShrutiNeural-Roast": ("+14%", "+0Hz"),
+    "shruti-roast": ("+14%", "+0Hz"),
+    "te-IN-MohanNeural": ("+10%", "+0Hz"),
+    "te-IN-ShrutiNeural": ("+12%", "+0Hz"),
     "hi-IN-MadhurNeural": ("+0%", "+0Hz"),
     "hi-IN-SwaraNeural": ("+0%", "+0Hz"),
-    "mohan": ("+4%", "+0Hz"),
-    "shruti": ("+4%", "+0Hz"),
+    "mohan": ("+10%", "+0Hz"),
+    "shruti": ("+12%", "+0Hz"),
     "clone": ("+0%", "+0Hz"),
     "xtts": ("+0%", "+0Hz"),
     "own_recording": ("+0%", "+0Hz"),
@@ -3342,10 +3342,10 @@ with st.container():
         )
 
         yt_mode_options = [
+            "Do Not Upload (Save Locally)",
             "Private (Only you can view - Recommended)",
             "Unlisted (Anyone with link can view)",
             "Public (Publish immediately to everyone)",
-            "Do Not Upload (Instagram Only / Save Locally)",
         ]
 
         saved_yt_mode = st.session_state.get("declared_yt_mode", yt_mode_options[0])

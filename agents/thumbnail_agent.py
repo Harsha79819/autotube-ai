@@ -343,12 +343,11 @@ def _clean_title(title, is_telugu=False):
 
 def _fit_to_aspect_ratio(image, aspect_ratio="16:9"):
     """
-    Fits and sizes the image to the specified aspect ratio with smart canvas:
+    Fits and sizes the image to the specified aspect ratio using full-bleed cinema framing.
+    Guarantees 100% full-screen coverage with zero blurred Canva borders or boxed card artifacts.
     - 16:9 -> 1280x720
-    - 9:16 -> 1080x1920
+    - 9:16 -> 1080x1920 (dramatic vertical cinema zoom centered on faces)
     - 1:1 -> 1080x1080
-    If aspect ratio differs substantially (e.g. landscape image on 9:16 vertical),
-    uses blurred background canvas padding rather than cropping away all context.
     """
     from PIL import ImageEnhance
 
@@ -359,43 +358,25 @@ def _fit_to_aspect_ratio(image, aspect_ratio="16:9"):
     else:
         target_w, target_h = 1280, 720
 
-    target_ratio = target_w / target_h
     width, height = image.size
-    current_ratio = width / height
 
-    # If aspect ratio is close (within 25%), clean center-crop
-    if abs(current_ratio - target_ratio) / target_ratio < 0.25:
-        if current_ratio > target_ratio:
-            new_w = int(height * target_ratio)
-            left = (width - new_w) // 2
-            cropped = image.crop((left, 0, left + new_w, height))
-        else:
-            new_h = int(width / target_ratio)
-            top = (height - new_h) // 2
-            cropped = image.crop((0, top, width, top + new_h))
-        return cropped.resize((target_w, target_h), Image.Resampling.LANCZOS)
+    # Full-Bleed Cinema Framing: Scale to completely fill target canvas
+    scale = max(target_w / width, target_h / height)
+    scaled_w = int(width * scale)
+    scaled_h = int(height * scale)
+    scaled = image.resize((scaled_w, scaled_h), Image.Resampling.LANCZOS)
+
+    # Center horizontally
+    left = max(0, (scaled_w - target_w) // 2)
+
+    # For vertical 9:16, human faces/expressions are typically in the upper 25-40% of the frame
+    if aspect_ratio == "9:16" and scaled_h > target_h:
+        top = max(0, min(scaled_h - target_h, int((scaled_h - target_h) * 0.30)))
     else:
-        # Smart canvas:
-        # 1. Background: scale to fill canvas and apply heavy blur + darkening
-        bg_scale = max(target_w / width, target_h / height)
-        bg_w, bg_h = int(width * bg_scale), int(height * bg_scale)
-        bg = image.resize((bg_w, bg_h), Image.Resampling.BILINEAR)
-        left = (bg_w - target_w) // 2
-        top = (bg_h - target_h) // 2
-        bg = bg.crop((left, top, left + target_w, top + target_h))
-        bg = bg.filter(ImageFilter.GaussianBlur(radius=28))
-        bg = ImageEnhance.Brightness(bg).enhance(0.45)
+        top = max(0, (scaled_h - target_h) // 2)
 
-        # 2. Foreground: scale to fit within canvas cleanly
-        fg_scale = min(target_w / width, target_h / height)
-        fg_w, fg_h = int(width * fg_scale), int(height * fg_scale)
-        fg = image.resize((fg_w, fg_h), Image.Resampling.LANCZOS)
-
-        # 3. Paste centered
-        fg_x = (target_w - fg_w) // 2
-        fg_y = (target_h - fg_h) // 2
-        bg.paste(fg, (fg_x, fg_y))
-        return bg
+    cropped = scaled.crop((left, top, left + target_w, top + target_h))
+    return cropped
 
 
 def create_thumbnail(title, aspect_ratio="16:9", assets_dir=None, output_dir=None):
