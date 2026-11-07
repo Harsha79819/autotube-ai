@@ -10,7 +10,9 @@ Detects and rejects images containing:
 """
 
 import os
+import sys
 import re
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path

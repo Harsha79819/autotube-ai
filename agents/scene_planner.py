@@ -268,7 +268,12 @@ def plan_scenes(
     overrides = _load_overrides(Path(overrides_path) if overrides_path else None)
     scenes: List[Scene] = []
 
-    for idx, group in enumerate(consolidate(timed_sections, bank), start=1):
+    groups = consolidate(timed_sections, bank)
+    max_canva_allowed = max(2, round(len(groups) * 0.35))
+    canva_count = 0
+    last_layout = None
+
+    for idx, group in enumerate(groups, start=1):
         narration = " ".join((s.get("narration") or "").strip() for s in group).strip()
         ov = overrides.get(idx, {})
         scene_emotion = ov.get("emotion") or detect_emotion(narration)
@@ -301,11 +306,28 @@ def plan_scenes(
         elif len(scene_entities) >= 2:
             layout = "split"
         elif len(scene_entities) == 1:
-            layout = "solo"
+            # Selective Canva Cadence:
+            # Hook (scene 1) always gets Canva punch card.
+            # Consecutive scenes must NEVER repeat Canva cards.
+            # Limit Canva card budget to ~35% of total scenes.
+            is_hook = (idx == 1)
+            is_punchy = scene_emotion in ("angry", "shocked", "smug")
+            allow_canva = is_hook or (last_layout not in ("solo", "split", "name_card") and canva_count < max_canva_allowed and is_punchy)
+            if allow_canva:
+                layout = "solo"
+            else:
+                layout = "broll"
         elif no_cutout:
-            layout = "name_card"
+            if idx == 1 or (last_layout not in ("solo", "split", "name_card") and canva_count < max_canva_allowed):
+                layout = "name_card"
+            else:
+                layout = "broll"
         else:
             layout = "broll"
+
+        if layout in ("solo", "split", "name_card"):
+            canva_count += 1
+        last_layout = layout
 
         scenes.append(
             Scene(

@@ -3444,12 +3444,18 @@ def download_images_from_visual_plan(
                         # OCR check: reject watermarked photos
                         if not already_used:
                             try:
+                                from tools.watermark_remover import clean_and_remove_watermarks, has_watermark_text
                                 from tools.ocr_guard import scan_images_ocr
                                 c_ocr = scan_images_ocr([c_path])
-                                c_txt = c_ocr.get(str(c_path), "").lower()
-                                if any(b in c_txt for b in ("biggboss.world", "housepulse", "kulfy", "coming soon", "shutterstock", "getty")):
-                                    print(f"⚠️ [Contestant Gallery OCR] Disqualified watermarked image: {c_path.name}")
-                                    already_used = True
+                                c_txt = c_ocr.get(str(c_path), "")
+                                has_wm, wm_word = has_watermark_text(c_txt)
+                                if has_wm:
+                                    is_clean, cleaned_c = clean_and_remove_watermarks(c_path)
+                                    if not is_clean:
+                                        print(f"⚠️ [Contestant Gallery OCR] Disqualified watermarked image: {c_path.name} ({wm_word})")
+                                        already_used = True
+                                    else:
+                                        c_path = cleaned_c
                             except Exception:
                                 pass
 
@@ -3526,15 +3532,16 @@ def download_images_from_visual_plan(
 
                     # Strict OCR guard: reject pre-launch teasers and watermarked logos
                     try:
+                        from tools.watermark_remover import clean_and_remove_watermarks, has_watermark_text
                         ocr_map = scan_images_ocr([np])
-                        ocr_txt = ocr_map.get(str(np), "").lower()
-                        disallowed_words = (
-                            "coming soon", "agnipariksha", "tell to", "biggboss.world",
-                            "housepulse", "kulfy", "shutterstock", "getty", "alamy"
-                        )
-                        if any(dw in ocr_txt for dw in disallowed_words):
-                            print(f"⚠️ [News Media OCR] Disqualified watermarked still {np.name}")
-                            continue
+                        ocr_txt = ocr_map.get(str(np), "")
+                        has_wm, wm_word = has_watermark_text(ocr_txt)
+                        if has_wm:
+                            is_clean, cleaned_np = clean_and_remove_watermarks(np)
+                            if not is_clean:
+                                print(f"⚠️ [News Media OCR] Disqualified watermarked still {np.name} ({wm_word})")
+                                continue
+                            np = cleaned_np
                     except Exception:
                         pass
 

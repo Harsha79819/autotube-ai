@@ -157,11 +157,20 @@ def _find_best_background(aspect_ratio="16:9", assets_dir=None):
         candidates = []
         for score, p, s_url in filtered_top:
             ocr_txt = ocr_results.get(str(p), "").lower()
-            if any(b in ocr_txt for b in ("kulfy", "housepulse", "biggboss.world", "coming soon", "agnipariksha", "tell to", "shutterstock", "getty")):
-                print(f"⚠️ [Thumbnail] Skipping {p.name}: contains watermark/disqualified text ({ocr_txt[:30]})")
-                continue
+            try:
+                from tools.watermark_remover import clean_and_remove_watermarks, has_watermark_text
+                has_wm, _ = has_watermark_text(ocr_txt)
+                if has_wm:
+                    ok, cleaned_p = clean_and_remove_watermarks(p)
+                    if not ok:
+                        print(f"⚠️ [Thumbnail] Skipping {p.name}: embedded watermark could not be cropped ({ocr_txt[:30]})")
+                        continue
+                    p = cleaned_p
+            except Exception:
+                if any(b in ocr_txt for b in ("kulfy", "housepulse", "biggboss.world", "boss.world", "shutterstock", "getty")):
+                    print(f"⚠️ [Thumbnail] Skipping {p.name}: contains watermark/disqualified text ({ocr_txt[:30]})")
+                    continue
             candidates.append((score, p))
-            # First clean high-scoring candidate is sufficient
             if len(candidates) >= 2:
                 break
 
@@ -197,6 +206,13 @@ def _find_best_background(aspect_ratio="16:9", assets_dir=None):
     )
 
     selected = candidates[0][1]
+    try:
+        from tools.watermark_remover import clean_and_remove_watermarks
+        is_clean, cleaned_selected = clean_and_remove_watermarks(selected)
+        if is_clean:
+            selected = cleaned_selected
+    except Exception as wm_clean_err:
+        print(f"⚠️ Thumbnail watermark cleaner notice: {wm_clean_err}")
 
     print(
         f"🖼️ Thumbnail background selected ({aspect_ratio}): "
@@ -239,13 +255,13 @@ def _load_font(size, is_telugu=False):
     return ImageFont.load_default()
 
 
-def _clean_title(title):
+def _clean_title(title, is_telugu=False):
     """
-    Converts a video title into a high-CTR, 3-4 word curiosity-gap phrase.
-    Limits text strictly to 3-4 words to maximize mobile thumbnail click-through rates.
+    Converts a video title into a high-CTR, 2-4 word curiosity-gap phrase.
+    For Telugu / Bigg Boss topics, prioritizes high-voltage, bold Telugu curiosity badges.
     """
     if not title:
-        return "SHOCKING TWIST?!"
+        return "బిగ్ బాస్ బిగ్ ట్విస్ట్?!" if is_telugu else "SHOCKING TWIST?!"
 
     t = str(title).strip()
 
@@ -256,7 +272,32 @@ def _clean_title(title):
 
     t_low = t.lower()
 
-    # Check for direct curiosity question in the title (e.g. "NAGARJUNA ROHIT NI TARGET CHESARA?")
+    # If Telugu context or Bigg Boss topic: Generate bold, curiosity-triggering Telugu badges
+    if is_telugu or any(k in t_low for k in ("bigg boss", "biggboss", "బిగ్ బాస్", "aman", "అమన్", "trigun", "త్రిగుణ్", "jhansi", "ఝాన్సీ", "rohit", "రోహిత్", "sudheer", "సుధీర్")):
+        if any(k in t_low for k in ["overaction", "ఓవరాక్షన్", "over action", "drama", "డ్రామా"]):
+            return "ఓవరాక్షన్ పీక్స్!"
+        elif any(k in t_low for k in ["elimination", "eviction", "ఎలిమినేషన్", "ఎలిమినేట్"]):
+            return "ఎలిమినేషన్ షాక్?!"
+        elif any(k in t_low for k in ["nomination", "నామినేషన్", "నామినేట్"]):
+            return "నామినేషన్ ట్విస్ట్?!"
+        elif any(k in t_low for k in ["fight", "రచ్చ", "గొడవ", "clash", "war"]):
+            return "హౌస్‌లో రచ్చ రంబోలా!"
+        elif any(k in t_low for k in ["family", "ఫ్యామిలీ", "visit"]):
+            return "ఫ్యామిలీ విజిట్ ట్విస్ట్?!"
+        elif any(k in t_low for k in ["secret", "నిజం", "లీక్", "truth"]):
+            return "అసలు నిజం లీక్?!"
+        elif any(k in t_low for k in ["nagarjuna", "నాగార్జున", "warning", "వార్నింగ్"]):
+            return "నాగార్జున ఫైర్!"
+        elif any(k in t_low for k in ["wild card", "wildcard", "వైల్డ్ కార్డ్"]):
+            return "వైల్డ్ కార్డ్ ఎంట్రీ?!"
+        elif any(k in t_low for k in ["shock", "twist", "షాక్", "ట్విస్ట్"]):
+            return "షాకింగ్ ట్విస్ట్?!"
+        telugu_words = re.findall(r"[\u0C00-\u0C7F]+", t)
+        if len(telugu_words) >= 2:
+            return " ".join(telugu_words[:3]) + "!"
+        return "బిగ్ బాస్ బిగ్ ట్విస్ట్?!"
+
+    # Check for direct curiosity question in the title
     if "?" in t:
         q_part = [p.strip() for p in t.split("?") if p.strip()]
         if q_part:
@@ -269,13 +310,12 @@ def _clean_title(title):
     # If colon, pipe, or hyphen separates a punchy statement, take the punchiest part
     parts = [p.strip() for p in re.split(r"[:|!-]", t) if p.strip()]
     if len(parts) > 1:
-        # Check if the second part is shorter and punchy
         cand = parts[1] if 2 <= len(parts[1].split()) <= 4 else parts[0]
         words = cand.split()
         if 2 <= len(words) <= 4:
             return " ".join(words[:4]).upper()
 
-    # Topic-specific curiosity trigger mappings if title is very long
+    # Topic-specific curiosity trigger mappings for English
     if any(k in t_low for k in ["elimination", "eviction"]):
         return "SHOCKING ELIMINATION?!"
     elif any(k in t_low for k in ["nomination"]):
@@ -287,10 +327,7 @@ def _clean_title(title):
     elif any(k in t_low for k in ["secret room"]):
         return "SECRET ROOM DRAMA!"
 
-    # Extract words (Telugu and alphanumeric)
     words = re.findall(r"[\w\u0C00-\u0C7F]+", t)
-
-    # Filter out boring stop words to keep punchy curiosity words
     stop_words = {"the", "a", "an", "is", "in", "and", "or", "of", "to", "for", "with", "this", "that", "telugu", "full", "story", "analysis"}
     punchy_words = [w for w in words if w.lower() not in stop_words]
 
@@ -485,11 +522,18 @@ def create_thumbnail(title, aspect_ratio="16:9", assets_dir=None, output_dir=Non
     draw = ImageDraw.Draw(image)
 
     # --------------------------------------------------------
-    # TITLE (3-4 Word High-CTR Curiosity Phrase)
+    # TITLE (High-CTR Curiosity Badge)
     # --------------------------------------------------------
 
+    is_telugu_topic = bool(
+        re.search(r"[\u0C00-\u0C7F]", str(title))
+        or ((OUTPUT_DIR / "topic.txt").exists() and re.search(r"[\u0C00-\u0C7F]|bigg boss|biggboss", (OUTPUT_DIR / "topic.txt").read_text(encoding="utf-8").lower()))
+        or re.search(r"bigg\s*boss|aman|trigun|jhansi|rohit|sudheer", str(title).lower())
+    )
+
     thumbnail_title = _clean_title(
-        title
+        title,
+        is_telugu=is_telugu_topic,
     )
 
     is_telugu_title = bool(re.search(r"[\u0C00-\u0C7F]", thumbnail_title))
@@ -532,10 +576,10 @@ def create_thumbnail(title, aspect_ratio="16:9", assets_dir=None, output_dir=Non
     if current:
         lines.append(current)
 
-    lines = lines[:2]  # Keep strictly 1-2 lines for 3-4 words
+    lines = lines[:2]  # Keep strictly 1-2 lines for maximum impact
 
     # --------------------------------------------------------
-    # CENTER TITLE VERTICALLY IN TARGET ZONE WITH HIGH-CONTRAST POP
+    # CENTER TITLE VERTICALLY IN TARGET ZONE WITH HIGH-CONTRAST PILL BADGES
     # --------------------------------------------------------
 
     total_height = (
@@ -562,20 +606,34 @@ def create_thumbnail(title, aspect_ratio="16:9", assets_dir=None, output_dir=Non
             canvas_w - text_width
         ) // 2
 
+        # Draw High-CTR Pill Badge behind the line
+        pad_x, pad_y = 26, 8
+        pill_left = max(10, x - pad_x)
+        pill_top = max(10, y - pad_y)
+        pill_right = min(canvas_w - 10, x + text_width + pad_x)
+        pill_bottom = min(canvas_h - 10, y + line_height - 6)
+
+        # Drop shadow for pill
+        draw.rounded_rectangle(
+            (pill_left + 4, pill_top + 6, pill_right + 4, pill_bottom + 6),
+            radius=16,
+            fill=(0, 0, 0, 180),
+        )
+
+        # Pill background with contrasting border
+        pill_border = "#FFCC00" if idx == 0 else "#E63946"
+        draw.rounded_rectangle(
+            (pill_left, pill_top, pill_right, pill_bottom),
+            radius=16,
+            fill=(12, 14, 24, 230),
+            outline=pill_border,
+            width=3,
+        )
+
         # Vibrant high-CTR color: Golden yellow for first line, crisp white for second
         text_color = "#FFE600" if idx == 0 else "#FFFFFF"
 
-        # Deep shadow
-        draw.text(
-            (x + 5, y + 5),
-            line,
-            font=font,
-            fill=(0, 0, 0, 240),
-            stroke_width=5,
-            stroke_fill=(0, 0, 0, 240),
-        )
-
-        # High-contrast text with thick black outline
+        # High-contrast text with deep outline
         draw.text(
             (x, y),
             line,

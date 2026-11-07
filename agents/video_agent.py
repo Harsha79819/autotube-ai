@@ -449,7 +449,19 @@ def render_smart_canvas_image(image_path, target_width=720, target_height=720, o
                 canvas.save(out_p, "JPEG", quality=95)
                 return out_p
 
-            # 1. Background layer: cover & Gaussian blur & darken
+            # Full-Bleed Cinema Framing for 9:16 Shorts/Reels:
+            # Scale and center-crop standard photos (0.55 <= aspect <= 1.95) to fill screen cleanly
+            if target_width < target_height and 0.55 <= orig_aspect <= 1.95:
+                scale = max(target_width / orig_w, target_height / orig_h)
+                new_w, new_h = int(orig_w * scale), int(orig_h * scale)
+                im_scaled = im.resize((new_w, new_h), Image.Resampling.LANCZOS)
+                crop_x = max(0, (new_w - target_width) // 2)
+                crop_y = max(0, (new_h - target_height) // 2)
+                canvas = im_scaled.crop((crop_x, crop_y, crop_x + target_width, crop_y + target_height))
+                canvas.save(out_p, "JPEG", quality=95)
+                return out_p
+
+            # 1. Background layer for extreme aspect ratios: cover & Gaussian blur & darken
             scale_bg = max(target_width / orig_w, target_height / orig_h)
             bg_w, bg_h = int(orig_w * scale_bg), int(orig_h * scale_bg)
             bg = im.resize((bg_w, bg_h), Image.Resampling.BILINEAR)

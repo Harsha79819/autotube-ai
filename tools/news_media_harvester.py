@@ -265,8 +265,17 @@ def extract_images_from_article_url(
                     out_path = CACHE_DIR / f"news_{url_hash}_{img_idx}.jpg"
                     im_rgb = im.convert("RGB")
                     im_rgb.save(out_path, "JPEG", quality=92)
-                    saved_paths.append(out_path)
-                    img_idx += 1
+                    try:
+                        from tools.watermark_remover import clean_and_remove_watermarks
+                        is_clean, cleaned_p = clean_and_remove_watermarks(out_path)
+                        if is_clean:
+                            saved_paths.append(cleaned_p)
+                            img_idx += 1
+                        else:
+                            out_path.unlink(missing_ok=True)
+                    except Exception:
+                        saved_paths.append(out_path)
+                        img_idx += 1
             except Exception:
                 continue
 
@@ -457,6 +466,15 @@ def harvest_news_images(
                                 h_name = f_h[:10]
                                 out_path = CACHE_DIR / f"news_domain_{h_name}.jpg"
                                 im.convert("RGB").save(out_path, "JPEG", quality=92)
+                                try:
+                                    from tools.watermark_remover import clean_and_remove_watermarks
+                                    is_clean, cleaned_p = clean_and_remove_watermarks(out_path)
+                                    if not is_clean:
+                                        out_path.unlink(missing_ok=True)
+                                        return None
+                                    out_path = cleaned_p
+                                except Exception:
+                                    pass
                                 return (f_h, out_path)
                 except Exception:
                     pass

@@ -510,8 +510,16 @@ def compose_scene(scene: Scene, out_dir: Path, w: int = W_DEFAULT, h: int = H_DE
         lay = _blank(w, h)
         lay.alpha_composite(nm, ((w - nm.width) // 2, int(h * 0.50 - nm.height / 2)))
         res.layers.append(LayerSpec(_save(lay, out_dir / f"{tag}_name.png"), "up", 0.20, True))
-    elif layout == "photo_card" or (photo_path and layout == "broll"):
-        # Real photo of a non-person / non-entity subject: blurred copy as backdrop, sharp framed card on top.
+    elif layout == "broll" and photo_path and Path(photo_path).exists():
+        # Full-Bleed 9:16 Cinema Motion & Full-Screen Reaction Meme
+        photo = Image.open(photo_path).convert("RGB")
+        bg = _cover(photo, w, h)
+        bg = _vignette(bg, strength=0.32)
+        res = SceneLayers(bg=_save(bg, out_dir / f"{tag}_bg.png", "RGB"), kind="cinema_motion")
+        # Full-screen cinema motion: no boxed card, clean view with room for burned-in subtitles
+        return res
+    elif layout == "photo_card" and photo_path and Path(photo_path).exists():
+        # Framed Canva photo card with blurred backdrop & punchline
         photo = Image.open(photo_path).convert("RGB")
         bg = _vignette(Image.eval(_cover(photo, w, h).filter(ImageFilter.GaussianBlur(34)), lambda v: int(v * 0.5)))
         res = SceneLayers(bg=_save(bg, out_dir / f"{tag}_bg.png", "RGB"), kind="photo_card")

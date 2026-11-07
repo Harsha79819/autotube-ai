@@ -161,13 +161,21 @@ BING_BROWSER_HEADERS = {
 
 def clean_and_crop_image(image_path: Path, aspect_ratio: str = "9:16") -> Path:
     """
-    Auto-crops solid black/dark letterboxing bars, trims watermark borders,
-    and formats 16:9 landscape images for 9:16 vertical shorts by compositing
-    onto a blurred mirrored background to fill the full 9:16 canvas without leaving black/empty bars.
+    Auto-detects and crops watermarks, trims letterbox borders,
+    and formats images for 9:16 vertical shorts by filling the full 9:16 canvas
+    with full-bleed cinema framing (never leaves awkward boxed cards or black bars).
     """
     p = Path(image_path)
     if not p.exists():
         return p
+
+    # 0. Automated Watermark Detection & Removal
+    try:
+        from tools.watermark_remover import clean_and_remove_watermarks
+        _, p = clean_and_remove_watermarks(p)
+    except Exception:
+        pass
+
     try:
         from PIL import ImageFilter
         with Image.open(p) as im:
@@ -184,7 +192,6 @@ def clean_and_crop_image(image_path: Path, aspect_ratio: str = "9:16") -> Path:
                 b_left, b_top, b_right, b_bottom = bbox
                 crop_w = b_right - b_left
                 crop_h = b_bottom - b_top
-                # Only apply if non-trivial border (> 8px) and preserves at least 55% of content
                 if crop_w > w * 0.55 and crop_h > h * 0.55:
                     if b_left >= 8 or b_top >= 8 or (w - b_right) >= 8 or (h - b_bottom) >= 8:
                         im_rgb = im_rgb.crop(bbox)
@@ -195,9 +202,9 @@ def clean_and_crop_image(image_path: Path, aspect_ratio: str = "9:16") -> Path:
                 im_rgb = im_rgb.crop((0, 0, w, int(h * 0.96)))
                 w, h = im_rgb.size
 
-            # 3. Clean Aspect Ratio & Canvas Filling:
+            # 3. Clean Aspect Ratio & Canvas Filling (Full-Bleed Cinema):
             # Guarantees exact 1080x1920 for 9:16 Shorts / Reels, or 1920x1080 for 16:9 Landscape.
-            # Never leaves raw sizes (like 650x788) with black bars.
+            # Covers full canvas cleanly without artificial borders.
             if aspect_ratio == "9:16":
                 target_w, target_h = 1080, 1920
                 if (w, h) == (target_w, target_h):
@@ -205,23 +212,13 @@ def clean_and_crop_image(image_path: Path, aspect_ratio: str = "9:16") -> Path:
                 elif abs(w / float(h) - (target_w / float(target_h))) < 0.03:
                     im_rgb = im_rgb.resize((target_w, target_h), Image.Resampling.LANCZOS)
                 else:
-                    bg_scale = max(target_w / float(w), target_h / float(h))
-                    bg_w, bg_h = int(w * bg_scale), int(h * bg_scale)
-                    bg_im = im_rgb.resize((bg_w, bg_h), Image.Resampling.LANCZOS)
-                    crop_x = max(0, (bg_w - target_w) // 2)
-                    crop_y = max(0, (bg_h - target_h) // 2)
-                    bg_cropped = bg_im.crop((crop_x, crop_y, crop_x + target_w, crop_y + target_h))
-                    bg_blurred = bg_cropped.filter(ImageFilter.GaussianBlur(radius=28)).convert("RGBA")
-                    scrim = Image.new("RGBA", (target_w, target_h), (0, 0, 0, 50))
-                    bg_blurred = Image.alpha_composite(bg_blurred, scrim)
-
-                    fg_scale = min(target_w / float(w), target_h / float(h))
-                    fg_w, fg_h = int(w * fg_scale), int(h * fg_scale)
-                    fg_resized = im_rgb.resize((fg_w, fg_h), Image.Resampling.LANCZOS).convert("RGBA")
-                    fg_x = (target_w - fg_w) // 2
-                    fg_y = (target_h - fg_h) // 2
-                    bg_blurred.paste(fg_resized, (fg_x, fg_y), fg_resized)
-                    im_rgb = bg_blurred.convert("RGB")
+                    # Full-bleed cinema cover: scale to fill 1080x1920 and center-crop
+                    scale = max(target_w / float(w), target_h / float(h))
+                    new_w, new_h = int(w * scale), int(h * scale)
+                    im_scaled = im_rgb.resize((new_w, new_h), Image.Resampling.LANCZOS)
+                    crop_x = max(0, (new_w - target_w) // 2)
+                    crop_y = max(0, (new_h - target_h) // 2)
+                    im_rgb = im_scaled.crop((crop_x, crop_y, crop_x + target_w, crop_y + target_h))
             elif aspect_ratio == "16:9":
                 target_w, target_h = 1920, 1080
                 if (w, h) == (target_w, target_h):

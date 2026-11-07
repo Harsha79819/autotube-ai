@@ -86,7 +86,7 @@ def _frame_from_video(video: Path, dest: Path) -> Optional[Path]:
 
 
 def _pick_photo(scene: Scene, images: List[Path], work: Path, banned: set, used: set) -> Optional[Path]:
-    """First real, not-yet-used image among the visuals this scene covers."""
+    """First real, not-yet-used image among the visuals this scene covers, or any unused image in pool."""
     for vid in scene.visual_ids:
         if not (1 <= vid <= len(images)):
             continue
@@ -106,6 +106,23 @@ def _pick_photo(scene: Scene, images: List[Path], work: Path, banned: set, used:
             continue
         used.add(digest)
         return p
+
+    # Pass 2: Look across any unused real photo in the entire images pool
+    for p in images:
+        if p.suffix.lower() in (".mp4", ".mov", ".webm", ".mkv"):
+            continue
+        try:
+            digest = _md5(p)
+            if digest in banned or digest in used:
+                continue
+            with Image.open(p) as im:
+                if min(im.size) < 400:
+                    continue
+            used.add(digest)
+            return p
+        except Exception:
+            continue
+
     return None
 
 
@@ -158,13 +175,13 @@ def build_scene_clips(
                     meme_p = get_reaction_meme(emo_cat, used_memes=used)
                 if meme_p and meme_p.exists():
                     photo = meme_p
-                    force = "photo_card"
+                    force = "broll"
                 else:
-                    photo = None
-                    force = "typography"
+                    photo = _pick_photo(scene, images, work, banned, used)
+                    force = "broll" if photo else "typography"
             else:
                 photo = _pick_photo(scene, images, work, banned, used) if allow_photos else None
-                force = "photo_card" if photo else "typography"
+                force = "broll" if photo else "typography"
         layers = compose_scene(scene, work, width, height, photo_path=photo, force=force)
 
         is_last = i == len(scenes) - 1

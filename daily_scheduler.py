@@ -48,6 +48,10 @@ DEFAULT_TELUGU_VOICE = "👩 Shruti (Telugu Creator / Anchor) - Conversational"
 DEFAULT_LANGUAGE_STYLE = "Telugu with English words (Casual / Trendy)"
 DEFAULT_PRIVACY = "public"
 
+# Master killswitch: All automatic background uploads are disabled by default per user request.
+# Videos will ONLY be uploaded when explicitly triggered or when ENABLE_AUTO_UPLOAD=1 is passed.
+ENABLE_AUTO_UPLOAD = os.getenv("ENABLE_AUTO_UPLOAD", "0").strip().lower() in ("1", "true", "yes")
+
 # ============================================================
 # 10 DAILY PEAK-HOURS SLOT SCHEDULE (IST)
 # ============================================================
@@ -656,12 +660,12 @@ class MultiSlotDailyScheduler:
                 captions=(aspect == "16:9"),
                 thumbnail=True,
                 metadata=True,
-                youtube_upload=True,
+                youtube_upload=ENABLE_AUTO_UPLOAD,
                 youtube_privacy=self.upload_privacy,
                 youtube_channel=channel,
                 aspect_ratio=aspect,
                 target_duration=duration,
-                instagram_upload=is_ig_eligible,
+                instagram_upload=bool(ENABLE_AUTO_UPLOAD and is_ig_eligible),
                 generation_mode="stock",
             )
 
@@ -777,12 +781,12 @@ class MultiSlotDailyScheduler:
                 captions=(aspect_ratio == "16:9"),
                 thumbnail=True,
                 metadata=True,
-                youtube_upload=True,
+                youtube_upload=ENABLE_AUTO_UPLOAD,
                 youtube_privacy=self.upload_privacy,
                 youtube_channel=channel,
                 aspect_ratio=aspect_ratio,
                 target_duration=duration,
-                instagram_upload=is_ig_eligible,
+                instagram_upload=bool(ENABLE_AUTO_UPLOAD and is_ig_eligible),
                 generation_mode="stock",
             )
             vid_id = (result or {}).get("youtube_video_id")
