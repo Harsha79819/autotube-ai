@@ -54,10 +54,10 @@ def generate_hook_card(
     output_path: str = "output/hook_overlay.png",
     width: int = 1080,
     height: int = 1920,
-    tag_label: str = "⚡ VIRAL HOOK",
+    tag_label: str = "",
 ) -> str:
     """
-    Renders an eye-catching viral hook overlay card on a transparent RGBA canvas.
+    Renders an eye-catching hook overlay card on a transparent RGBA canvas.
     Designed for 9:16 Shorts frame-0 hook impact.
     """
     out_file = Path(output_path)
@@ -86,15 +86,19 @@ def generate_hook_card(
         wrapped_lines = wrapped_lines[:3]
         wrapped_lines[2] = wrapped_lines[2].rstrip(".") + "..."
 
-    # Badge tag dimensions
-    clean_tag = tag_label.replace("⚡", "").strip()
-    try:
-        tag_bbox = draw.textbbox((0, 0), clean_tag, font=tag_font)
-        tag_w = tag_bbox[2] - tag_bbox[0] + 32
-        tag_h = tag_bbox[3] - tag_bbox[1] + 16
-    except Exception:
-        tag_w = 200
-        tag_h = 36
+    # Badge tag dimensions (only if tag_label is explicitly passed)
+    clean_tag = tag_label.replace("⚡", "").strip() if tag_label else ""
+    if clean_tag:
+        try:
+            tag_bbox = draw.textbbox((0, 0), clean_tag, font=tag_font)
+            tag_w = tag_bbox[2] - tag_bbox[0] + 32
+            tag_h = tag_bbox[3] - tag_bbox[1] + 16
+        except Exception:
+            tag_w = 200
+            tag_h = 36
+    else:
+        tag_w = 0
+        tag_h = 0
 
     # Calculate text bounding boxes
     line_heights = []
@@ -115,9 +119,10 @@ def generate_hook_card(
 
     # Card dimensions with generous padding
     pad_x = 50
-    pad_y = 40 if is_telugu else 36
+    pad_y = 36 if is_telugu else 30
+    extra_tag_h = (tag_h + 16) if clean_tag else 0
     card_w = min(width - 120, max(max_line_w + (pad_x * 2), tag_w + 60))
-    card_h = total_text_h + tag_h + (pad_y * 2) + (35 if is_telugu else 20)
+    card_h = total_text_h + extra_tag_h + (pad_y * 2) + (10 if is_telugu else 0)
 
     # Upper third positioning (centered horizontally, y at ~19% of height)
     card_x = (width - card_w) // 2
@@ -143,21 +148,24 @@ def generate_hook_card(
         width=4,
     )
 
-    # 3. Pill Tag Badge (top-left inside card)
-    tag_x = card_x + pad_x
-    tag_y = card_y + 22
-    draw.rounded_rectangle(
-        [tag_x, tag_y, tag_x + tag_w, tag_y + tag_h],
-        radius=14,
-        fill=(255, 215, 0, 255),  # Vibrant gold
-    )
-    # Tag text in black bold
-    draw.text(
-        (tag_x + 16, tag_y + 8),
-        clean_tag,
-        font=tag_font,
-        fill=(10, 10, 10, 255),
-    )
+    # 3. Pill Tag Badge (top-left inside card - ONLY if clean_tag is present)
+    if clean_tag:
+        tag_x = card_x + pad_x
+        tag_y = card_y + 20
+        draw.rounded_rectangle(
+            [tag_x, tag_y, tag_x + tag_w, tag_y + tag_h],
+            radius=14,
+            fill=(255, 215, 0, 255),  # Vibrant gold
+        )
+        draw.text(
+            (tag_x + 16, tag_y + 8),
+            clean_tag,
+            font=tag_font,
+            fill=(10, 10, 10, 255),
+        )
+        start_text_y = tag_y + tag_h + 16
+    else:
+        start_text_y = card_y + pad_y
 
     # 4. Spoken Hook Text (HarfBuzz OpenType shaping for Telugu, PIL for Latin)
     if is_telugu and (FONTS_DIR / "NotoSansTelugu-Bold.ttf").exists():
@@ -172,7 +180,7 @@ def generate_hook_card(
                 txt_path = tf.name
 
             esc_txt = txt_path.replace(":", "\\:").replace("'", "\\'")
-            text_y = tag_y + tag_h + 20
+            text_y = start_text_y
             vf = (
                 f"drawtext=fontfile='{t_font}':textfile='{esc_txt}':fontsize={font_size}:fontcolor=black@0.9:"
                 f"line_spacing={line_spacing}:x=(w-text_w)/2+2:y={text_y}+2,"
@@ -185,7 +193,7 @@ def generate_hook_card(
                 tmp_base.unlink(missing_ok=True)
                 if os.path.exists(txt_path):
                     os.unlink(txt_path)
-                print(f"✅ Generated Frame-0 Viral Hook Overlay (HarfBuzz Telugu): {out_file} ({card_w}x{card_h}px)")
+                print(f"✅ Generated Frame-0 Hook Overlay (Telugu): {out_file} ({card_w}x{card_h}px)")
                 return str(out_file)
         except Exception as hb_err:
             print(f"Hook card HarfBuzz note: {hb_err}")
@@ -194,7 +202,7 @@ def generate_hook_card(
             if "txt_path" in locals() and os.path.exists(txt_path):
                 os.unlink(txt_path)
 
-    curr_y = tag_y + tag_h + 20
+    curr_y = start_text_y
     for idx, (line, l_w, l_h) in enumerate(zip(wrapped_lines, line_widths, line_heights)):
         # Center each line horizontally within the card
         text_x = card_x + ((card_w - l_w) // 2)

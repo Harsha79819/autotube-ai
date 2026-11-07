@@ -280,86 +280,66 @@ def _load_font(size, is_telugu=False):
 
 def _clean_title(title, is_telugu=False):
     """
-    Converts a video title into a high-CTR, 2-4 word curiosity-gap phrase.
-    For Telugu / Bigg Boss topics, prioritizes high-voltage, bold Telugu curiosity badges.
+    Converts a video title into a high-CTR, strictly 2-4 word curiosity-gap phrase.
+    Guarantees:
+    1. Simple & Clean: strictly 2 to 4 words in large font.
+    2. Curiosity Gap: Never repeats the full video title; triggers intense viewer mystery.
+    3. High-Contrast viral hooks in authentic Telugu or punchy English.
     """
     if not title:
-        return "బిగ్ బాస్ బిగ్ ట్విస్ట్?!" if is_telugu else "SHOCKING TWIST?!"
+        return "షాకింగ్ ట్విస్ట్?!" if is_telugu else "SHOCKING TWIST?!"
 
     t = str(title).strip()
-
-    # Strip common channel prefixes or suffixes
-    t = re.sub(r"^(roasting the drama|roasting|breaking|honest review|review):\s*", "", t, flags=re.IGNORECASE)
-    t = re.sub(r"\s*-\s*(reuters|youtube|shorts|viral).*$", "", t, flags=re.IGNORECASE)
-    t = re.sub(r"[#@][\w]+", "", t).strip()
-
     t_low = t.lower()
 
-    # If Telugu context or Bigg Boss topic: Generate bold, curiosity-triggering Telugu badges
-    if is_telugu or any(k in t_low for k in ("bigg boss", "biggboss", "బిగ్ బాస్", "aman", "అమన్", "trigun", "త్రిగుణ్", "jhansi", "ఝాన్సీ", "rohit", "రోహిత్", "sudheer", "సుధీర్")):
-        if any(k in t_low for k in ["overaction", "ఓవరాక్షన్", "over action", "drama", "డ్రామా"]):
+    # Topic-driven high-CTR Telugu curiosity badges (strictly 2-4 words)
+    if is_telugu or any(k in t_low for k in ("bigg boss", "biggboss", "బిగ్ బాస్", "aman", "అమన్", "trigun", "త్రిగుణ్", "jhansi", "ఝాన్సీ", "rohit", "రోహిత్", "sudheer", "సుధీర్", "vamsi", "వంశీ")):
+        if any(k in t_low for k in ["overaction", "ఓవరాక్షన్", "over action", "drama", "డ్రామా", "యాక్టింగ్"]):
             return "ఓవరాక్షన్ పీక్స్!"
-        elif any(k in t_low for k in ["elimination", "eviction", "ఎలిమినేషన్", "ఎలిమినేట్"]):
+        elif any(k in t_low for k in ["elimination", "eviction", "ఎలిమినేషన్", "ఎలిమినేట్", "వీడ్కోలు", "బయటకు"]):
             return "ఎలిమినేషన్ షాక్?!"
         elif any(k in t_low for k in ["nomination", "నామినేషన్", "నామినేట్"]):
             return "నామినేషన్ ట్విస్ట్?!"
-        elif any(k in t_low for k in ["fight", "రచ్చ", "గొడవ", "clash", "war"]):
+        elif any(k in t_low for k in ["fight", "రచ్చ", "గొడవ", "clash", "war", "ఘర్షణ", "వార్"]):
             return "హౌస్‌లో రచ్చ రంబోలా!"
-        elif any(k in t_low for k in ["family", "ఫ్యామిలీ", "visit"]):
-            return "ఫ్యామిలీ విజిట్ ట్విస్ట్?!"
-        elif any(k in t_low for k in ["secret", "నిజం", "లీక్", "truth"]):
+        elif any(k in t_low for k in ["secret", "నిజం", "లీక్", "truth", "సీక్రెట్", "బట్టబయలు", "ఎక్స్‌పోజ్"]):
             return "అసలు నిజం లీక్?!"
-        elif any(k in t_low for k in ["nagarjuna", "నాగార్జున", "warning", "వార్నింగ్"]):
+        elif any(k in t_low for k in ["nagarjuna", "నాగార్జున", "warning", "వార్నింగ్", "క్లాస్", "ఫైర్"]):
             return "నాగార్జున ఫైర్!"
-        elif any(k in t_low for k in ["wild card", "wildcard", "వైల్డ్ కార్డ్"]):
+        elif any(k in t_low for k in ["winner", "విన్నర్", "కప్పు", "ట్రోఫీ", "గెలుపు"]):
+            return "విన్నర్ ఎవరో లీక్?!"
+        elif any(k in t_low for k in ["wild card", "wildcard", "వైల్డ్ కార్డ్", "ఎంట్రీ"]):
             return "వైల్డ్ కార్డ్ ఎంట్రీ?!"
-        elif any(k in t_low for k in ["shock", "twist", "షాక్", "ట్విస్ట్"]):
+        elif any(k in t_low for k in ["fake", "ఫేక్", "మోసం", "చీటింగ్"]):
+            return "ఫేక్ డ్రామా బయటపడింది!"
+        elif any(k in t_low for k in ["shock", "twist", "షాక్", "ట్విస్ట్", "ట్విస్టు"]):
             return "షాకింగ్ ట్విస్ట్?!"
+
+        # If title has custom Telugu words, extract punchiest 2-3 words (NEVER full sentence)
         telugu_words = re.findall(r"[\u0C00-\u0C7F]+", t)
-        if len(telugu_words) >= 2:
-            return " ".join(telugu_words[:3]) + "!"
-        return "బిగ్ బాస్ బిగ్ ట్విస్ట్?!"
+        stop_words = {"బిగ్", "బాస్", "తెలుగు", "ఈ", "మరియు", "ఆ", "ఒక", "గురించి", "తో", "లో"}
+        punchy = [w for w in telugu_words if w not in stop_words]
+        if len(punchy) >= 2:
+            return " ".join(punchy[:3]) + "?!"
+        return "షాకింగ్ ట్విస్ట్?!"
 
-    # Check for direct curiosity question in the title
-    if "?" in t:
-        q_part = [p.strip() for p in t.split("?") if p.strip()]
-        if q_part:
-            words = q_part[0].split()
-            if len(words) <= 4:
-                return (q_part[0] + "?").upper()
-            else:
-                return (" ".join(words[-4:]) + "?").upper()
-
-    # If colon, pipe, or hyphen separates a punchy statement, take the punchiest part
-    parts = [p.strip() for p in re.split(r"[:|!-]", t) if p.strip()]
-    if len(parts) > 1:
-        cand = parts[1] if 2 <= len(parts[1].split()) <= 4 else parts[0]
-        words = cand.split()
-        if 2 <= len(words) <= 4:
-            return " ".join(words[:4]).upper()
-
-    # Topic-specific curiosity trigger mappings for English
+    # English high-CTR curiosity triggers (strictly 2-4 words)
     if any(k in t_low for k in ["elimination", "eviction"]):
         return "SHOCKING ELIMINATION?!"
     elif any(k in t_low for k in ["nomination"]):
         return "NOMINATION TWIST?!"
-    elif any(k in t_low for k in ["wild card", "wildcard"]):
-        return "WILDCARD ENTRY BOMBSHELL!"
-    elif any(k in t_low for k in ["nagarjuna"]):
-        return "NAGARJUNA SHOCKING VERDICT!"
-    elif any(k in t_low for k in ["secret room"]):
-        return "SECRET ROOM DRAMA!"
+    elif any(k in t_low for k in ["secret", "truth", "leak"]):
+        return "THE TRUTH LEAKED?!"
+    elif any(k in t_low for k in ["fight", "clash", "drama"]):
+        return "UNEXPECTED DRAMA?!"
+    elif any(k in t_low for k in ["fake", "cheat", "scam"]):
+        return "EXPOSED ON STAGE!"
+    elif any(k in t_low for k in ["shock", "twist"]):
+        return "SHOCKING TWIST?!"
 
-    words = re.findall(r"[\w\u0C00-\u0C7F]+", t)
-    stop_words = {"the", "a", "an", "is", "in", "and", "or", "of", "to", "for", "with", "this", "that", "telugu", "full", "story", "analysis"}
-    punchy_words = [w for w in words if w.lower() not in stop_words]
-
-    if len(punchy_words) >= 3:
-        return " ".join(punchy_words[:4]).upper()
-    elif len(words) >= 3:
-        return " ".join(words[:4]).upper()
-    elif words:
-        return " ".join(words).upper()
+    words = [w for w in re.findall(r"[A-Za-z0-9]+", t) if w.lower() not in {"the", "a", "an", "is", "in", "and", "or", "of", "to", "for", "with", "this", "that", "review", "full", "video"}]
+    if len(words) >= 2:
+        return (" ".join(words[:3]) + "?!").upper()
 
     return "SHOCKING TWIST?!"
 
@@ -523,28 +503,31 @@ def create_thumbnail(title, aspect_ratio="16:9", assets_dir=None, output_dir=Non
         or re.search(r"bigg\s*boss|aman|trigun|jhansi|rohit|sudheer", str(title).lower())
     )
 
-    context_text = f"{title} "
-    t_file = OUTPUT_DIR / "topic.txt"
-    if t_file.exists():
-        context_text += t_file.read_text(encoding="utf-8") + " "
-    m_file = OUTPUT_DIR / "metadata.json"
-    if m_file.exists():
-        context_text += m_file.read_text(encoding="utf-8")
-
-    ent_slug = _find_contestant_slug(context_text)
+    ent_slug = _find_contestant_slug(title)
+    if not ent_slug:
+        t_file = (out_dir / "topic.txt") if (out_dir / "topic.txt").exists() else (OUTPUT_DIR / "topic.txt")
+        if t_file.exists():
+            ent_slug = _find_contestant_slug(t_file.read_text(encoding="utf-8"))
+    if not ent_slug:
+        m_file = (out_dir / "metadata.json") if (out_dir / "metadata.json").exists() else (OUTPUT_DIR / "metadata.json")
+        if m_file.exists():
+            ent_slug = _find_contestant_slug(m_file.read_text(encoding="utf-8"))
 
     cutout_applied = False
     if ent_slug:
         try:
             from tools.person_cutout import extract_person_cutout
-            cand_paths = [
-                ROOT / "data" / "entities" / ent_slug / "neutral.jpg",
-                ROOT / "data" / "entities" / ent_slug / "neutral.png",
-                ROOT / "data" / "entities" / f"{ent_slug}_naidu" / "neutral.jpg",
-                ROOT / "data" / "entities" / f"{ent_slug}_reddy" / "neutral.jpg",
-                ROOT / "data" / "entities" / f"{ent_slug}_sounderajan" / "neutral.jpg",
-                ROOT / "assets" / "entities" / ent_slug / "image.jpg",
-            ]
+            # Prioritize high-emotion close-up facial expressions (shock, anger, laughter)
+            cand_paths = []
+            slug_variants = [ent_slug, f"{ent_slug}_naidu", f"{ent_slug}_reddy", f"{ent_slug}_sounderajan", f"{ent_slug}_contestant", f"{ent_slug}_bb"]
+            emotion_stems = ["shocked", "angry", "laughing", "smug", "reaction", "surprised", "crying", "neutral", "image"]
+            for em in emotion_stems:
+                for sv in slug_variants:
+                    cand_paths.append(ROOT / "data" / "entities" / sv / f"{em}.jpg")
+                    cand_paths.append(ROOT / "data" / "entities" / sv / f"{em}.png")
+                    cand_paths.append(ROOT / "assets" / "entities" / sv / f"{em}.jpg")
+                    cand_paths.append(ROOT / "assets" / "entities" / sv / "image.jpg")
+
             person_img_path = next((p for p in cand_paths if p.exists() and p.stat().st_size > 1000), None)
             if person_img_path:
                 cutout_path = extract_person_cutout(person_img_path)
@@ -552,21 +535,26 @@ def create_thumbnail(title, aspect_ratio="16:9", assets_dir=None, output_dir=Non
                     cutout_img = Image.open(cutout_path).convert("RGBA")
                     cw, ch = cutout_img.size
 
+                    # Close-up face crop: focus on head and shoulders for high-emotion YouTuber reaction impact
+                    if ch > 350:
+                        cutout_img = cutout_img.crop((0, 0, cw, int(ch * 0.72)))
+                        cw, ch = cutout_img.size
+
                     # Scale cutout to dominate canvas
                     if aspect_ratio == "9:16":
-                        target_ch = int(canvas_h * 0.62)
-                        target_cw = int(cw * (target_ch / ch))
-                        cutout_img = cutout_img.resize((target_cw, target_ch), Image.Resampling.LANCZOS)
-                        cx = (canvas_w - target_cw) // 2
-                        cy = int(canvas_h * 0.12)
-                    elif aspect_ratio == "1:1":
-                        target_ch = int(canvas_h * 0.72)
+                        target_ch = int(canvas_h * 0.65)
                         target_cw = int(cw * (target_ch / ch))
                         cutout_img = cutout_img.resize((target_cw, target_ch), Image.Resampling.LANCZOS)
                         cx = (canvas_w - target_cw) // 2
                         cy = int(canvas_h * 0.10)
+                    elif aspect_ratio == "1:1":
+                        target_ch = int(canvas_h * 0.75)
+                        target_cw = int(cw * (target_ch / ch))
+                        cutout_img = cutout_img.resize((target_cw, target_ch), Image.Resampling.LANCZOS)
+                        cx = (canvas_w - target_cw) // 2
+                        cy = int(canvas_h * 0.08)
                     else:  # 16:9 (Prasad Tech layout: Subject stands on the right)
-                        target_ch = int(canvas_h * 0.90)
+                        target_ch = int(canvas_h * 0.95)
                         target_cw = int(cw * (target_ch / ch))
                         cutout_img = cutout_img.resize((target_cw, target_ch), Image.Resampling.LANCZOS)
                         cx = canvas_w - target_cw - 40
@@ -574,21 +562,21 @@ def create_thumbnail(title, aspect_ratio="16:9", assets_dir=None, output_dir=Non
 
                     # Golden outer rim glow (Prasad Tech signature pop)
                     r, g, b, a = cutout_img.split()
-                    glow_color = Image.new("RGBA", cutout_img.size, (255, 175, 0, 220))
+                    glow_color = Image.new("RGBA", cutout_img.size, (255, 185, 0, 230))
                     glow_color.putalpha(a)
-                    glow_expanded = glow_color.filter(ImageFilter.GaussianBlur(radius=18))
+                    glow_expanded = glow_color.filter(ImageFilter.GaussianBlur(radius=22))
 
                     # Blend background and cutout
                     base_rgba = image.convert("RGBA")
-                    # Slightly dim background so cutout pops
+                    # Dim background so cutout and high-contrast text pop
                     enhancer = ImageEnhance.Brightness(base_rgba)
-                    base_rgba = enhancer.enhance(0.85)
+                    base_rgba = enhancer.enhance(0.78)
 
                     base_rgba.paste(glow_expanded, (cx, cy), glow_expanded)
                     base_rgba.paste(cutout_img, (cx, cy), cutout_img)
                     image = base_rgba
                     cutout_applied = True
-                    print(f"🌟 [Prasad Tech Style] Blended person cutout for {ent_slug} with vibrant rim glow!")
+                    print(f"🌟 [Prasad Tech Style] Blended high-emotion person cutout for {ent_slug} with vibrant rim glow!")
         except Exception as cutout_err:
             print(f"⚠️ Person cutout blend notice: {cutout_err}")
 
@@ -604,11 +592,11 @@ def create_thumbnail(title, aspect_ratio="16:9", assets_dir=None, output_dir=Non
         # Subtle dark gradient on left 50% for split-screen text readability
         overlay_draw.rectangle(
             (0, 0, int(canvas_w * 0.52), canvas_h),
-            fill=(0, 0, 0, 110),
+            fill=(0, 0, 0, 120),
         )
     else:
         # Soft dark gradient at bottom 24% for bottom badge readability
-        vignette_y = int(canvas_h * 0.74)
+        vignette_y = int(canvas_h * 0.72)
         overlay_draw.rectangle(
             (0, vignette_y, canvas_w, canvas_h),
             fill=(0, 0, 0, 160),
@@ -617,7 +605,7 @@ def create_thumbnail(title, aspect_ratio="16:9", assets_dir=None, output_dir=Non
     image = Image.alpha_composite(image, overlay)
 
     # --------------------------------------------------------
-    # TITLE (High-CTR Curiosity Badge)
+    # TITLE (High-CTR Curiosity Badge: Strictly 2-4 Words)
     # --------------------------------------------------------
 
     thumbnail_title = _clean_title(
@@ -630,8 +618,10 @@ def create_thumbnail(title, aspect_ratio="16:9", assets_dir=None, output_dir=Non
     if is_telugu_topic:
         try:
             from tools.native_typography import render_native_telugu_badge
-            badge_font_size = 72 if aspect_ratio == "9:16" else (52 if aspect_ratio == "16:9" else 64)
-            native_badge_path = render_native_telugu_badge(thumbnail_title, font_size=badge_font_size)
+            # High-CTR color scheme: Yellow, Red, White on Obsidian Black
+            badge_border = "#E63946" if any(w in thumbnail_title for w in ["షాక్", "ఎలిమినేషన్", "ఫైర్", "రచ్చ", "ELIMINATION", "DRAMA", "SHOCK"]) else "#FFD700"
+            badge_font_size = 82 if aspect_ratio == "9:16" else (64 if aspect_ratio == "16:9" else 70)
+            native_badge_path = render_native_telugu_badge(thumbnail_title, font_size=badge_font_size, border_color=badge_border)
             if native_badge_path and Path(native_badge_path).exists():
                 badge_img = Image.open(native_badge_path).convert("RGBA")
                 bw, bh = badge_img.size
@@ -647,21 +637,21 @@ def create_thumbnail(title, aspect_ratio="16:9", assets_dir=None, output_dir=Non
                     badge_img = badge_img.resize((max_bw, int(bh * scale_factor)), Image.Resampling.LANCZOS)
                     bw, bh = badge_img.size
 
-                # Position strictly at the BOTTOM (lower third) or LEFT split-screen so faces are NEVER covered!
+                # Position strictly at the BOTTOM (lower third) or LEFT split-screen (Safe from YouTube bottom-right timer!)
                 if aspect_ratio == "9:16":
                     bx = (canvas_w - bw) // 2
-                    by = canvas_h - bh - 150  # Anchored cleanly at bottom, leaving face completely free!
+                    by = canvas_h - bh - 230  # Safely above YouTube Shorts bottom UI, leaving face 100% free!
                 elif aspect_ratio == "1:1":
                     bx = (canvas_w - bw) // 2
                     by = canvas_h - bh - 80
                 else:  # 16:9 Landscape
                     if cutout_applied:
-                        # Prasad Tech split-screen: Subject on RIGHT, Badge on LEFT
-                        bx = 50
+                        # Prasad Tech split-screen: Subject on RIGHT, Badge on LEFT (Bottom-right corner 100% free)
+                        bx = 60
                         by = (canvas_h - bh) // 2
                     else:
-                        bx = (canvas_w - bw) // 2
-                        by = canvas_h - bh - 55
+                        bx = 60
+                        by = canvas_h - bh - 80
 
                 image.paste(badge_img, (bx, by), badge_img)
                 badge_drawn = True
@@ -672,7 +662,7 @@ def create_thumbnail(title, aspect_ratio="16:9", assets_dir=None, output_dir=Non
     # Fallback to standard Pillow text rendering if native renderer was not used
     if not badge_drawn:
         draw = ImageDraw.Draw(image)
-        font_size = 78 if aspect_ratio == "9:16" else (52 if aspect_ratio == "16:9" else 66)
+        font_size = 82 if aspect_ratio == "9:16" else (64 if aspect_ratio == "16:9" else 70)
         line_height = int(font_size * 1.18)
         font = _load_font(font_size, is_telugu=is_telugu_topic)
 
