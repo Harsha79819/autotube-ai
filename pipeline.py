@@ -1192,34 +1192,12 @@ def generate_multi_media_video(
     if captions is None:
         captions = (aspect_ratio == "16:9")
 
-    # Clean lingering artifacts from previous runs
-    for stale_file in (
-        "output/subtitles.ass",
-        "output/subtitles.srt",
-        "output/voice.mp3",
-        "output/voice_raw.wav",
-        "output/voice_paced.wav",
-        "output/transcription.json",
-        "output/final_video.mp4",
-        "output/video.mp4",
-        "output/verify_frame.jpg",
-        "output/visual_plan.json",
-        "output/visual_report.html",
-        "output/validation_notifications.json",
-    ):
-        try:
-            sp = Path(stale_file)
-            if sp.exists():
-                sp.unlink(missing_ok=True)
-        except Exception:
-            pass
-
-    # Reset SQLite asset ledger for fresh run
+    # 100% Strict Workspace Isolation: Purge lingering artifacts, previous scripts & old scraped images
     try:
-        from data.asset_ledger import clear_ledger_for_video
-        clear_ledger_for_video("current")
-    except Exception:
-        pass
+        from tools.workspace_cleaner import clean_run_environment
+        clean_run_environment(archive_first=True)
+    except Exception as clean_err:
+        print(f"⚠️ Workspace clean notice: {clean_err}")
 
     # Record topic in used topics ledger to guarantee future suggestions are novel
     try:
