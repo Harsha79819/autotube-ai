@@ -298,3 +298,4 @@ data/contestant_galleries/
 reference_assets/
 token_channel2.json
 autotube-ai/
+data/*.db*
