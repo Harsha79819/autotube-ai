@@ -22,6 +22,37 @@ except Exception:
     pass
 
 
+def _has_secrets_file() -> bool:
+    try:
+        p1 = ROOT / ".streamlit" / "secrets.toml"
+        p2 = Path.home() / ".streamlit" / "secrets.toml"
+        return p1.exists() or p2.exists()
+    except Exception:
+        return False
+
+
+def _auto_populate_secrets_toml():
+    """Auto-populates .streamlit/secrets.toml from .env if missing for seamless local Streamlit compatibility."""
+    try:
+        dest = ROOT / ".streamlit" / "secrets.toml"
+        if not dest.exists() and ENV_FILE.exists():
+            from dotenv import dotenv_values
+            env_vals = dotenv_values(ENV_FILE)
+            if env_vals:
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                lines = ['# Local Streamlit Secrets (Generated from .env, gitignored)\n']
+                for k, v in env_vals.items():
+                    if v is not None:
+                        escaped_v = str(v).replace('\\', '\\\\').replace('"', '\\"')
+                        lines.append(f'{k} = "{escaped_v}"\n')
+                dest.write_text(''.join(lines), encoding='utf-8')
+    except Exception:
+        pass
+
+
+_auto_populate_secrets_toml()
+
+
 def get_secret(key: str, default: str = "") -> str:
     """
     Retrieves secret string with priority:
@@ -43,10 +74,14 @@ def get_secret(key: str, default: str = "") -> str:
             if s_val is not None and str(s_val).strip():
                 return str(s_val).strip()
 
-        if hasattr(st, "secrets") and key in st.secrets:
-            s_val = st.secrets[key]
-            if s_val is not None and str(s_val).strip():
-                return str(s_val).strip()
+        if _has_secrets_file():
+            try:
+                if key in st.secrets:
+                    s_val = st.secrets[key]
+                    if s_val is not None and str(s_val).strip():
+                        return str(s_val).strip()
+            except Exception:
+                pass
     except Exception:
         pass
 
@@ -57,14 +92,17 @@ def sync_secrets_to_env():
     """Sync Streamlit secrets and session_state to os.environ so all sub-processes/agents have access."""
     try:
         import streamlit as st
-        if hasattr(st, "secrets"):
-            for k in st.secrets:
-                try:
-                    val = st.secrets[k]
-                    if isinstance(val, (str, int, float, bool)) and k not in os.environ:
-                        os.environ[k] = str(val).strip()
-                except Exception:
-                    pass
+        if _has_secrets_file():
+            try:
+                for k in st.secrets:
+                    try:
+                        val = st.secrets[k]
+                        if isinstance(val, (str, int, float, bool)) and k not in os.environ:
+                            os.environ[k] = str(val).strip()
+                    except Exception:
+                        pass
+            except Exception:
+                pass
         if hasattr(st, "session_state"):
             for k in ("GEMINI_API_KEY", "PEXELS_API_KEY", "OPENAI_API_KEY", "APP_PIN"):
                 if k in st.session_state and st.session_state[k]:
