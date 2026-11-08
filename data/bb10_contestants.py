@@ -41,11 +41,15 @@ CONTESTANTS_BB10: Dict[str, Dict] = {
         "full_name": "Rohit Patnam",
         "aliases": ["rohit", "rohit patnam", "రోహిత్", "రోహిత్ పట్నం"],
         "negative_tokens": ["sahni", "marina", "season 6", "bb6", "2022", "season-6", "wife"],
+        "status": "eliminated",
+        "is_active": False,
     },
     "shalini": {
         "full_name": "Shalini Patel",
         "aliases": ["shalini", "shalini patel", "shalini damera", "శాలిని", "శాలిని పటేల్", "షాలిని"],
         "negative_tokens": ["nair", "malayalam", "season 4", "bb4", "zain"],
+        "status": "eliminated",
+        "is_active": False,
     },
     "aman": {
         "full_name": "Aman Masud",
@@ -83,6 +87,15 @@ CONTESTANTS_BB10: Dict[str, Dict] = {
         "full_name": "Chaithra Rai",
         "aliases": ["chaithra", "chaithra rai", "చైత్ర", "చైత్ర రాయ్"],
         "negative_tokens": [],
+        "status": "eliminated",
+        "is_active": False,
+    },
+    "jhansi": {
+        "full_name": "Gundeboina Jhansi",
+        "aliases": ["jhansi", "singer jhansi", "gundeboina jhansi", "ఝాన్సీ", "సింగర్ ఝాన్సీ"],
+        "negative_tokens": ["anchor jhansi", "fort"],
+        "status": "eliminated",
+        "is_active": False,
     },
     "debjani": {
         "full_name": "Debjani Modak",

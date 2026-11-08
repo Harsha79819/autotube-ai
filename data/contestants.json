@@ -98,7 +98,8 @@
     "role": "Digital content creator, model and aspiring actor",
     "origin": "Vijayawada, Andhra Pradesh",
     "type": "COMMONER",
-    "status": "IN HOUSE",
+    "status": "ELIMINATED / EVICTED",
+    "is_active": false,
     "instagram_handle": "@rohitnaidupatnam.official",
     "show_hashtag": "#BiggBossTelugu10",
     "show_hashtags": [
@@ -132,7 +133,8 @@
     "role": "Digital content creator, model and aspiring actor",
     "origin": "Vijayawada, Andhra Pradesh",
     "type": "COMMONER",
-    "status": "IN HOUSE",
+    "status": "ELIMINATED / EVICTED",
+    "is_active": false,
     "instagram_handle": "@rohitnaidupatnam.official",
     "show_hashtag": "#BiggBossTelugu10",
     "show_hashtags": [
@@ -443,7 +445,8 @@
     "role": "Model, emcee, digital creator and social media influencer",
     "origin": "Karimnagar, Telangana / Melbourne, Australia",
     "type": "COMMONER",
-    "status": "IN HOUSE",
+    "status": "ELIMINATED / EVICTED",
+    "is_active": false,
     "instagram_handle": "@shaliniii_patell",
     "show_hashtag": "#BiggBossTelugu10",
     "show_hashtags": [

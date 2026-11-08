@@ -168,7 +168,7 @@ Context:
 {context_text or "Latest Bigg Boss Telugu house events, nominations, voting flips, and housemate conflicts"}
 
 MANDATORY RULES:
-- MUST name specific ACTIVE housemates (e.g. Temper Vamsi, Rohit Patnam, Thrigun Eswaran, Aman Masud, Sudheer Reddy, or Host Akkineni Nagarjuna). STRICT: DO NOT name eliminated housemates (Gundeboina Jhansi, Chaithra Rai, Krishna Alluri, Srishti, and Charan Mahadev were eliminated).
+- MUST name specific ACTIVE housemates (e.g. Temper Vamsi, Thrigun Eswaran, Aman Masud, Sudheer Reddy, Auto Ram Prasad, or Host Akkineni Nagarjuna). STRICT: DO NOT name eliminated housemates (Rohit Patnam, Shalini Patel, Gundeboina Jhansi, Chaithra Rai, Krishna Alluri, Srishti, and Charan Mahadev were eliminated).
 - MUST describe concrete events: heated nomination arguments, captaincy betrayal, secret room twist, shocking voting trend change, or weekend host grilling.
 - STRICTLY FORBIDDEN: Do NOT write generic empty filler like 'creators made claims', 'fake tears', or 'high voltage drama'. Give REAL actions, who said what, and why it exploded!
 Return ONLY a bulleted list of 5-7 concrete facts in English or Tanglish, one per line."""
@@ -197,7 +197,7 @@ Return ONLY a bulleted list of 5-8 facts in English or Tanglish, one per line. N
     # Fallback default facts anchored to real entities rather than generic filler
     if is_bb:
         return [
-            "Bigg Boss Telugu heated nomination clash broke out between Rohit Patnam and Aman Masud",
+            "Bigg Boss Telugu heated nomination clash broke out between Temper Vamsi and Aman Masud",
             "Temper Vamsi's controversial captaincy decisions and biased task judgements sparked intense house rebellion",
             "Thrigun Eswaran and Sudheer Reddy went head-to-head challenging house game strategies",
             "Host Akkineni Nagarjuna's weekend reality check exposed secret voting pacts and overacting",
@@ -295,9 +295,9 @@ def generate_roast_draft(topic: str, facts: List[str], target_duration_sec: int 
 - Comment Trigger & CTA (Final Beat):
   * End with a provocative, polarizing debate question (e.g. "ఈ వారం బిగ్ బాస్ హౌస్‌లో అసలైన కవర్ డ్రైవర్ ఎవరు? మీ అభిప్రాయం ఏమిటో కింద కామెంట్ చేయండి!") followed by witty లైక్, షేర్, సబ్‌స్క్రైబ్."""
         bb_constraint = """BIGG BOSS TELUGU 10 ROSTER RULES:
-- ACTIVE HOUSEMATES: Temper Vamsi, Thrigun Eswaran, Rohit Patnam, Aman Masud, Sudheer Reddy, Auto Ram Prasad, Potti Naresh, Debjani Modak, Mukesh Gowda, Varshini Sounderajan, Shalini Patel, Neethu Natraj, Dakkshi Guttikonda.
-- ELIMINATED CONTESTANTS: Gundeboina Jhansi (Singer Jhansi), Chaithra Rai, Krishna Alluri (Krishnudu), Srishti Vyakaranam, Charan Mahadev.
-- CRITICAL ACCURACY RULE: Jhansi, Chaithra, Krishnudu, Srishti, and Charan are ALREADY ELIMINATED! DO NOT describe them inside the house, in captaincy, getting immunity, or performing weekly tasks! Focus strictly on active housemates."""
+- ACTIVE HOUSEMATES: Temper Vamsi, Thrigun Eswaran, Aman Masud, Sudheer Reddy, Auto Ram Prasad, Potti Naresh, Debjani Modak, Mukesh Gowda, Varshini Sounderajan, Neethu Natraj, Dakkshi Guttikonda.
+- ELIMINATED CONTESTANTS: Rohit Patnam, Shalini Patel, Gundeboina Jhansi (Singer Jhansi), Chaithra Rai, Krishna Alluri (Krishnudu), Srishti Vyakaranam, Charan Mahadev, Mithilesh Reddy.
+- CRITICAL ACCURACY RULE: Rohit Patnam, Shalini Patel, Jhansi, Chaithra, Krishnudu, Srishti, and Charan are ALREADY ELIMINATED! DO NOT describe them inside the house, in captaincy, getting immunity, or performing weekly tasks! Focus strictly on active housemates."""
         loanword_samples = "'బిగ్ బాస్', 'మైండ్ బ్లాంక్', 'సీన్ కట్', 'పీఆర్ స్ట్రాటజీ', 'టీఆర్పీ రేటింగ్స్', 'సీక్రెట్ రూమ్', 'ఎలిమినేషన్', 'ఓటింగ్'"
     else:
         struct_text = f"""Structure:

@@ -37,7 +37,7 @@ def generate_community_poll(
         fallback_poll = {
             "poll_question": f"🔥 Bigg Boss 10 Today: ఈ వారం ఎలిమినేషన్ లో ఎవరు బయటకు వెళ్తారని మీరు అనుకుంటున్నారు?",
             "options": [
-                "1. రోహిత్ పట్నం (Rohit)",
+                "1. త్రిగుణ్ ఈశ్వరన్ (Thrigun)",
                 "2. తెంపర్ వంశీ (Temper Vamsi)",
                 "3. అమన్ మసూద్ (Aman)",
                 "4. ఎవరూ కాదు (No Elimination)",

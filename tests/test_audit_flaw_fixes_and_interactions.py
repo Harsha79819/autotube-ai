@@ -38,15 +38,24 @@ class TestCharanEliminationGuard(unittest.TestCase):
 
         active_list = get_active_contestants()
         self.assertNotIn("Charan Mahadev", active_list)
-        self.assertIn("Rohit Patnam", active_list)
+        self.assertNotIn("Rohit Patnam", active_list)
+        self.assertNotIn("Shalini Patel", active_list)
+        self.assertIn("Temper Vamsi", active_list)
+        self.assertTrue(is_eliminated_contestant("Rohit Patnam"))
+        self.assertTrue(is_eliminated_contestant("Shalini Patel"))
 
     def test_season_guard_elimination(self):
         from utils.season_guard import is_contestant_eliminated
         self.assertTrue(is_contestant_eliminated("Charan Mahadev"))
         self.assertTrue(is_contestant_eliminated("Charan"))
         self.assertTrue(is_contestant_eliminated("చరణ్"))
-        self.assertFalse(is_contestant_eliminated("Rohit Patnam"))
-        self.assertFalse(is_contestant_eliminated("Gundeboina Jhansi"))
+        self.assertTrue(is_contestant_eliminated("Rohit Patnam"))
+        self.assertTrue(is_contestant_eliminated("రోహిత్"))
+        self.assertTrue(is_contestant_eliminated("Shalini Patel"))
+        self.assertTrue(is_contestant_eliminated("శాలిని"))
+        self.assertTrue(is_contestant_eliminated("Gundeboina Jhansi"))
+        self.assertFalse(is_contestant_eliminated("Temper Vamsi"))
+        self.assertFalse(is_contestant_eliminated("Thrigun Eswaran"))
 
     def test_image_agent_skips_eliminated_contestant_for_general_scenes(self):
         from agents.image_agent import find_local_contestant_image

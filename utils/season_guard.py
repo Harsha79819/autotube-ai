@@ -30,6 +30,8 @@ KNOWN_TELUGU_SHOW_PERSONS: Dict[str, Dict[str, Any]] = {
         "canonical": "Rohit Patnam",
         "search_name": "Rohit Patnam Bigg Boss Telugu 10",
         "aliases": ["rohit", "రోహిత్", "rohit patnam", "రోహిత్ పట్నం", "rohit naidu"],
+        "status": "eliminated",
+        "is_active": False,
         "disallow_terms": [
             "rohit sahni", "rohit sharma", "cricket", "bcci", "hitman", "ipl", "mumbai indians", "cartoon", "anime",
         ],
@@ -38,6 +40,8 @@ KNOWN_TELUGU_SHOW_PERSONS: Dict[str, Dict[str, Any]] = {
         "canonical": "Gundeboina Jhansi",
         "search_name": "Gundeboina Jhansi singer Bigg Boss Telugu 10",
         "aliases": ["jhansi", "ఝాన్సీ", "ఝాన్సి", "singer jhansi", "సింగర్ ఝాన్సీ", "gundeboina jhansi"],
+        "status": "eliminated",
+        "is_active": False,
         "disallow_terms": [
             "anchor jhansi", "యాంకర్ ఝాన్సీ", "fort", "rani laxmibai", "queen", "uttar pradesh", "tourism", "monument", "cartoon", "anime",
         ],
@@ -97,12 +101,16 @@ KNOWN_TELUGU_SHOW_PERSONS: Dict[str, Dict[str, Any]] = {
         "canonical": "Shalini Patel",
         "search_name": "Shalini Patel Bigg Boss Telugu 10",
         "aliases": ["shalini patel", "shalini", "శాలిని పటేల్", "శాలిని", "షాలిని పటేల్", "షాలిని"],
+        "status": "eliminated",
+        "is_active": False,
         "disallow_terms": ["cartoon", "anime", "shalini ajith", "baby shalini"],
     },
     "chaitra": {
         "canonical": "Chaithra Rai",
         "search_name": "Chaithra Rai actress Bigg Boss Telugu 10",
         "aliases": ["chaitra", "చైత్ర", "chaitra rai", "చైత్ర రాయ్", "chaithra rai"],
+        "status": "eliminated",
+        "is_active": False,
         "disallow_terms": ["cartoon", "anime"],
     },
     "debjani": {
@@ -115,6 +123,8 @@ KNOWN_TELUGU_SHOW_PERSONS: Dict[str, Dict[str, Any]] = {
         "canonical": "Krishnudu",
         "search_name": "Krishnudu Telugu actor",
         "aliases": ["krishnudu", "కృష్ణుడు", "actor krishnudu"],
+        "status": "eliminated",
+        "is_active": False,
         "disallow_terms": ["cartoon", "anime", "lord krishna", "iskcon"],
     },
     "daakshi": {
@@ -869,5 +879,10 @@ def is_contestant_eliminated(person_name: str) -> bool:
         if p_info.get("status") == "eliminated" or not p_info.get("is_active", True):
             if p_info["canonical"].lower() == target_lower or target_lower in [a.lower() for a in p_info["aliases"]]:
                 return True
+            if p_info["canonical"].lower() in target_lower:
+                return True
+            for a in p_info["aliases"]:
+                if len(a) >= 4 and a.lower() in target_lower:
+                    return True
     return False
 

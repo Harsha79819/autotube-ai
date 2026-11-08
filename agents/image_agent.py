@@ -283,7 +283,7 @@ def find_local_contestant_image(
             continue
 
         # Check eviction/elimination status: If evicted, do NOT match unless the query explicitly discusses eviction/elimination
-        is_evicted = cdata.get("status") in ("EVICTED", "ELIMINATED") or not cdata.get("is_active", True)
+        is_evicted = any(k in str(cdata.get("status", "")).upper() for k in ("EVICTED", "ELIMINATED")) or not cdata.get("is_active", True)
         if is_evicted:
             eviction_keywords = ("evict", "elimina", "ఎలిమినే", "విడుదల", "బయటకు")
             if not any(ek in t_low for ek in eviction_keywords):
