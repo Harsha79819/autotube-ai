@@ -13,7 +13,7 @@ TRANSITIONS = [
 
 DIRECTIONS = [
     "zoom_in", "slow_cinematic_push", "pan_left", "zoom_in_tilt_up",
-    "zoom_out", "pan_right", "zoom_in_tilt_down", "hook_snap_zoom"
+    "zoom_out", "pan_right", "zoom_in_tilt_down", "hook_snap_zoom", "static_subtle"
 ]
 
 
@@ -42,47 +42,53 @@ def _zoompan_expr(direction, duration_seconds, out_w=1080, out_h=1920, fps=30):
     """
     Builds the ffmpeg zoompan filter expression for smooth continuous motion.
     Coordinates are strictly clamped to avoid out-of-bounds artifacting.
+    Max zoom is capped at 1.06 - 1.10x to ensure subjects and vehicles are never oversized.
     """
     total_frames = max(1, int(round(duration_seconds * fps)))
 
     if direction == "hook_snap_zoom":
-        # Viral YouTube Shorts / Reels Hook: Rapid punch-in during first 0.8s (frames 1-25), then smooth drift
-        z = "if(lt(on,25),min(1.0+on*0.010,1.25),min(1.25+(on-25)*0.001,1.40))"
+        # Viral Shorts Hook: Snappy punch-in to 1.07 then subtle drift to 1.10
+        z = "if(lt(on,18),min(1.0+on*0.004,1.07),min(1.07+(on-18)*0.00025,1.10))"
         x = "iw/2-(iw/zoom/2)"
         y = "ih/2-(ih/zoom/2)"
     elif direction == "slow_cinematic_push":
-        # Subtle slow push (1.0 to 1.18) ideal for tech & explainer videos
-        z = "min(zoom+0.0008,1.20)"
+        # Subtle slow push (1.0 to 1.06) ideal for news, explainers & realism
+        z = "min(zoom+0.0003,1.06)"
         x = "iw/2-(iw/zoom/2)"
         y = "ih/2-(ih/zoom/2)"
     elif direction == "zoom_in_tilt_up":
-        # Dynamic push in drifting upward toward focal head/top area
-        z = "min(zoom+0.0012,1.35)"
+        # Subtle upward drift toward focal head/face
+        z = "min(zoom+0.00035,1.08)"
         x = "iw/2-(iw/zoom/2)"
-        y = "if(eq(on,1),ih*0.25,max(0,y-1.5))"
+        y = "if(eq(on,1),ih*0.08,max(0,y-0.8))"
     elif direction == "zoom_in_tilt_down":
-        # Dynamic push in drifting downward toward hardware/details
-        z = "min(zoom+0.0012,1.35)"
+        # Subtle downward drift
+        z = "min(zoom+0.00035,1.08)"
         x = "iw/2-(iw/zoom/2)"
-        y = "if(eq(on,1),0,min(ih-ih/zoom,y+1.5))"
+        y = "if(eq(on,1),0,min(ih-ih/zoom,y+0.8))"
     elif direction == "zoom_in":
-        z = "min(zoom+0.0015,1.5)"
+        z = "min(zoom+0.00035,1.08)"
         x = "iw/2-(iw/zoom/2)"
         y = "ih/2-(ih/zoom/2)"
     elif direction == "zoom_out":
-        z = "if(eq(on,1),1.5,max(zoom-0.0015,1.0))"
+        z = "if(eq(on,1),1.08,max(zoom-0.00035,1.0))"
         x = "iw/2-(iw/zoom/2)"
         y = "ih/2-(ih/zoom/2)"
     elif direction == "pan_left":
-        z = "1.25"
-        x = "if(eq(on,1),iw-iw/zoom,max(0,x-2))"
+        z = "1.04"
+        x = "if(eq(on,1),iw-iw/zoom,max(0,x-1))"
         y = "ih/2-(ih/zoom/2)"
     elif direction == "pan_right":
-        z = "1.25"
-        x = "if(eq(on,1),0,min(iw-iw/zoom,x+2))"
+        z = "1.04"
+        x = "if(eq(on,1),0,min(iw-iw/zoom,x+1))"
         y = "ih/2-(ih/zoom/2)"
-    else:  # default zoom_in
-        z = "min(zoom+0.0015,1.5)"
+    elif direction == "static_subtle":
+        # Micro-drift for typography cards, charts, and text graphics so text never cuts off
+        z = "min(zoom+0.0001,1.025)"
+        x = "iw/2-(iw/zoom/2)"
+        y = "ih/2-(ih/zoom/2)"
+    else:  # default slow push
+        z = "min(zoom+0.0003,1.06)"
         x = "iw/2-(iw/zoom/2)"
         y = "ih/2-(ih/zoom/2)"
 
@@ -101,19 +107,26 @@ def build_ken_burns_clip(
 ):
     """
     Renders a still image into a video clip with smooth Ken Burns pan/zoom motion.
-    Upscales 2x before zoompan to maintain crisp resolution and prevent pixelation.
-    If is_hook=True, applies a high-energy snap-zoom and subtle exposure flash.
+    Uses subtle upscale margins (1.04x) to prevent cutting off subjects or text.
+    If image is a card or graphic, locks to micro-drift to preserve 100% typography readability.
     """
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
 
-    if is_hook:
+    img_name = Path(image_path).name.lower()
+    is_card = any(k in img_name for k in ("card", "poll", "tweet", "chart", "graphic", "typography", "intro", "metadata"))
+
+    if is_hook and not is_card:
         direction = "hook_snap_zoom"
+    elif is_card:
+        direction = "static_subtle"
     elif direction is None or direction not in DIRECTIONS:
-        available_dirs = [d for d in DIRECTIONS if d != "hook_snap_zoom"]
+        available_dirs = [d for d in DIRECTIONS if d not in ("hook_snap_zoom", "static_subtle")]
         direction = random.choice(available_dirs)
 
-    upscale_w = int(width * 1.2)
-    upscale_h = int(height * 1.2)
+    # Subtle padding margin (1.04x instead of 1.20x)
+    upscale_factor = 1.01 if is_card else 1.04
+    upscale_w = int(width * upscale_factor)
+    upscale_h = int(height * upscale_factor)
 
     zp = _zoompan_expr(
         direction=direction,

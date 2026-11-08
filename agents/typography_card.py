@@ -408,12 +408,22 @@ def generate_typography_card(
 
         badge_pad_x = 24
         badge_pad_y = 10
+        max_badge_w = width - (margin_x * 2) - 40
+        if t_w + (badge_pad_x * 2) > max_badge_w:
+            while len(tag) > 12 and (t_w + (badge_pad_x * 2)) > max_badge_w:
+                tag = tag[:-4].rstrip(" •-_") + "..."
+                try:
+                    t_bbox = tag_font.getbbox(tag)
+                    t_w = t_bbox[2] - t_bbox[0]
+                except Exception:
+                    t_w = len(tag) * 12
+
         if avatar_rendered:
             badge_y = av_y_bottom + 22
         else:
             badge_y = margin_y + int(height * 0.05)
-        badge_x0 = (width - t_w - (badge_pad_x * 2)) // 2
-        badge_x1 = badge_x0 + t_w + (badge_pad_x * 2)
+        badge_x0 = max(margin_x + 10, (width - t_w - (badge_pad_x * 2)) // 2)
+        badge_x1 = min(width - margin_x - 10, badge_x0 + t_w + (badge_pad_x * 2))
         badge_y0 = badge_y
         badge_y1 = badge_y + t_h + (badge_pad_y * 2)
 

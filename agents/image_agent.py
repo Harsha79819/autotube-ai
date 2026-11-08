@@ -3692,8 +3692,23 @@ def download_images_from_visual_plan(
                     cand_pool.extend(search_twitter_media_images(contextual_query_with_negs, max_results=6))
 
                 # Query broadening if pool is small
-                if len(cand_pool) < 4:
+                if len(cand_pool) < 6:
                     cand_pool.extend(search_bing_images(concise_q, max_results=8))
+                    if s_search_query and s_search_query != concise_q:
+                        cand_pool.extend(search_bing_images(s_search_query, max_results=8))
+                    try:
+                        from providers.image import search_duckduckgo_images
+                        cand_pool.extend(search_duckduckgo_images(s_search_query or concise_q, max_results=8))
+                    except Exception:
+                        pass
+
+                if len(cand_pool) < 4:
+                    try:
+                        from providers.image import search_pexels_photos
+                        orient = "portrait" if aspect_ratio == "9:16" else "landscape"
+                        cand_pool.extend(search_pexels_photos(s_search_query or visual_query or concise_q, orientation=orient, per_page=6))
+                    except Exception:
+                        pass
 
                 # Negative keyword, collision & quality filtering
                 clean_cands = []
@@ -3808,109 +3823,79 @@ def download_images_from_visual_plan(
             or "bigg boss" in (visual_query or "").lower()
         )
         
-        if is_bb_scene or (topic_category in ("entertainment", "reality", "cinema") and (entity_name or topic_person_slug)):
-            # Real celebrities/reality contestants MUST NOT be generated via text-to-image AI (Pollinations produces anime/cartoons)
-            # Use Canva-Style Editorial Card with verified authentic contestant photo or show graphic:
-            try:
-                from agents.typography_card import generate_typography_card
-                av_p = str(loc_c[1]) if loc_c else None
-                if loc_c:
-                    b_lbl = f"{loc_c[0].upper().replace('_', ' ')} • BIGG BOSS 10"
-                elif entity_name:
-                    b_lbl = f"{entity_name.upper()} • BIGG BOSS 10" if is_bb_scene else f"{entity_name.upper()} • HIGHLIGHT"
-                else:
-                    b_lbl = "BIGG BOSS TELUGU 10" if is_bb_scene else "HIGHLIGHT"
+        # ============================================================
+        # TIER 3: EDITORIAL GRAPHIC CARD (NO FAKE AI CARTOONS FOR REAL TOPICS)
+        # ============================================================
+        # Real-world topics (news, traffic, crime, tech, reality, politics, sports, cinema)
+        # MUST NOT be generated via text-to-image AI (Pollinations produces anime/cartoons/fake scenes).
+        # Use Canva-Style Editorial Broadcast Card with verified headline, badge, and theme gradient:
+        try:
+            from agents.typography_card import generate_typography_card
+            av_p = str(loc_c[1]) if loc_c else None
+            if loc_c:
+                b_lbl = f"{loc_c[0].upper().replace('_', ' ')} • BIGG BOSS 10"
+            elif entity_name:
+                b_lbl = f"{entity_name.upper()} • BIGG BOSS 10" if is_bb_scene else f"{entity_name.upper()} • UPDATE"
+            elif topic_ctx:
+                b_lbl = f"{topic_ctx[:22].upper()} • NEWS BRIEF"
+            else:
+                b_lbl = "KEY HIGHLIGHT"
 
-                if not av_p and is_bb_scene:
+            if not av_p and is_bb_scene:
+                bb_host = ROOT / "reference_assets" / "contestants" / "akkineni_nagarjuna.jpg"
+                if bb_host.exists():
+                    av_p = str(bb_host)
+
+            # Zero Repeated Avatar in Editorial Cards:
+            with hash_lock:
+                if av_p and av_p in used_editorial_avatars:
                     bb_host = ROOT / "reference_assets" / "contestants" / "akkineni_nagarjuna.jpg"
-                    if bb_host.exists():
+                    if bb_host.exists() and str(bb_host) not in used_editorial_avatars:
                         av_p = str(bb_host)
-
-                # Zero Repeated Avatar in Editorial Cards:
-                with hash_lock:
-                    if av_p and av_p in used_editorial_avatars:
-                        bb_host = ROOT / "reference_assets" / "contestants" / "akkineni_nagarjuna.jpg"
-                        if bb_host.exists() and str(bb_host) not in used_editorial_avatars:
-                            av_p = str(bb_host)
-                            b_lbl = "BIGG BOSS TELUGU 10"
-                            used_editorial_avatars.add(av_p)
-                        else:
-                            av_p = None
-                    elif av_p:
+                        b_lbl = "BIGG BOSS TELUGU 10"
                         used_editorial_avatars.add(av_p)
-                
-                headline = assigned_narration or visual_query or f"Scene {visual_number}"
-                print(f"🎨 [Visual {visual_number}] Generating Canva-style editorial card (avatar={av_p is not None})...")
-                if generate_typography_card(
-                    headline_text=headline,
-                    output_path=str(destination),
-                    topic_category=topic_category or "entertainment",
-                    aspect_ratio=aspect_ratio,
-                    badge_label=b_lbl,
-                    avatar_image_path=av_p,
-                    subtext="Bigg Boss Telugu 10 • Star Maa" if is_bb_scene else None,
-                ):
-                    if destination.exists() and destination.stat().st_size > 3000:
-                        f_hash = image_hash(destination)
-                        f_dhash = image_dhash(destination)
-                        with hash_lock:
-                            if f_hash:
-                                used_hashes.add(f_hash)
-                            if f_dhash:
-                                used_dhashes.append(f_dhash)
-                        print(f"✅ Visual {visual_number} saved via Canva-style editorial composite -> {destination.name}")
-                        return visual_number, destination
-            except Exception as card_err:
-                print(f"⚠️ Canva-style card fallback notice for Visual {visual_number}: {card_err}")
-        else:
-            try:
-                from providers.image import generate_pollinations_image
-                target_subj = entity_name or topic_ctx or "cinematic scene"
-                scene_detail = s_search_query or visual_query or assigned_narration or ""
-                kw_list = [w for w in re.sub(r"[^\w\s]", " ", scene_detail).split() if len(w) > 2][:4]
-                scene_kw = " ".join(kw_list)
-                ai_prompt = (
-                    f"Cinematic scene {visual_number}: {target_subj} {scene_kw} {s_emotion or ''}, {aspect_ratio} vertical format, dramatic lighting, photorealistic, 8k, live action photograph, no anime, no cartoon, no 3d render"
-                )
-                print(f"🎨 [Visual {visual_number}] Triggering dynamic AI fallback: '{ai_prompt[:60]}...'")
-                if generate_pollinations_image(ai_prompt, destination, aspect_ratio=aspect_ratio, force=True):
-                    if destination.exists() and destination.stat().st_size > 3000:
-                        f_hash = image_hash(destination)
-                        f_dhash = image_dhash(destination)
-                        with hash_lock:
-                            is_dup = (f_hash and f_hash in used_hashes) or (f_dhash and is_perceptual_duplicate(f_dhash, used_dhashes, max_dist=5))
-                        if is_dup:
-                            print(f"🔄 Perceptual duplicate detected for AI Visual {visual_number}, regenerating with varied perspective...")
-                            destination.unlink(missing_ok=True)
-                            alt_prompt = f"Expressive cinematic portrait shot {visual_number}: {target_subj}, dynamic perspective, vibrant colors, {aspect_ratio} vertical, photorealistic, no cartoon"
-                            generate_pollinations_image(alt_prompt, destination, aspect_ratio=aspect_ratio, force=True)
-                            if destination.exists():
-                                f_hash = image_hash(destination)
-                                f_dhash = image_dhash(destination)
-
-                        with hash_lock:
-                            if f_hash:
-                                used_hashes.add(f_hash)
-                            if f_dhash:
-                                used_dhashes.append(f_dhash)
-                        try:
-                            from data.asset_ledger import record_asset
-                            record_asset(
-                                video_id="current",
-                                beat_id=visual_number,
-                                asset_path=str(destination),
-                                source_url="pollinations_flux_entity_fallback",
-                                tier="TIER_A",
-                                license_name="Generated AI (CC0)",
-                                credit_text="AutoTube AI Engine",
-                                duration_sec=3.0,
-                            )
-                        except Exception:
-                            pass
-                        print(f"✅ Visual {visual_number} saved via dynamic AI fallback -> {destination.name}")
-                        return visual_number, destination
-            except Exception as ai_err:
-                print(f"⚠️ AI fallback notice for Visual {visual_number}: {ai_err}")
+                    else:
+                        av_p = None
+                elif av_p:
+                    used_editorial_avatars.add(av_p)
+            
+            headline = assigned_narration or visual_query or f"Scene {visual_number}"
+            print(f"🎨 [Visual {visual_number}] Generating Canva-style editorial card (avatar={av_p is not None})...")
+            if generate_typography_card(
+                headline_text=headline,
+                output_path=str(destination),
+                topic_category=topic_category or "general",
+                aspect_ratio=aspect_ratio,
+                badge_label=b_lbl,
+                avatar_image_path=av_p,
+                subtext="Bigg Boss Telugu 10 • Star Maa" if is_bb_scene else None,
+            ):
+                if destination.exists() and destination.stat().st_size > 3000:
+                    f_hash = image_hash(destination)
+                    f_dhash = image_dhash(destination)
+                    with hash_lock:
+                        if f_hash:
+                            used_hashes.add(f_hash)
+                        if f_dhash:
+                            used_dhashes.append(f_dhash)
+                    try:
+                        from data.asset_ledger import record_asset
+                        record_asset(
+                            video_id="current",
+                            beat_id=visual_number,
+                            asset_path=str(destination),
+                            source_url="editorial_typography_card",
+                            tier="TIER_A",
+                            license_name="Royalty-Free / Generated",
+                            credit_text="AutoTube Broadcast Engine",
+                            duration_sec=3.0,
+                        )
+                    except Exception:
+                        pass
+                    print(f"✅ Visual {visual_number} saved via Canva-style editorial composite -> {destination.name}")
+                    return visual_number, destination
+        except Exception as card_err:
+            print(f"⚠️ Canva-style card fallback notice for Visual {visual_number}: {card_err}")
 
         # Phase 5 Visual Fallback Ladder: Pexels -> Pixabay -> Pollinations FLUX -> Wikimedia Commons -> Typography Card
         try:

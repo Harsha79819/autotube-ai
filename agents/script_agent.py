@@ -715,18 +715,22 @@ def build_structured_visual_plan(sections, visual_plan, topic: str = ""):
             incident_context = "Audience Discussion Outro"
 
         # 3. Format Strict Context-Isolated Search Queries
+        EMOTION_STOPWORDS = {"shocked", "aggressive", "sarcastic", "deadpan", "laughing", "angry", "confused", "crying", "happy", "serious", "dramatic moment"}
+        clean_action = emotion_or_action if emotion_or_action.lower() not in EMOTION_STOPWORDS else ""
+
         if content_type == "reality_tv" and is_bb:
             primary_cname = primary_entity or (contestant_names[0] if contestant_names else "Bigg Boss Telugu 10")
             strict_query = format_strict_visual_query(primary_cname, season_name, event_year)
             fallback_promo_query = format_strict_visual_query(primary_cname, "Bigg Boss Telugu", event_year, task_or_promo=incident_context)
         elif content_type in ("cinema", "politics"):
-            strict_query = f'"{primary_entity}" {emotion_or_action} face photo OR interview'
+            strict_query = f'"{primary_entity}" {clean_action or "face photo"} OR interview'.strip()
             fallback_promo_query = f'"{primary_entity}" photo HD'
         elif content_type in ("business", "tech"):
-            strict_query = f'"{primary_entity}" {emotion_or_action} modern high quality'
+            strict_query = f'"{primary_entity}" {clean_action or "technology official"} HD'.strip()
             fallback_promo_query = f'"{primary_entity}" official high resolution'
         else:
-            strict_query = f'"{primary_entity}" {emotion_or_action} high quality HD'
+            # News & General Real-World Topics: Journalistic keywords only
+            strict_query = f'"{primary_entity}" {clean_action or "news photo"} HD'.strip()
             fallback_promo_query = f'"{primary_entity}" news photo'
 
         # 4. Check metaphor mapping
@@ -745,7 +749,13 @@ def build_structured_visual_plan(sections, visual_plan, topic: str = ""):
         # 5. Clean, sanitize and disallow generic queries
         raw_v_str = (raw_v.get("query") or raw_v.get("concept") or "") if isinstance(raw_v, dict) else str(raw_v or "")
         raw_queries = [q.strip() for q in raw_v_str.split("|") if q.strip()]
-        cleaned_queries = [strict_query, fallback_promo_query]
+
+        # For real-world topics, prioritize the concrete scene query at the very top of search
+        if content_type not in ("reality_tv", "entertainment"):
+            concrete_top = [q for q in raw_queries if not is_generic_visual_query(q)]
+            cleaned_queries = concrete_top[:2] + [strict_query, fallback_promo_query]
+        else:
+            cleaned_queries = [strict_query, fallback_promo_query]
 
         for q in raw_queries:
             q_lower = q.lower()

@@ -207,18 +207,40 @@ def clean_and_crop_image(image_path: Path, aspect_ratio: str = "9:16") -> Path:
             # Covers full canvas cleanly without artificial borders.
             if aspect_ratio == "9:16":
                 target_w, target_h = 1080, 1920
+                current_ratio = w / float(h)
                 if (w, h) == (target_w, target_h):
                     pass
-                elif abs(w / float(h) - (target_w / float(target_h))) < 0.03:
+                elif abs(current_ratio - (target_w / float(target_h))) < 0.05:
                     im_rgb = im_rgb.resize((target_w, target_h), Image.Resampling.LANCZOS)
-                else:
-                    # Full-bleed cinema cover: scale to fill 1080x1920 and center-crop
+                elif current_ratio <= 0.65:
+                    # Native portrait photo (e.g. 720x1280 or vertical mobile capture): scale to fill with minimal crop
                     scale = max(target_w / float(w), target_h / float(h))
                     new_w, new_h = int(w * scale), int(h * scale)
                     im_scaled = im_rgb.resize((new_w, new_h), Image.Resampling.LANCZOS)
                     crop_x = max(0, (new_w - target_w) // 2)
                     crop_y = max(0, (new_h - target_h) // 2)
                     im_rgb = im_scaled.crop((crop_x, crop_y, crop_x + target_w, crop_y + target_h))
+                else:
+                    # Landscape or Square Image (e.g. 16:9, 4:3, 1:1 web/news photos):
+                    # Broadcast standard layout: Full 9:16 blurred background + 100% contained crisp foreground
+                    # Guarantees zero cropping of cars, subjects, or contextual scene details!
+                    bg_scale = max(target_w / float(w), target_h / float(h))
+                    bg_w, bg_h = int(w * bg_scale), int(h * bg_scale)
+                    bg_im = im_rgb.resize((bg_w, bg_h), Image.Resampling.LANCZOS)
+                    crop_x = max(0, (bg_w - target_w) // 2)
+                    crop_y = max(0, (bg_h - target_h) // 2)
+                    bg_cropped = bg_im.crop((crop_x, crop_y, crop_x + target_w, crop_y + target_h))
+                    bg_blurred = bg_cropped.filter(ImageFilter.GaussianBlur(radius=30)).convert("RGBA")
+                    scrim = Image.new("RGBA", (target_w, target_h), (0, 0, 0, 85))
+                    bg_blurred = Image.alpha_composite(bg_blurred, scrim)
+
+                    fg_scale = min(target_w / float(w), (target_h * 0.82) / float(h))
+                    fg_w, fg_h = int(w * fg_scale), int(h * fg_scale)
+                    fg_resized = im_rgb.resize((fg_w, fg_h), Image.Resampling.LANCZOS).convert("RGBA")
+                    fg_x = (target_w - fg_w) // 2
+                    fg_y = (target_h - fg_h) // 2
+                    bg_blurred.paste(fg_resized, (fg_x, fg_y), fg_resized)
+                    im_rgb = bg_blurred.convert("RGB")
             elif aspect_ratio == "16:9":
                 target_w, target_h = 1920, 1080
                 if (w, h) == (target_w, target_h):

@@ -1305,49 +1305,51 @@ def source_beat_visual(
                     return result
 
     # ------------------------------------------------------------
-    # PRIORITY 2: SCENE-SPECIFIC AI IMAGE GENERATION (FLUX / IMAGEN)
+    # PRIORITY 2: SCENE-SPECIFIC AI IMAGE GENERATION (ONLY FOR FICTION/FANTASY)
     # ------------------------------------------------------------
-    try:
-        from agents.image_agent import rewrite_query_for_flux
-        if visual_fallback_prompt_meta:
-            flux_p = f"Cinematic {visual_fallback_prompt_meta}, {aspect_ratio} vertical ratio, photorealistic, 8k, dramatic lighting"
-        else:
-            scene_desc = narration if (narration and len(narration.split()) >= 4) else primary_query
-            flux_p = rewrite_query_for_flux(scene_desc, show_context="", topic_category=topic_category)
-            if "photorealistic" not in flux_p.lower() and "cinematic" not in flux_p.lower():
-                flux_p = f"Gritty cinematic {flux_p}, {aspect_ratio} vertical ratio, photorealistic, 8k photography, dramatic atmospheric lighting"
-            elif aspect_ratio not in flux_p:
-                flux_p = f"{flux_p}, {aspect_ratio} vertical ratio, photorealistic, 8k"
+    is_real_world_topic = any(k in str(topic_category).lower() for k in ("news", "traffic", "crime", "politics", "tech", "general", "entertainment", "reality", "facts"))
+    if not is_real_world_topic:
+        try:
+            from agents.image_agent import rewrite_query_for_flux
+            if visual_fallback_prompt_meta:
+                flux_p = f"Cinematic {visual_fallback_prompt_meta}, {aspect_ratio} vertical ratio, photorealistic, 8k, dramatic lighting"
+            else:
+                scene_desc = narration if (narration and len(narration.split()) >= 4) else primary_query
+                flux_p = rewrite_query_for_flux(scene_desc, show_context="", topic_category=topic_category)
+                if "photorealistic" not in flux_p.lower() and "cinematic" not in flux_p.lower():
+                    flux_p = f"Gritty cinematic {flux_p}, {aspect_ratio} vertical ratio, photorealistic, 8k photography, dramatic atmospheric lighting"
+                elif aspect_ratio not in flux_p:
+                    flux_p = f"{flux_p}, {aspect_ratio} vertical ratio, photorealistic, 8k"
 
-        print(f"🎨 [Beat {beat_number}] High-confidence real media missing. Synthesizing Priority 2 AI visual: '{flux_p[:65]}...'")
-        if generate_pollinations_image(flux_p, destination_jpg, aspect_ratio=aspect_ratio):
-            if destination_jpg.exists() and destination_jpg.stat().st_size > 1000:
-                clean_and_crop_image(destination_jpg, aspect_ratio=aspect_ratio)
-                f_hash = get_image_file_hash(destination_jpg)
-                with hash_lock:
-                    if f_hash:
-                        used_hashes.add(f_hash)
-                record_asset(
-                    video_id="current",
-                    beat_id=beat_number,
-                    asset_path=str(destination_jpg),
-                    source_url="ai_generation_flux",
-                    tier="TIER_A",
-                    license_name="Generated AI Visual (CC0)",
-                    credit_text="AutoTube FLUX Engine",
-                    duration_sec=3.0,
-                )
-                result.update({
-                    "source": "ai_generation_flux",
-                    "asset_path": str(destination_jpg),
-                    "relevance_score": 0.88,
-                    "tier": "TIER_A",
-                    "success": True,
-                })
-                print(f"✅ [Beat {beat_number}] Priority 2 AI Scene Generated (Tier A CC0): assets/{beat_number}.jpg")
-                return result
-    except Exception as f_err:
-        print(f"Priority 2 AI synthesis notice: {f_err}")
+            print(f"🎨 [Beat {beat_number}] Synthesizing AI visual for creative genre: '{flux_p[:65]}...'")
+            if generate_pollinations_image(flux_p, destination_jpg, aspect_ratio=aspect_ratio):
+                if destination_jpg.exists() and destination_jpg.stat().st_size > 1000:
+                    clean_and_crop_image(destination_jpg, aspect_ratio=aspect_ratio)
+                    f_hash = get_image_file_hash(destination_jpg)
+                    with hash_lock:
+                        if f_hash:
+                            used_hashes.add(f_hash)
+                    record_asset(
+                        video_id="current",
+                        beat_id=beat_number,
+                        asset_path=str(destination_jpg),
+                        source_url="ai_generation_flux",
+                        tier="TIER_A",
+                        license_name="Generated AI Visual (CC0)",
+                        credit_text="AutoTube FLUX Engine",
+                        duration_sec=3.0,
+                    )
+                    result.update({
+                        "source": "ai_generation_flux",
+                        "asset_path": str(destination_jpg),
+                        "relevance_score": 0.88,
+                        "tier": "TIER_A",
+                        "success": True,
+                    })
+                    print(f"✅ [Beat {beat_number}] AI Scene Generated (Tier A CC0): assets/{beat_number}.jpg")
+                    return result
+        except Exception as f_err:
+            print(f"Priority 2 AI synthesis notice: {f_err}")
 
 
     # ------------------------------------------------------------
