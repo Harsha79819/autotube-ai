@@ -122,6 +122,16 @@ class TestDailyMultiSlotScheduler(unittest.TestCase):
         self.assertTrue(scheduler.is_slot_due(slot_conf, time_exact))
         self.assertTrue(scheduler.is_slot_due(slot_conf, time_after))
 
+    def test_08_channel_automation_filtering(self):
+        """Ensure Channel 1 is automated while Channel 2 is reserved for manual execution."""
+        scheduler = MultiSlotDailyScheduler()
+        ch1_slot = {"channel": "Channel 1 (Primary)"}
+        ch2_slot = {"channel": "Channel 2 (Secondary)"}
+
+        # With default SCHEDULED_CHANNELS="Channel 1"
+        self.assertTrue(scheduler.is_channel_automated(ch1_slot))
+        self.assertFalse(scheduler.is_channel_automated(ch2_slot))
+
 
 if __name__ == "__main__":
     unittest.main()

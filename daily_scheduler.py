@@ -27,6 +27,9 @@ ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from dotenv import load_dotenv
+load_dotenv(ROOT / ".env")
+
 LOGS_DIR = ROOT / "logs"
 OUTPUT_DIR = ROOT / "output"
 LOGS_DIR.mkdir(parents=True, exist_ok=True)
@@ -48,9 +51,12 @@ DEFAULT_TELUGU_VOICE = "👩 Shruti (Telugu Creator / Anchor) - Conversational"
 DEFAULT_LANGUAGE_STYLE = "Telugu with English words (Casual / Trendy)"
 DEFAULT_PRIVACY = "public"
 
-# Master killswitch: All automatic background uploads are disabled by default per user request.
-# Videos will ONLY be uploaded when explicitly triggered or when ENABLE_AUTO_UPLOAD=1 is passed.
+# Master killswitch: All automatic background uploads are enabled when ENABLE_AUTO_UPLOAD=1 is set.
 ENABLE_AUTO_UPLOAD = os.getenv("ENABLE_AUTO_UPLOAD", "0").strip().lower() in ("1", "true", "yes")
+
+# Channel filter for automated background scheduler (default: 'Channel 1'):
+# Allows dedicating automated scheduling strictly to Channel 1, while preserving Channel 2 for manual runs.
+SCHEDULED_CHANNELS = os.getenv("SCHEDULED_CHANNELS", "Channel 1").strip()
 
 # ============================================================
 # 10 DAILY PEAK-HOURS SLOT SCHEDULE (IST)
@@ -545,6 +551,22 @@ class MultiSlotDailyScheduler:
         except Exception:
             return False
 
+    def is_channel_automated(self, slot_conf: Dict[str, Any]) -> bool:
+        """
+        Filters which channels are included in automated scheduling sweeps.
+        If SCHEDULED_CHANNELS='Channel 1', only Channel 1 slots will run automatically.
+        Channel 2 is preserved strictly for manual/local runs by the user.
+        """
+        sched_ch = os.getenv("SCHEDULED_CHANNELS", "Channel 1").strip().lower()
+        if not sched_ch or sched_ch in ("all", "both", "*"):
+            return True
+        ch_name = slot_conf.get("channel", "").lower()
+        if "1" in sched_ch and ("channel 1" in ch_name or "primary" in ch_name or "ch1" in ch_name):
+            return True
+        if "2" in sched_ch and ("channel 2" in ch_name or "secondary" in ch_name or "ch2" in ch_name):
+            return True
+        return False
+
     def execute_slot(self, slot_id: str, force: bool = False) -> bool:
         """
         Executes a single scheduled slot end-to-end:
@@ -801,15 +823,22 @@ class MultiSlotDailyScheduler:
 
     def run_pending_slots(self) -> int:
         """
-        Scans all 10 slots for today. Executes any slot that is due and pending.
+        Scans all 10 slots for today. Executes any slot that is due, pending, and enabled for automation.
         Returns the count of successfully executed slots in this pass.
         """
+        if not self.enabled:
+            log_daily("ℹ️ Scheduler is disabled via DAILY_AUTO_GENERATE=false. Skipping automated sweep.")
+            return 0
+
         now = datetime.now()
         status_data = load_daily_slot_status()
         success_count = 0
 
         for conf in DAILY_SLOT_CONFIGS:
             s_id = conf["slot_id"]
+            if not self.is_channel_automated(conf):
+                continue
+
             slot_st = status_data["slots"].get(s_id, {})
             current_status = slot_st.get("status", "pending")
 
@@ -828,6 +857,10 @@ class MultiSlotDailyScheduler:
         Executes strictly ONE single slot that matches the current time window.
         Prevents batch bursts and adheres to YouTube daily pacing limits.
         """
+        if not self.enabled:
+            log_daily("ℹ️ Scheduler is disabled via DAILY_AUTO_GENERATE=false. Skipping execution.")
+            return None
+
         try:
             from zoneinfo import ZoneInfo
             now = datetime.now(ZoneInfo("Asia/Kolkata"))
@@ -844,6 +877,9 @@ class MultiSlotDailyScheduler:
 
         for conf in DAILY_SLOT_CONFIGS:
             s_id = conf["slot_id"]
+            if not self.is_channel_automated(conf):
+                continue
+
             slot_st = status_data.get("slots", {}).get(s_id, {})
             current_status = slot_st.get("status", "pending")
             if current_status == "success":
@@ -864,6 +900,9 @@ class MultiSlotDailyScheduler:
             # If no slot is within (0, 90] minutes, look for the earliest due pending slot
             for conf in DAILY_SLOT_CONFIGS:
                 s_id = conf["slot_id"]
+                if not self.is_channel_automated(conf):
+                    continue
+
                 slot_st = status_data.get("slots", {}).get(s_id, {})
                 if slot_st.get("status") == "pending" and self.is_slot_due(conf, now):
                     best_slot = s_id
@@ -916,11 +955,13 @@ def print_slot_status():
     slots = status_data.get("slots", {})
 
     print()
-    print("=" * 90)
-    print(f"📊 AUTOTUBE AI — 10-SLOT DAILY PRODUCTION STATUS ({today})")
-    print("=" * 90)
-    print(f"{'SLOT ID':<9} | {'TIME':<5} | {'CHANNEL':<22} | {'FORMAT':<9} | {'STATUS':<11} | {'TOPIC / URL'}")
-    print("-" * 90)
+    sched = MultiSlotDailyScheduler()
+    sched_ch = os.getenv("SCHEDULED_CHANNELS", "Channel 1").strip()
+    print("=" * 95)
+    print(f"📊 AUTOTUBE AI — 10-SLOT DAILY PRODUCTION STATUS ({today}) | AUTOMATING: {sched_ch.upper()}")
+    print("=" * 95)
+    print(f"{'SLOT ID':<8} | {'TIME':<5} | {'CHANNEL':<18} | {'MODE':<8} | {'FORMAT':<9} | {'STATUS':<11} | {'TOPIC / URL'}")
+    print("-" * 95)
 
     for conf in DAILY_SLOT_CONFIGS:
         s_id = conf["slot_id"]
@@ -932,9 +973,10 @@ def print_slot_status():
         topic = st.get("topic") or conf["slot_name"]
         yt_id = st.get("youtube_video_id")
         extra = f" -> https://youtu.be/{yt_id}" if yt_id else ""
-        print(f"{s_id:<9} | {sched_time:<5} | {channel[:22]:<22} | {fmt[:9]:<9} | {status:<11} | {topic[:35]}{extra}")
+        mode = "AUTO" if sched.is_channel_automated(conf) else "MANUAL"
+        print(f"{s_id:<8} | {sched_time:<5} | {channel[:18]:<18} | {mode:<8} | {fmt[:9]:<9} | {status:<11} | {topic[:30]}{extra}")
 
-    print("=" * 90)
+    print("=" * 95)
     print()
 
 
