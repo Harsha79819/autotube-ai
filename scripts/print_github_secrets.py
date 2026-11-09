@@ -34,6 +34,14 @@ def main():
         "CLIENT_SECRET_JSON_B64": get_b64(ROOT / "client_secret.json"),
     }
 
+    if "--export" in sys.argv:
+        print("\n=== RAW SECRETS FOR GITHUB (COPY-PASTE) ===\n")
+        for name, val in secrets.items():
+            print(f"--- [ {name} ] ---")
+            print(val)
+            print()
+        return
+
     for name, val in secrets.items():
         if val:
             display_val = val if len(val) <= 60 else f"{val[:25]}...{val[-15:]} (Length: {len(val)})"
@@ -42,7 +50,7 @@ def main():
             print(f"⚠️ {name:<28}: [MISSING]")
 
     print("=" * 70)
-    print("💡 To output raw values for easy copy-pasting, run:")
+    print("💡 To output raw values for easy copy-pasting into GitHub, run:")
     print("   .venv/bin/python scripts/print_github_secrets.py --export")
     print("=" * 70)
 

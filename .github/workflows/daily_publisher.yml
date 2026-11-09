@@ -1,19 +1,14 @@
 name: AutoTube AI 24/7 Daily Multi-Channel Publisher
 
 on:
-  # AUTOMATIC UPLOADING DISABLED BY USER REQUEST
-  # Videos are generated strictly on manual dispatch via workflow_dispatch or local dashboard.
-  # schedule:
-  #   - cron: '30 2 * * *'
-  #   - cron: '15 3 * * *'
-  #   - cron: '0 7 * * *'
-  #   - cron: '0 8 * * *'
-  #   - cron: '30 10 * * *'
-  #   - cron: '30 11 * * *'
-  #   - cron: '30 13 * * *'
-  #   - cron: '15 14 * * *'
-  #   - cron: '30 15 * * *'
-  #   - cron: '30 16 * * *'
+  schedule:
+    # 24/7 Cloud Automated Publishing for Channel 1 (Primary - Imaginary_facts)
+    # Peak Telugu Viewing Hours (IST = UTC + 5:30):
+    - cron: '30 2 * * *'   # 08:00 AM IST (CH1-S1: Morning Local Breaking News Short)
+    - cron: '0 7 * * *'    # 12:30 PM IST (CH1-L1: Tech Innovation Deep Dive Long-form)
+    - cron: '30 10 * * *'  # 04:00 PM IST (CH1-S2: Viral Tech / AI Innovation Short)
+    - cron: '15 14 * * *'  # 07:45 PM IST (CH1-S3: Interesting Facts / Mysteries Short)
+    - cron: '30 16 * * *'  # 10:00 PM IST (CH1-L2: Historical Mysteries Long-form)
 
   workflow_dispatch:
     inputs:
@@ -119,6 +114,9 @@ jobs:
           INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
           INSTAGRAM_USER_ID: ${{ secrets.INSTAGRAM_USER_ID }}
           DAILY_UPLOAD_PRIVACY: "public"
+          ENABLE_AUTO_UPLOAD: "1"
+          DAILY_AUTO_GENERATE: "true"
+          SCHEDULED_CHANNELS: "Channel 1"
           CUSTOM_TOPIC: ${{ github.event.inputs.custom_topic }}
           CUSTOM_CHANNEL: ${{ github.event.inputs.custom_channel }}
           CUSTOM_DURATION: ${{ github.event.inputs.custom_duration }}
