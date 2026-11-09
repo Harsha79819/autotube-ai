@@ -219,6 +219,15 @@ def is_blacklisted_candidate(
     if any(s in c_meta for s in ("stamp", "postage")):
         return True
 
+    # Universal NSFW / Adult / Dating / Bikini / Lingerie / Inappropriate Ad Rejection
+    if any(ad in c_meta for ad in (
+        "golove", "hot series", "live chat", "livechat", "dating", "bikini", "lingerie",
+        "underwear", "bra", "cleavage", "sexy", "nude", "naked", "erotic", "xxx", "porn",
+        "escort", "adult", "onlyfans", "char creation", "hot girls", "glamour model",
+        "camgirl", "webcam", "strip", "babes", "swimsuit", "sensual", "romance", "bed scene"
+    )):
+        return True
+
     # Universal anime / cartoon / illustration rejection for realistic media
     if any(an in c_meta for an in ("anime", "manga", "cartoon", "illustration", "drawing", "fanart", "sketch", "cosplay", "vash", "stampede", "zerochan", "pixiv", "wallpapercrafter")):
         if "anime" not in t_low and "manga" not in top_low and "cartoon" not in top_low:
@@ -1785,6 +1794,7 @@ def search_bing(query):
         "q": q_clean,
         "form": "HDRSC2",
         "first": 1,
+        "adlt": "strict",
     }
 
     try:

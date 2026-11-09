@@ -287,14 +287,17 @@ def search_bing_images(query, max_results=16):
         "bing.com", "microsoft.com", "merriam-webster", "les-inoxydables",
         "freepik.com", "alamy.com", "shutterstock.com", "dreamstime.com", "stockphoto",
         "amazon.", "media-amazon.com", "images-amazon.com", "flipkart.com", "ebay.com",
-        "walmart.com", "aliexpress.com", "shopee.", "etsy.com", "shopify.com"
+        "walmart.com", "aliexpress.com", "shopee.", "etsy.com", "shopify.com",
+        "golove", "hot series", "livechat", "live-chat", "dating", "bikini", "lingerie",
+        "underwear", "bra", "cleavage", "sexy", "nude", "naked", "erotic", "xxx", "porn",
+        "escort", "adult", "onlyfans", "char-creation", "hot-girls", "camgirl", "webcam", "strip"
     )
 
     # Method 1: Desktop HTML Search endpoint (most reliable, returns 20-40 direct murl photos)
     try:
         session = requests.Session()
         url = "https://www.bing.com/images/search"
-        params = {"q": clean_q, "form": "HDRSC2", "first": "1"}
+        params = {"q": clean_q, "form": "HDRSC2", "first": "1", "adlt": "strict"}
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -331,7 +334,7 @@ def search_bing_images(query, max_results=16):
         try:
             session = requests.Session()
             url = "https://www.bing.com/images/async"
-            params = {"q": clean_q, "first": 1, "count": 35}
+            params = {"q": clean_q, "first": 1, "count": 35, "adlt": "strict"}
             resp = session.get(url, params=params, headers=BING_BROWSER_HEADERS, timeout=6)
             if resp.status_code == 200:
                 pattern = re.compile(r'murl&quot;:&quot;(.*?)&quot;', re.DOTALL)
