@@ -287,6 +287,11 @@ def make_tts_text(text):
             "three thousand three hundred and ten crore rupees",
         "crore rupees": "crore rupees",
         "crorerupees": "crore rupees",
+        "టెప్పర్ వంశీ": "టెంపర్ వంశీ",
+        "టెప్పర్": "టెంపర్",
+        "ఆటో ర్యామ్": "ఆటో రామ్",
+        "దేబ్జాని": "డెబ్‌జానీ",
+        "నీతు నట్రాజ్": "నీతూ నట్రాజ్",
     }
 
     for old, new in pronunciation_replacements.items():

@@ -2749,7 +2749,7 @@ CRITICAL VIRALITY RULES:
 ============================================================
 Host: Akkineni Nagarjuna
 Official Season 10 Active Housemates:
-- Vamsi Krishna (Temper Vamsi) [CURRENT CAPTAIN THIS WEEK!]
+- Vamsi Krishna (Temper Vamsi - MUST spell in Telugu as టెంపర్ వంశీ, NEVER టెప్పర్!) [CURRENT CAPTAIN THIS WEEK!]
 - Thrigun Eswaran (Actor Thrigun / Adith Arun)
 - Aman Masud (Actor)
 - Sudheer Reddy (Sudheer Talks YouTuber / Sudheer)
@@ -2763,6 +2763,9 @@ Official Season 10 Active Housemates:
 - Swetha
 - Neethu Natraj
 CRITICAL GROUND TRUTH: THIS WEEK NO ELIMINATION! Temper Vamsi is the current Captain.
+CRITICAL FORMAT RULES:
+- Include ONLY ONE clear Call to Action (CTA) at the very end. NEVER repeat CTA twice!
+- Focus exclusively on active housemates! DO NOT mention past evicted contestants unless specifically reviewing past episodes.
 
 Eliminated Contestants:
 - Rohit Patnam (Rohit Naidu Patnam) [ELIMINATED / EVICTED - NO LONGER IN HOUSE!]
