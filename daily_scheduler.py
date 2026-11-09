@@ -58,6 +58,24 @@ ENABLE_AUTO_UPLOAD = os.getenv("ENABLE_AUTO_UPLOAD", "0").strip().lower() in ("1
 # Allows dedicating automated scheduling strictly to Channel 1, while preserving Channel 2 for manual runs.
 SCHEDULED_CHANNELS = os.getenv("SCHEDULED_CHANNELS", "Channel 1").strip()
 
+# Target Publish Timing: Videos must be uploaded and LIVE on YouTube BY scheduled_time.
+# Pre-generation lead time triggers production in advance so rendering, compositing, and uploading
+# finish before the scheduled target publish time.
+LEAD_TIME_SHORT_MINUTES = int(os.getenv("LEAD_TIME_SHORT_MINUTES", "25"))  # 25 mins for 60-90s Shorts
+LEAD_TIME_LONG_MINUTES = int(os.getenv("LEAD_TIME_LONG_MINUTES", "35"))   # 35 mins for 3-5m / 5-8m Long-form
+
+
+def get_slot_lead_time_minutes(slot: Dict[str, Any]) -> int:
+    """
+    Returns the required pre-generation lead time in minutes ahead of target publish time.
+    Shorts take ~15-20 min total; Long-form takes ~25-30 min total to generate, composite & upload.
+    """
+    fmt = slot.get("format_type", "").lower()
+    dur = slot.get("target_duration", "") or slot.get("duration", "")
+    if fmt == "long-form" or "3-5" in str(dur) or "5-8" in str(dur):
+        return LEAD_TIME_LONG_MINUTES
+    return LEAD_TIME_SHORT_MINUTES
+
 # ============================================================
 # 10 DAILY PEAK-HOURS SLOT SCHEDULE (IST)
 # ============================================================
@@ -537,17 +555,24 @@ class MultiSlotDailyScheduler:
         self.deferred_until: Optional[float] = None
         self._is_executing_slot: bool = False
 
-    def is_slot_due(self, slot_conf: Dict[str, Any], current_time: datetime) -> bool:
+    def is_slot_due(self, slot_conf: Dict[str, Any], current_time: datetime, use_lead_time: bool = True) -> bool:
         """
         Determines if a slot is due for execution.
-        Triggers if current local time is at or after scheduled_time today.
+        With use_lead_time=True (default), triggers ahead of scheduled_time so generation
+        and upload complete BEFORE or BY the target scheduled publish time.
+        With use_lead_time=False, checks strictly against scheduled_time.
         """
         sched_str = slot_conf.get("scheduled_time", "08:00")
         try:
             parts = sched_str.split(":")
             s_hour, s_minute = int(parts[0]), int(parts[1])
             slot_dt = current_time.replace(hour=s_hour, minute=s_minute, second=0, microsecond=0)
-            return current_time >= slot_dt
+            if use_lead_time:
+                lead_mins = get_slot_lead_time_minutes(slot_conf)
+                trigger_dt = slot_dt - timedelta(minutes=lead_mins)
+            else:
+                trigger_dt = slot_dt
+            return current_time >= trigger_dt
         except Exception:
             return False
 
@@ -842,8 +867,9 @@ class MultiSlotDailyScheduler:
             slot_st = status_data["slots"].get(s_id, {})
             current_status = slot_st.get("status", "pending")
 
-            if current_status == "pending" and self.is_slot_due(conf, now):
-                log_daily(f"⏰ Slot '{s_id}' scheduled for {conf['scheduled_time']} is DUE NOW. Launching...")
+            if current_status == "pending" and self.is_slot_due(conf, now, use_lead_time=True):
+                lead = get_slot_lead_time_minutes(conf)
+                log_daily(f"⏰ Slot '{s_id}' (target publish: {conf['scheduled_time']} IST, lead: {lead}m) is DUE NOW. Launching...")
                 ok = self.execute_slot(s_id, force=False)
                 if ok:
                     success_count += 1
@@ -856,6 +882,7 @@ class MultiSlotDailyScheduler:
         """
         Executes strictly ONE single slot that matches the current time window.
         Prevents batch bursts and adheres to YouTube daily pacing limits.
+        Uses pre-generation lead time so production finishes and uploads BY target scheduled time.
         """
         if not self.enabled:
             log_daily("ℹ️ Scheduler is disabled via DAILY_AUTO_GENERATE=false. Skipping execution.")
@@ -871,7 +898,7 @@ class MultiSlotDailyScheduler:
         now_mins = now.hour * 60 + now.minute
         status_data = load_daily_slot_status()
 
-        # Find the pending slot whose scheduled time is closest to now (within 90 mins)
+        # Find the pending slot whose trigger window matches now (within 90 mins)
         best_slot = None
         min_diff = 999999
 
@@ -888,9 +915,11 @@ class MultiSlotDailyScheduler:
             sched_str = conf.get("scheduled_time", "08:00")
             parts = sched_str.split(":")
             s_mins = int(parts[0]) * 60 + int(parts[1])
+            lead_mins = get_slot_lead_time_minutes(conf)
+            trigger_mins = s_mins - lead_mins
 
-            # Slot must be past its scheduled time, but within 90 mins
-            diff = now_mins - s_mins
+            # Slot trigger window: now is at or past trigger time, within 90 mins
+            diff = now_mins - trigger_mins
             if 0 <= diff <= 90:
                 if diff < min_diff:
                     min_diff = diff
@@ -904,12 +933,14 @@ class MultiSlotDailyScheduler:
                     continue
 
                 slot_st = status_data.get("slots", {}).get(s_id, {})
-                if slot_st.get("status") == "pending" and self.is_slot_due(conf, now):
+                if slot_st.get("status") == "pending" and self.is_slot_due(conf, now, use_lead_time=True):
                     best_slot = s_id
                     break
 
         if best_slot:
-            log_daily(f"🎯 [Single Slot Pacing] Selected slot for current window ({now.strftime('%H:%M')} IST): '{best_slot}'. Launching...")
+            best_conf = get_slot_config(best_slot)
+            target_time = best_conf.get("scheduled_time", "") if best_conf else ""
+            log_daily(f"🎯 [Single Slot Pacing] Selected slot for current trigger window ({now.strftime('%H:%M')} IST): '{best_slot}' (Target publish: {target_time} IST). Launching...")
             ok = self.execute_slot(best_slot, force=False)
             return best_slot if ok else None
         else:

@@ -23,6 +23,9 @@ from daily_scheduler import (
     load_daily_slot_status,
     save_daily_slot_status,
     evaluate_slot_duration,
+    get_slot_lead_time_minutes,
+    LEAD_TIME_SHORT_MINUTES,
+    LEAD_TIME_LONG_MINUTES,
     DEFAULT_TELUGU_VOICE,
     MultiSlotDailyScheduler,
 )
@@ -110,17 +113,27 @@ class TestDailyMultiSlotScheduler(unittest.TestCase):
             self.assertIn(status["slots"][s_id]["status"], ("pending", "in_progress", "success", "failed", "skipped"))
 
     def test_07_due_time_checker(self):
-        """Ensure scheduler correctly flags due slots based on time."""
+        """Ensure scheduler correctly flags due slots based on time and lead time."""
         scheduler = MultiSlotDailyScheduler()
-        slot_conf = {"scheduled_time": "08:00"}
+        slot_conf = {"scheduled_time": "08:00", "format_type": "short"}
 
+        # Without lead time (strict publish time)
         time_before = datetime(2026, 11, 3, 7, 59, 0)
         time_exact = datetime(2026, 11, 3, 8, 0, 0)
         time_after = datetime(2026, 11, 3, 10, 30, 0)
 
-        self.assertFalse(scheduler.is_slot_due(slot_conf, time_before))
-        self.assertTrue(scheduler.is_slot_due(slot_conf, time_exact))
-        self.assertTrue(scheduler.is_slot_due(slot_conf, time_after))
+        self.assertFalse(scheduler.is_slot_due(slot_conf, time_before, use_lead_time=False))
+        self.assertTrue(scheduler.is_slot_due(slot_conf, time_exact, use_lead_time=False))
+        self.assertTrue(scheduler.is_slot_due(slot_conf, time_after, use_lead_time=False))
+
+        # With pre-generation lead time (25 mins before 08:00 = 07:35)
+        time_pre_lead = datetime(2026, 11, 3, 7, 34, 0)
+        time_at_lead = datetime(2026, 11, 3, 7, 35, 0)
+        time_during_lead = datetime(2026, 11, 3, 7, 45, 0)
+
+        self.assertFalse(scheduler.is_slot_due(slot_conf, time_pre_lead, use_lead_time=True))
+        self.assertTrue(scheduler.is_slot_due(slot_conf, time_at_lead, use_lead_time=True))
+        self.assertTrue(scheduler.is_slot_due(slot_conf, time_during_lead, use_lead_time=True))
 
     def test_08_channel_automation_filtering(self):
         """Ensure Channel 1 is automated while Channel 2 is reserved for manual execution."""
@@ -131,6 +144,18 @@ class TestDailyMultiSlotScheduler(unittest.TestCase):
         # With default SCHEDULED_CHANNELS="Channel 1"
         self.assertTrue(scheduler.is_channel_automated(ch1_slot))
         self.assertFalse(scheduler.is_channel_automated(ch2_slot))
+
+    def test_09_lead_time_calculation_and_pacing(self):
+        """Ensure lead times are 25 min for Shorts and 35 min for Long-form across all 10 slots."""
+        self.assertEqual(LEAD_TIME_SHORT_MINUTES, 25)
+        self.assertEqual(LEAD_TIME_LONG_MINUTES, 35)
+
+        for s in DAILY_SLOT_CONFIGS:
+            lead = get_slot_lead_time_minutes(s)
+            if s["format_type"] == "short":
+                self.assertEqual(lead, 25, f"Slot {s['slot_id']} short must have 25 min lead time")
+            elif s["format_type"] == "long-form":
+                self.assertEqual(lead, 35, f"Slot {s['slot_id']} long-form must have 35 min lead time")
 
 
 if __name__ == "__main__":
