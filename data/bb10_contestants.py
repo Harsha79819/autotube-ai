@@ -65,6 +65,7 @@ CONTESTANTS_BB10: Dict[str, Dict] = {
         "full_name": "Temper Vamsi",
         "aliases": ["temper vamsi", "vamsi", "టెంపర్ వంశీ", "వంశీ"],
         "negative_tokens": [],
+        "is_captain": True,
     },
     "charan": {
         "full_name": "Charan Mahadev",
@@ -75,12 +76,12 @@ CONTESTANTS_BB10: Dict[str, Dict] = {
     },
     "sudheer": {
         "full_name": "Sudheer Reddy",
-        "aliases": ["sudheer", "sudheer reddy", "సుధీర్", "సుధీర్ రెడ్డి"],
+        "aliases": ["sudheer", "sudheer reddy", "sudheer talks", "సుధీర్", "సుధీర్ రెడ్డి"],
         "negative_tokens": ["rashmi", "sudigali"],
     },
     "nagarjuna": {
         "full_name": "Akkineni Nagarjuna",
-        "aliases": ["nagarjuna", "akkineni nagarjuna", "నాగార్జున"],
+        "aliases": ["nagarjuna", "akkineni nagarjuna", "నాగార్జున", "king nag"],
         "negative_tokens": [],
     },
     "chaithra": {
@@ -99,25 +100,64 @@ CONTESTANTS_BB10: Dict[str, Dict] = {
     },
     "debjani": {
         "full_name": "Debjani Modak",
-        "aliases": ["debjani", "debjani modak", "దేబ్జాని"],
+        "aliases": ["debjani", "debjani modak", "దేబ్జాని", "దేవజాని"],
         "negative_tokens": [],
+        "is_active": True,
     },
     "ram prasad": {
         "full_name": "Auto Ram Prasad",
         "aliases": ["ram prasad", "auto ram prasad", "రామ్ ప్రసాద్", "ఆటో రామ్ ప్రసాద్"],
         "negative_tokens": [],
+        "is_active": True,
     },
     "shiv": {
         "full_name": "Shiv",
         "aliases": ["shiv", "shiva", "anchor shiva", "శివ్", "శివ"],
         "negative_tokens": ["lord shiva", "shiva rajkumar", "temple", "pooja", "bhagwan", "thakare", "shiv thakare", "khatron", "lock upp", "roadies", "hindi", "marathi"],
+        "is_active": True,
     },
     "naresh": {
         "full_name": "Potti Naresh",
         "aliases": ["naresh", "potti naresh", "jabardasth naresh", "నరేష్", "పొట్టి నరేష్"],
         "negative_tokens": ["allari naresh", "senior naresh", "vk naresh", "pavitra lokesh", "actor naresh", "mahesh babu"],
+        "is_active": True,
+    },
+    "mukesh": {
+        "full_name": "Mukesh Gowda",
+        "aliases": ["mukesh", "mukesh gowda", "ముఖేష్", "ముఖేష్ గౌడ"],
+        "negative_tokens": ["mukesh ambani", "reliance"],
+        "is_active": True,
+    },
+    "varshini": {
+        "full_name": "Varshini Sounderajan",
+        "aliases": ["varshini", "varshini sounderajan", "వర్షిణి", "వర్షిణి సౌందరరాజన్"],
+        "negative_tokens": [],
+        "is_active": True,
+    },
+    "rama krishna": {
+        "full_name": "Rama Krishna",
+        "aliases": ["rama krishna", "ramakrishna", "రామకృష్ణ"],
+        "negative_tokens": ["ramakrishna paramahamsa", "mission", "math"],
+        "is_active": True,
+    },
+    "swetha": {
+        "full_name": "Swetha",
+        "aliases": ["swetha", "sweatha", "శ్వేత"],
+        "negative_tokens": [],
+        "is_active": True,
+    },
+    "neethu": {
+        "full_name": "Neethu Natraj",
+        "aliases": ["neethu", "neethu natraj", "నీతు", "నీతు నటరాజ్"],
+        "negative_tokens": [],
+        "is_active": True,
     },
 }
+
+# Ground Truth Realities for Current Week:
+THIS_WEEK_NO_ELIMINATION = True
+CURRENT_CAPTAIN = "Temper Vamsi"
+ACTIVE_CONTESTANTS_SUMMARY = "Debjani Modak, Auto Ram Prasad, Shiv, Potti Naresh, Mukesh Gowda, Varshini Sounderajan, Aman Masud, Thrigun Eswaran, Rama Krishna, Swetha, Neethu Natraj, Temper Vamsi (Captain), Sudheer Reddy"
 
 PAST_SEASONS_KNOWN_NAMES: List[str] = [
     "kalyan padala", "winner kalyan", "ashwini sri", "ashwini",

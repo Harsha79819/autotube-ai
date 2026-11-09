@@ -904,9 +904,10 @@ def synthesize_beat_visual_plan(delivery_plan: List[Dict[str, Any]], topic: str 
         if not is_bb
         else (
             "- MANDATORY REALITY SHOW FORMAT: Format search_query strictly as '[Contestant Name] [Season Name]' (e.g. 'Thrigun Bigg Boss Telugu 10', 'Temper Vamsi Bigg Boss 10', 'Aman Masud Bigg Boss Telugu 10').\n"
-            "- STRICT GROUND TRUTH: Active Season 10 housemates: Temper Vamsi, Thrigun Eswaran, Aman Masud, Sudheer Reddy (Sudheer Talks), Auto Ram Prasad, Potti Naresh, Debjani Modak, Mukesh Gowda, Varshini Sounderajan, Neethu Natraj, Dakkshi Guttikonda, Host Akkineni Nagarjuna.\n"
+            "- STRICT GROUND TRUTH: Active Season 10 housemates: Temper Vamsi (CAPTAIN THIS WEEK), Thrigun Eswaran (Trigun), Aman Masud, Sudheer Reddy (Sudheer), Auto Ram Prasad, Potti Naresh, Debjani Modak, Shiv, Mukesh Gowda, Varshini Sounderajan, Rama Krishna, Swetha, Neethu Natraj, Host Akkineni Nagarjuna.\n"
+            "- THIS WEEK GROUND TRUTH: NO ELIMINATION THIS WEEK! Temper Vamsi is the current Captain.\n"
             "- ELIMINATED CONTESTANTS: Rohit Patnam, Shalini Patel, Gundeboina Jhansi (Singer Jhansi), Chaithra Rai, Krishna Alluri (Krishnudu), Srishti Vyakaranam, Charan Mahadev, Mithilesh Reddy. STRICT: DO NOT feature eliminated contestants in active house tasks, immunity, captaincy, or nominations unless the topic specifically covers their eviction episode!\n"
-            "- STRICT PROHIBITION: NEVER use past contestants or unrelated stars: NO Sudigali Sudheer, NO Rohit Sahni, NO Anchor Jhansi, NO Ram Charan.\n"
+            "- STRICT PROHIBITION: NEVER use past contestants or unrelated stars: NO Rohit Sahni, NO Anchor Jhansi, NO Ram Charan.\n"
             "- FORBIDDEN GENERIC QUERIES: NEVER output generic search queries like 'Bigg Boss Telugu drama', 'Bigg Boss emotional scene', 'Bigg Boss Telugu stage', or 'Bigg Boss housemates'."
         )
     )
@@ -2748,17 +2749,20 @@ CRITICAL VIRALITY RULES:
 ============================================================
 Host: Akkineni Nagarjuna
 Official Season 10 Active Housemates:
-- Vamsi Krishna (Temper Vamsi)
+- Vamsi Krishna (Temper Vamsi) [CURRENT CAPTAIN THIS WEEK!]
 - Thrigun Eswaran (Actor Thrigun / Adith Arun)
 - Aman Masud (Actor)
-- Sudheer Reddy (Sudheer Talks YouTuber) [STRICT: NOT Sudigali Sudheer!]
+- Sudheer Reddy (Sudheer Talks YouTuber / Sudheer)
 - Auto Ram Prasad (Jabardasth Ram Prasad)
 - Potti Naresh (Jabardasth Naresh)
 - Debjani Modak
+- Shiv (Anchor Shiv)
 - Mukesh Gowda
 - Varshini Sounderajan
+- Rama Krishna
+- Swetha
 - Neethu Natraj
-- Dakkshi Guttikonda
+CRITICAL GROUND TRUTH: THIS WEEK NO ELIMINATION! Temper Vamsi is the current Captain.
 
 Eliminated Contestants:
 - Rohit Patnam (Rohit Naidu Patnam) [ELIMINATED / EVICTED - NO LONGER IN HOUSE!]

@@ -4,6 +4,7 @@ import re
 import textwrap
 from pathlib import Path
 import json
+import shutil
 from typing import Optional, List, Dict, Tuple
 
 
@@ -898,6 +899,10 @@ def create_playwright_canva_thumbnail(title, aspect_ratio="16:9", assets_dir=Non
                     bg_theme=params.get("bg_theme", "tech_purple"),
                     output_path=str(poster_916_path),
                 )
+                if poster_916_path.exists():
+                    global_poster = OUTPUT_DIR / "thumbnail_916_poster.png"
+                    if poster_916_path.resolve() != global_poster.resolve():
+                        shutil.copyfile(poster_916_path, global_poster)
 
             return final_jpg
 

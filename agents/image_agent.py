@@ -3420,84 +3420,7 @@ def download_images_from_visual_plan(
                 print(f"Telugu meme manager notice: {m_err}")
 
         # ------------------------------------------------------------
-        # TIER 1.3: DYNAMIC CONTESTANT GALLERY STILLS (EPISODE ACTION & EXPRESSIONS)
-        # ------------------------------------------------------------
-        # If this beat is about a Bigg Boss contestant, provide a fresh, distinct,
-        # high-resolution episode still from their multi-image gallery pool.
-        if is_bb_scene or local_contestant:
-            c_cand = local_contestant or find_local_contestant_image(
-                f"{entity_name} {visual_query} {assigned_narration}",
-                used_hashes=used_hashes,
-                used_dhashes=used_dhashes,
-            )
-            if c_cand:
-                c_slug, c_path = c_cand
-                if c_path.exists() and c_path.stat().st_size > 5000:
-                    c_h = image_hash(c_path)
-                    c_dh = image_dhash(c_path)
-                    with hash_lock:
-                        already_used = (
-                            (c_h and c_h in used_hashes)
-                            or (c_dh and is_perceptual_duplicate(c_dh, used_dhashes))
-                            or (str(c_path) in used_harvested_paths)
-                        )
-                        # OCR check: reject watermarked photos
-                        if not already_used:
-                            try:
-                                from tools.watermark_remover import clean_and_remove_watermarks, has_watermark_text
-                                from tools.ocr_guard import scan_images_ocr
-                                c_ocr = scan_images_ocr([c_path])
-                                c_txt = c_ocr.get(str(c_path), "")
-                                has_wm, wm_word = has_watermark_text(c_txt)
-                                if has_wm:
-                                    is_clean, cleaned_c = clean_and_remove_watermarks(c_path)
-                                    if not is_clean:
-                                        print(f"⚠️ [Contestant Gallery OCR] Disqualified watermarked image: {c_path.name} ({wm_word})")
-                                        already_used = True
-                                    else:
-                                        c_path = cleaned_c
-                            except Exception:
-                                pass
-
-                        if not already_used:
-                            used_harvested_paths.add(str(c_path))
-                            if c_h:
-                                used_hashes.add(c_h)
-                            if c_dh:
-                                used_dhashes.append(c_dh)
-                    if not already_used:
-                        shutil.copy2(c_path, destination)
-                        try:
-                            from providers.image import clean_and_crop_image
-                            clean_and_crop_image(destination, aspect_ratio=aspect_ratio)
-                            post_h = image_hash(destination)
-                            post_dh = image_dhash(destination)
-                            with hash_lock:
-                                if post_h:
-                                    used_hashes.add(post_h)
-                                if post_dh:
-                                    used_dhashes.append(post_dh)
-                        except Exception:
-                            pass
-                        try:
-                            from data.asset_ledger import record_asset
-                            record_asset(
-                                video_id="current",
-                                beat_id=visual_number,
-                                asset_path=str(destination),
-                                source_url=f"contestant_gallery:{c_slug}/{c_path.name}",
-                                tier="TIER_A",
-                                license_name="Editorial Reality Coverage Fair Dealing",
-                                credit_text=f"Bigg Boss 10 Episode Still ({c_slug.title()})",
-                                duration_sec=3.0,
-                            )
-                        except Exception:
-                            pass
-                        print(f"🌟 [Contestant Gallery] Visual {visual_number} assigned fresh episode still for '{c_slug}': {c_path.name}")
-                        return visual_number, destination
-
-        # ------------------------------------------------------------
-        # TIER 1.4: LIVE TELUGU NEWS PORTAL PHOTOS & EPISODE STILLS (MAX 8 BEATS)
+        # TIER 1.3: LIVE TELUGU NEWS PORTAL PHOTOS & EPISODE STILLS (PRIORITIZED ONLINE MEDIA)
         # ------------------------------------------------------------
         is_current_bb = bool(
             is_bb_scene
@@ -3593,6 +3516,81 @@ def download_images_from_visual_plan(
                         return visual_number, destination
             except Exception as n_err:
                 print(f"News media harvester notice: {n_err}")
+
+        # ------------------------------------------------------------
+        # TIER 1.4: DYNAMIC CONTESTANT GALLERY STILLS (FALLBACK IF ONLINE HARVEST YIELDS NO ASSET)
+        # ------------------------------------------------------------
+        if is_bb_scene or local_contestant:
+            c_cand = local_contestant or find_local_contestant_image(
+                f"{entity_name} {visual_query} {assigned_narration}",
+                used_hashes=used_hashes,
+                used_dhashes=used_dhashes,
+            )
+            if c_cand:
+                c_slug, c_path = c_cand
+                if c_path.exists() and c_path.stat().st_size > 5000:
+                    c_h = image_hash(c_path)
+                    c_dh = image_dhash(c_path)
+                    with hash_lock:
+                        already_used = (
+                            (c_h and c_h in used_hashes)
+                            or (c_dh and is_perceptual_duplicate(c_dh, used_dhashes))
+                            or (str(c_path) in used_harvested_paths)
+                        )
+                        # OCR check: reject watermarked photos
+                        if not already_used:
+                            try:
+                                from tools.watermark_remover import clean_and_remove_watermarks, has_watermark_text
+                                from tools.ocr_guard import scan_images_ocr
+                                c_ocr = scan_images_ocr([c_path])
+                                c_txt = c_ocr.get(str(c_path), "")
+                                has_wm, wm_word = has_watermark_text(c_txt)
+                                if has_wm:
+                                    is_clean, cleaned_c = clean_and_remove_watermarks(c_path)
+                                    if not is_clean:
+                                        print(f"⚠️ [Contestant Gallery OCR] Disqualified watermarked image: {c_path.name} ({wm_word})")
+                                        already_used = True
+                                    else:
+                                        c_path = cleaned_c
+                            except Exception:
+                                pass
+
+                        if not already_used:
+                            used_harvested_paths.add(str(c_path))
+                            if c_h:
+                                used_hashes.add(c_h)
+                            if c_dh:
+                                used_dhashes.append(c_dh)
+                    if not already_used:
+                        shutil.copy2(c_path, destination)
+                        try:
+                            from providers.image import clean_and_crop_image
+                            clean_and_crop_image(destination, aspect_ratio=aspect_ratio)
+                            post_h = image_hash(destination)
+                            post_dh = image_dhash(destination)
+                            with hash_lock:
+                                if post_h:
+                                    used_hashes.add(post_h)
+                                if post_dh:
+                                    used_dhashes.append(post_dh)
+                        except Exception:
+                            pass
+                        try:
+                            from data.asset_ledger import record_asset
+                            record_asset(
+                                video_id="current",
+                                beat_id=visual_number,
+                                asset_path=str(destination),
+                                source_url=f"contestant_gallery:{c_slug}/{c_path.name}",
+                                tier="TIER_A",
+                                license_name="Editorial Reality Coverage Fair Dealing",
+                                credit_text=f"Bigg Boss 10 Episode Still ({c_slug.title()})",
+                                duration_sec=3.0,
+                            )
+                        except Exception:
+                            pass
+                        print(f"🌟 [Contestant Gallery] Visual {visual_number} assigned episode still for '{c_slug}': {c_path.name}")
+                        return visual_number, destination
 
         # ------------------------------------------------------------
         # TIER 1.6: OFFICIAL STAR MAA YOUTUBE PROMO FRAMES (BIGG BOSS ONLY, MAX 3 BEATS)

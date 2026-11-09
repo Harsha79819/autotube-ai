@@ -121,6 +121,10 @@ def create_final_video(
     audio_source = "output/mixed_audio.wav" if os.path.exists("output/mixed_audio.wav") else "output/voice.mp3"
 
     poster_overlay_path = "output/thumbnail_916_poster.png"
+    if not os.path.exists(poster_overlay_path):
+        cand_p = Path(input_video).parent / "thumbnail_916_poster.png"
+        if cand_p.exists():
+            poster_overlay_path = str(cand_p)
     has_poster_overlay = bool(
         is_shorts and os.path.exists(poster_overlay_path) and os.path.getsize(poster_overlay_path) > 1000
     )

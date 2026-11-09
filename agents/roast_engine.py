@@ -295,10 +295,12 @@ def generate_roast_draft(topic: str, facts: List[str], target_duration_sec: int 
 - Comment Trigger & CTA (Final Beat):
   * End with a provocative, polarizing debate question (e.g. "ఈ వారం బిగ్ బాస్ హౌస్‌లో అసలైన కవర్ డ్రైవర్ ఎవరు? మీ అభిప్రాయం ఏమిటో కింద కామెంట్ చేయండి!") followed by witty లైక్, షేర్, సబ్‌స్క్రైబ్."""
         bb_constraint = """BIGG BOSS TELUGU 10 ROSTER RULES:
-- ACTIVE HOUSEMATES: Temper Vamsi, Thrigun Eswaran, Aman Masud, Sudheer Reddy, Auto Ram Prasad, Potti Naresh, Debjani Modak, Mukesh Gowda, Varshini Sounderajan, Neethu Natraj, Dakkshi Guttikonda.
+- ACTIVE HOUSEMATES: Temper Vamsi (CAPTAIN THIS WEEK), Thrigun Eswaran (Trigun), Aman Masud, Sudheer Reddy (Sudheer), Auto Ram Prasad, Potti Naresh, Debjani Modak, Shiv, Mukesh Gowda, Varshini Sounderajan, Rama Krishna, Swetha, Neethu Natraj.
+- HOST: Akkineni Nagarjuna.
+- THIS WEEK GROUND TRUTH: NO ELIMINATION THIS WEEK! Temper Vamsi is the current Captain of the house.
 - ELIMINATED CONTESTANTS: Rohit Patnam, Shalini Patel, Gundeboina Jhansi (Singer Jhansi), Chaithra Rai, Krishna Alluri (Krishnudu), Srishti Vyakaranam, Charan Mahadev, Mithilesh Reddy.
-- CRITICAL ACCURACY RULE: Rohit Patnam, Shalini Patel, Jhansi, Chaithra, Krishnudu, Srishti, and Charan are ALREADY ELIMINATED! DO NOT describe them inside the house, in captaincy, getting immunity, or performing weekly tasks! Focus strictly on active housemates."""
-        loanword_samples = "'బిగ్ బాస్', 'మైండ్ బ్లాంక్', 'సీన్ కట్', 'పీఆర్ స్ట్రాటజీ', 'టీఆర్పీ రేటింగ్స్', 'సీక్రెట్ రూమ్', 'ఎలిమినేషన్', 'ఓటింగ్'"
+- CRITICAL ACCURACY RULE: Rohit Patnam, Shalini Patel, Jhansi, Chaithra, Krishnudu, Srishti, and Charan are ALREADY ELIMINATED! DO NOT describe them inside the house, in captaincy, getting immunity, or performing weekly tasks! Focus strictly on the active housemates above."""
+        loanword_samples = "'బిగ్ బాస్', 'మైండ్ బ్లాంక్', 'సీన్ కట్', 'పీఆర్ స్ట్రాటజీ', 'టీఆర్పీ రేటింగ్స్', 'సీక్రెట్ రూమ్', 'ఎలిమినేషన్', 'ఓటింగ్', 'కెప్టెన్'"
     else:
         struct_text = f"""Structure:
 - Hook (0-3s): SAVAGE HIGH-VOLTAGE OBSERVATIONAL HOOK (0.0s START):

@@ -1947,6 +1947,14 @@ def generate_multi_media_video(
             f_sub.result()
             f_thm.result()
 
+        # Mirror thumbnail and 9:16 poster into OUTPUT_DIR immediately before final video assembly
+        for p_name in ["thumbnail.jpg", "thumbnail_916_poster.png", "thumbnail_prasad_16_9.png"]:
+            if (run_dir / p_name).exists():
+                try:
+                    shutil.copyfile(run_dir / p_name, OUTPUT_DIR / p_name)
+                except Exception:
+                    pass
+
         # ----------------------------------------------------
         # FINAL VIDEO + CAPTIONS (Direct Muxing)
         # ----------------------------------------------------
