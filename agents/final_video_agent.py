@@ -120,8 +120,13 @@ def create_final_video(
     video_has_audio = bool(p_res.stdout.strip())
     audio_source = "output/mixed_audio.wav" if os.path.exists("output/mixed_audio.wav") else "output/voice.mp3"
 
-    # Fast copy optimization ONLY when NO captions and NO hook overlay are needed
-    if not add_captions and not has_hook_overlay and video_has_audio:
+    poster_overlay_path = "output/thumbnail_916_poster.png"
+    has_poster_overlay = bool(
+        is_shorts and os.path.exists(poster_overlay_path) and os.path.getsize(poster_overlay_path) > 1000
+    )
+
+    # Fast copy optimization ONLY when NO captions, NO hook overlay, and NO poster overlay are needed
+    if not add_captions and not has_hook_overlay and not has_poster_overlay and video_has_audio:
         if aspect_ratio == "9:16":
             print("⏩ 9:16 Vertical Export: Re-encoding stream for Instagram Reels compliance (+faststart, 44.1kHz)...")
             try:
@@ -156,15 +161,24 @@ def create_final_video(
     # Assemble inputs and filter graph
     cmd = ["ffmpeg", "-y", "-i", input_video]
     overlay_input_idx = -1
+    poster_input_idx = -1
     audio_input_idx = -1
+
+    current_input_idx = 1
+    if has_poster_overlay:
+        cmd.extend(["-i", poster_overlay_path])
+        poster_input_idx = current_input_idx
+        current_input_idx += 1
 
     if has_hook_overlay:
         cmd.extend(["-i", hook_overlay_path])
-        overlay_input_idx = 1
+        overlay_input_idx = current_input_idx
+        current_input_idx += 1
 
     if not video_has_audio and os.path.exists(audio_source):
         cmd.extend(["-i", audio_source])
-        audio_input_idx = 2 if has_hook_overlay else 1
+        audio_input_idx = current_input_idx
+        current_input_idx += 1
 
     filter_steps = []
     # 1. Base scale + letterbox pad
@@ -173,6 +187,13 @@ def create_final_video(
         f"pad={target_w}:{target_h}:(ow-iw)/2:(oh-ih)/2[scaled]"
     )
     last_v = "scaled"
+
+    # 1b. Poster overlay on Frame 0 for first 0.35s (Guarantees YouTube Shorts mobile auto-picker displays Prasad Tech cover)
+    if has_poster_overlay:
+        filter_steps.append(
+            f"[{last_v}][{poster_input_idx}:v]overlay=0:0:enable='between(t,0,0.35)'[v_poster]"
+        )
+        last_v = "v_poster"
 
     # 2. Hook overlay banner on Frame 0 for first 2.0s
     if has_hook_overlay:

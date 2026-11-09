@@ -2530,6 +2530,16 @@ TRANSLATE AND ADAPT ALL NEWS/TOPIC FACTS DIRECTLY INTO ENGAGING TELUGU SPOKEN CR
   * Specs: "యూఎఫ్ఎస్ ఫైవ్ పాయింట్ వన్" (UFS 5.1), "టూ ఫిఫ్టీ సిక్స్ జీబీ" (256GB), "ట్వెల్వ్ జీబీ ర్యామ్" (12GB RAM), "సిక్స్ థౌసండ్ ఎంఏహెచ్ బ్యాటరీ" (6000mAh), "వన్ ట్వంటీ హెర్ట్జ్ డిస్‌ప్లే" (120Hz).
   * Dynamic Key Spec Tagging: Wrap standout specs in double asterisks (e.g. **6000mAh**, **120Hz**, **UFS 5.1**, **₹19,999**).
 
+- MANDATORY PRASAD TECH SMARTPHONE SPECIFICATIONS BREAKDOWN (PURE TECH FOCUS):
+  When discussing smartphones, gadgets, processors, or tech news:
+  * NEVER speak in vague generalities like "ఈ ఫోన్ చాలా బాగుంది" or "కెమెరా సూపర్".
+  * YOU MUST DETAIL CONCRETE REAL-WORLD SPECIFICATIONS in natural creator Telugu:
+    1. Processor & Performance: State the exact chipset (e.g. Snapdragon 8 Elite, Dimensity 9400, Snapdragon 7s Gen 3, Apple A18 Pro) and gaming/multitasking capability.
+    2. Camera Optics: Exact Megapixels (e.g. 200MP Main / 50MP Sony LYT-808, Periscope Telephoto zoom, OIS stabilization).
+    3. Battery & Fast Charging: Exact capacity (e.g. **6000mAh**, **6500mAh**) and charging wattage (e.g. **80W**, **100W**, **120W** ఫాస్ట్ ఛార్జింగ్).
+    4. Display: AMOLED / OLED, **120Hz** / **144Hz** refresh rate, peak nits brightness.
+    5. Price in India (₹): Expected / launch price (e.g. **₹24,999**, **₹54,999**) and value-for-money verdict ('ఈ ప్రైస్ కి ఇది వర్త్ ఆ కాదా?').
+
 - PACING: Each beat must be speakable in 2.0-3.5 seconds (6-12 words) for maximum retention.
 - CRITICAL VISUAL RULE: All VISUAL descriptions MUST be written strictly in concise ENGLISH keywords (e.g. "traffic highway india | modern electric vehicle charging station drone"), because stock video search engines query in English. Do NOT write visual descriptions in Telugu."""
     elif is_hindi:

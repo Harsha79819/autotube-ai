@@ -411,7 +411,7 @@ def _fit_to_aspect_ratio(image, aspect_ratio="16:9"):
     return cropped
 
 
-def create_thumbnail(title, aspect_ratio="16:9", assets_dir=None, output_dir=None, use_playwright=False):
+def create_thumbnail(title, aspect_ratio="16:9", assets_dir=None, output_dir=None, use_playwright=True):
 
     if use_playwright:
         try:
@@ -782,71 +782,87 @@ def create_thumbnail(title, aspect_ratio="16:9", assets_dir=None, output_dir=Non
     return output
 
 
-def create_playwright_canva_thumbnail(title, aspect_ratio="16:9", assets_dir=None, output_dir=None) -> Path:
+def create_playwright_canva_thumbnail(title, aspect_ratio="16:9", assets_dir=None, output_dir=None, channel="Channel 1 (Primary)") -> Path:
     """
-    Renders a Canva-grade high-CTR YouTube thumbnail using Playwright Chromium with HTML5/CSS3.
+    Renders the signature 'Prasad Tech in Telugu' high-CTR YouTube thumbnail using Playwright Chromium.
     Features:
-    - Google Fonts Noto Sans Telugu (zero conjunct distortion).
-    - Glowing outer rim on cutout.
-    - Obsidian dark badge pill with electric yellow and gold/red borders.
-    - Safe area protection (bottom-right 100% free of text on 16:9; bottom safe zone on 9:16).
-    - Automatic fallback to create_thumbnail (Pillow/CoreText) if Playwright fails.
+    - Dual top banner black pills with high-contrast Yellow & White Telugu text and emojis.
+    - Expressive cutout with golden/cyan glowing rim light.
+    - Lower split evidence panels with cyan neon glow.
+    - Floating brand logos and episode pill badge.
+    - Standard 16:9 (1280x720) canvas for YouTube Data API (no side pillarbox bars).
+    - If aspect_ratio == "9:16", also renders a 9:16 poster frame for video burn-in!
     """
     out_dir = Path(output_dir) if output_dir else OUTPUT_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     try:
-        from tools.playwright_renderer import render_canva_pro_thumbnail
+        from tools.playwright_renderer import render_prasad_tech_thumbnail, build_prasad_tech_thumbnail_params
         from tools.person_cutout import extract_person_cutout
 
-        is_telugu_topic = bool(
-            re.search(r"[\u0C00-\u0C7F]", str(title))
-            or ((OUTPUT_DIR / "topic.txt").exists() and re.search(r"[\u0C00-\u0C7F]|bigg boss|biggboss", (OUTPUT_DIR / "topic.txt").read_text(encoding="utf-8").lower()))
-            or re.search(r"bigg\s*boss|aman|trigun|jhansi|rohit|sudheer", str(title).lower())
-        )
+        t_file = (out_dir / "topic.txt") if (out_dir / "topic.txt").exists() else (OUTPUT_DIR / "topic.txt")
+        topic_text = t_file.read_text(encoding="utf-8").strip() if t_file.exists() else str(title)
 
-        badge_text = _clean_title(title, is_telugu=is_telugu_topic)
-        border_color = "#E63946" if any(w in badge_text for w in ["షాక్", "ఎలిమినేషన్", "ఫైర్", "రచ్చ", "ELIMINATION", "DRAMA", "SHOCK"]) else "#FFD700"
-
-        # Background candidate
-        bg_path = _find_best_background(aspect_ratio=aspect_ratio, assets_dir=assets_dir)
+        # Build Prasad Tech style parameters
+        params = build_prasad_tech_thumbnail_params(title=str(title), channel=str(channel), topic=topic_text)
 
         # Cutout candidate
         cutout_path = None
-        ent_slug = _find_contestant_slug(title)
-        if not ent_slug:
-            t_file = (out_dir / "topic.txt") if (out_dir / "topic.txt").exists() else (OUTPUT_DIR / "topic.txt")
-            if t_file.exists():
-                ent_slug = _find_contestant_slug(t_file.read_text(encoding="utf-8"))
+        ent_slug = _find_contestant_slug(f"{title} {topic_text}")
         if not ent_slug:
             m_file = (out_dir / "metadata.json") if (out_dir / "metadata.json").exists() else (OUTPUT_DIR / "metadata.json")
             if m_file.exists():
                 ent_slug = _find_contestant_slug(m_file.read_text(encoding="utf-8"))
 
+        if not ent_slug and ("bigg boss" in f"{title} {topic_text}".lower() or "bb10" in f"{title} {topic_text}".lower() or "channel 2" in str(channel).lower()):
+            ent_slug = "nagarjuna"
+
         if ent_slug:
             cand_paths = []
-            slug_variants = [ent_slug, f"{ent_slug}_naidu", f"{ent_slug}_reddy", f"{ent_slug}_sounderajan", f"{ent_slug}_contestant", f"{ent_slug}_bb"]
-            emotion_stems = ["shocked", "angry", "laughing", "smug", "reaction", "surprised", "crying", "neutral", "image"]
-            for em in emotion_stems:
-                for sv in slug_variants:
-                    cand_paths.append(ROOT / "data" / "entities" / sv / f"{em}.jpg")
-                    cand_paths.append(ROOT / "data" / "entities" / sv / f"{em}.png")
-                    cand_paths.append(ROOT / "assets" / "entities" / sv / f"{em}.jpg")
-                    cand_paths.append(ROOT / "assets" / "entities" / sv / "image.jpg")
+            for ent_dir in [ROOT / "data" / "entities", ROOT / "assets" / "entities"]:
+                if ent_dir.exists():
+                    for sub in ent_dir.iterdir():
+                        if sub.is_dir() and ent_slug.lower() in sub.name.lower():
+                            for em in ["shocked", "angry", "reaction", "image", "surprised", "laughing", "smug", "crying", "neutral"]:
+                                cand_paths.append(sub / f"{em}.jpg")
+                                cand_paths.append(sub / f"{em}.png")
             person_img_path = next((p for p in cand_paths if p.exists() and p.stat().st_size > 1000), None)
             if person_img_path:
                 raw_cutout = extract_person_cutout(person_img_path)
                 if raw_cutout and Path(raw_cutout).exists():
                     cutout_path = Path(raw_cutout)
 
-        out_png = out_dir / f"thumbnail_playwright_{aspect_ratio.replace(':', '_')}.png"
-        res = render_canva_pro_thumbnail(
-            badge_text=badge_text,
-            aspect_ratio=aspect_ratio,
-            bg_image_path=Path(bg_path) if bg_path else None,
-            cutout_path=cutout_path,
-            border_color=border_color,
+        # Evidence images from generated run images if available
+        ev_left_img = None
+        ev_right_img = None
+        run_images = list((out_dir / "images").glob("*.jpg")) + list((out_dir / "images").glob("*.png"))
+        if not run_images:
+            run_images = list((OUTPUT_DIR / "images").glob("*.jpg")) + list((OUTPUT_DIR / "images").glob("*.png"))
+        if len(run_images) >= 1:
+            ev_left_img = run_images[0]
+        if len(run_images) >= 2:
+            ev_right_img = run_images[1]
+
+        out_png = out_dir / "thumbnail_prasad_16_9.png"
+        res = render_prasad_tech_thumbnail(
+            header_left_yellow=params["header_left_yellow"],
+            header_left_white=params["header_left_white"],
+            header_left_emoji=params["header_left_emoji"],
+            header_right_white=params["header_right_white"],
+            header_right_yellow=params["header_right_yellow"],
+            header_right_emoji=params["header_right_emoji"],
+            hero_cutout_path=cutout_path,
+            evidence_left_img=ev_left_img,
+            evidence_left_text=params["evidence_left_text"],
+            evidence_left_badge=params["evidence_left_badge"],
+            evidence_right_img=ev_right_img,
+            evidence_right_text=params["evidence_right_text"],
+            evidence_right_badge=params["evidence_right_badge"],
+            episode_pill_text=params["episode_pill_text"],
+            brand_logos=params.get("brand_logos"),
+            aspect_ratio="16:9",  # Always 16:9 (1280x720) for YouTube API upload
+            bg_theme=params.get("bg_theme", "tech_purple"),
             output_path=str(out_png),
         )
 
@@ -857,11 +873,36 @@ def create_playwright_canva_thumbnail(title, aspect_ratio="16:9", assets_dir=Non
                 img.convert("RGB").save(final_jpg, "JPEG", quality=95, optimize=True)
                 if final_jpg.resolve() != global_jpg.resolve():
                     img.convert("RGB").save(global_jpg, "JPEG", quality=95, optimize=True)
-            print(f"✅ [Playwright Canva] High-CTR thumbnail created: {final_jpg}")
+            print(f"✅ [Prasad Tech Thumbnail Engine] High-CTR thumbnail created: {final_jpg}")
+
+            # Also render 9:16 vertical poster if needed for video burn-in
+            if aspect_ratio == "9:16":
+                poster_916_path = out_dir / "thumbnail_916_poster.png"
+                render_prasad_tech_thumbnail(
+                    header_left_yellow=params["header_left_yellow"],
+                    header_left_white=params["header_left_white"],
+                    header_left_emoji=params["header_left_emoji"],
+                    header_right_white=params["header_right_white"],
+                    header_right_yellow=params["header_right_yellow"],
+                    header_right_emoji=params["header_right_emoji"],
+                    hero_cutout_path=cutout_path,
+                    evidence_left_img=ev_left_img,
+                    evidence_left_text=params["evidence_left_text"],
+                    evidence_left_badge=params["evidence_left_badge"],
+                    evidence_right_img=ev_right_img,
+                    evidence_right_text=params["evidence_right_text"],
+                    evidence_right_badge=params["evidence_right_badge"],
+                    episode_pill_text=params["episode_pill_text"],
+                    brand_logos=params.get("brand_logos"),
+                    aspect_ratio="9:16",
+                    bg_theme=params.get("bg_theme", "tech_purple"),
+                    output_path=str(poster_916_path),
+                )
+
             return final_jpg
 
     except Exception as exc:
-        print(f"⚠️ Playwright Canva thumbnail rendering notice: {exc}. Falling back to PIL/CoreText.")
+        print(f"⚠️ Prasad Tech thumbnail rendering notice: {exc}. Falling back to standard canvas.")
 
     return create_thumbnail(title=title, aspect_ratio=aspect_ratio, assets_dir=assets_dir, output_dir=output_dir, use_playwright=False)
 

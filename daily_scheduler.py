@@ -83,14 +83,14 @@ def get_slot_lead_time_minutes(slot: Dict[str, Any]) -> int:
 DAILY_SLOT_CONFIGS: List[Dict[str, Any]] = [
     {
         "slot_id": "CH1-S1",
-        "slot_name": "Channel 1 — Morning Breaking Local News",
+        "slot_name": "Channel 1 — Morning Smartphone Launch & Price Leaks",
         "scheduled_time": "08:00",
         "channel": "Channel 1 (Primary)",
         "format_type": "short",
         "aspect_ratio": "9:16",
         "target_duration": "60-90s",
-        "category": "Regional",
-        "content_type": "Local News",
+        "category": "Technology",
+        "content_type": "Tech News",
         "instagram_upload": True,
         "language_style": DEFAULT_LANGUAGE_STYLE,
         "voice": DEFAULT_TELUGU_VOICE,
@@ -113,7 +113,7 @@ DAILY_SLOT_CONFIGS: List[Dict[str, Any]] = [
     },
     {
         "slot_id": "CH1-L1",
-        "slot_name": "Channel 1 — Tech Innovation / Fact Explainer Deep Dive",
+        "slot_name": "Channel 1 — Daily Tech News Roundup & Mobile Specs",
         "scheduled_time": "12:30",
         "channel": "Channel 1 (Primary)",
         "format_type": "long-form",
@@ -143,7 +143,7 @@ DAILY_SLOT_CONFIGS: List[Dict[str, Any]] = [
     },
     {
         "slot_id": "CH1-S2",
-        "slot_name": "Channel 1 — Viral Tech / AI Innovation Short",
+        "slot_name": "Channel 1 — New Mobile Specs, Features & Comparison",
         "scheduled_time": "16:00",
         "channel": "Channel 1 (Primary)",
         "format_type": "short",
@@ -188,14 +188,14 @@ DAILY_SLOT_CONFIGS: List[Dict[str, Any]] = [
     },
     {
         "slot_id": "CH1-S3",
-        "slot_name": "Channel 1 — Mind-Blowing Mystery & Bizarre Facts",
+        "slot_name": "Channel 1 — Future Tech, AI Gadgets & Crazy Inventions",
         "scheduled_time": "19:45",
         "channel": "Channel 1 (Primary)",
         "format_type": "short",
         "aspect_ratio": "9:16",
         "target_duration": "60-90s",
-        "category": "Science",
-        "content_type": "Interesting Facts",
+        "category": "Technology",
+        "content_type": "Tech News",
         "instagram_upload": True,
         "language_style": DEFAULT_LANGUAGE_STYLE,
         "voice": DEFAULT_TELUGU_VOICE,
@@ -218,14 +218,14 @@ DAILY_SLOT_CONFIGS: List[Dict[str, Any]] = [
     },
     {
         "slot_id": "CH1-L2",
-        "slot_name": "Channel 1 — Historical Mysteries & Unsolved Phenomena",
+        "slot_name": "Channel 1 — Best Mobiles to Buy in India & Flagship Deep Dive",
         "scheduled_time": "22:00",
         "channel": "Channel 1 (Primary)",
         "format_type": "long-form",
         "aspect_ratio": "16:9",
         "target_duration": "dynamic",  # 5-8m based on topic intensity
-        "category": "History",
-        "content_type": "History",
+        "category": "Technology",
+        "content_type": "Tech News",
         "instagram_upload": False,
         "language_style": DEFAULT_LANGUAGE_STYLE,
         "voice": DEFAULT_TELUGU_VOICE,
@@ -442,41 +442,37 @@ def fetch_live_slot_topic(slot: Dict[str, Any]) -> str:
         record_used_topic(fallback)
         return fallback
 
-    # 3. AP & Telangana Local Breaking News (Slot: CH1-S1)
-    elif "local" in content_type.lower() or "regional" in category.lower():
+    # 3. Channel 1 — 100% Pure Tech News, Smartphones & Mobile Specifications (Slots: CH1-S1, CH1-L1, CH1-S2, CH1-S3, CH1-L2)
+    else:
+        # Determine specific tech angle based on slot
+        if s_id == "CH1-S1":
+            tech_query = "Latest Smartphone Launch Price Leak India Specs"
+        elif s_id == "CH1-L1":
+            tech_query = "Tech News Today Smartphone Specs Flagship Review"
+        elif s_id == "CH1-S2":
+            tech_query = "Smartphone Camera Battery Processor Comparison Specs"
+        elif s_id == "CH1-S3":
+            tech_query = "Future Technology AI Gadgets Inventions Wearables"
+        else:  # CH1-L2
+            tech_query = "Best Mobiles to Buy in India Budget Flagship Smartphone Specs"
+
+        # Model-aware novelty filter: extract phone model keywords to prevent repeating same phone
+        def is_model_repeated(topic_candidate: str) -> bool:
+            tc_lower = topic_candidate.lower()
+            models = ["oneplus 13", "oneplus 12", "galaxy s25", "galaxy s24", "iphone 17", "iphone 16", "iqoo 13", "iqoo 12", "vivo x200", "vivo x100", "realme gt 7", "realme gt 6", "redmi note 14", "pixel 9", "pixel 10", "nothing phone 3", "moto edge 50"]
+            for m in models:
+                if m in tc_lower:
+                    for u in used:
+                        if m in str(u).lower():
+                            return True
+            return False
+
         try:
             from agents.topic_suggester import fetch_ai_topic_suggestions, rank_topics_by_ovs
-            suggestions = fetch_ai_topic_suggestions("Ground Reality AP/Telangana News", count=5, use_ai=True)
-            valid = [c for c in suggestions if c.strip().lower() not in used]
-            if valid:
-                ranked = rank_topics_by_ovs(valid, "Ground Reality AP/Telangana News")
-                chosen = ranked[0]
-                record_used_topic(chosen)
-                return chosen
-        except Exception:
-            pass
-
-        try:
-            from agents.news_agent import get_trending_news
-            regional_news = get_trending_news(category="Regional", limit=8)
-            for item in regional_news:
-                t = item.get("title", "")
-                if t and t.strip().lower() not in used:
-                    record_used_topic(t)
-                    return t
-        except Exception as e:
-            log_daily(f"Notice: news_agent for Regional returned ({e})")
-
-        fallback = "Andhra Pradesh and Telangana Key Updates and Trending Highlights Today"
-        record_used_topic(fallback)
-        return fallback
-
-    # 4. Tech News & AI Innovations (Slots: CH1-L1, CH1-S2)
-    elif "tech" in content_type.lower() or "technology" in category.lower():
-        try:
-            from agents.topic_suggester import fetch_ai_topic_suggestions, rank_topics_by_ovs
-            suggestions = fetch_ai_topic_suggestions("Tech News", count=5, use_ai=True)
-            valid = [c for c in suggestions if c.strip().lower() not in used]
+            suggestions = fetch_ai_topic_suggestions(tech_query, count=6, use_ai=True)
+            valid = [c for c in suggestions if c.strip().lower() not in used and not is_model_repeated(c)]
+            if not valid:
+                valid = [c for c in suggestions if c.strip().lower() not in used]
             if valid:
                 ranked = rank_topics_by_ovs(valid, "Tech News")
                 chosen = ranked[0]
@@ -487,54 +483,30 @@ def fetch_live_slot_topic(slot: Dict[str, Any]) -> str:
 
         try:
             from agents.news_agent import get_trending_news
-            tech_news = get_trending_news(category="Technology", limit=8)
+            tech_news = get_trending_news(category="Technology", limit=10)
             for item in tech_news:
                 t = item.get("title", "")
-                if t and t.strip().lower() not in used:
+                if t and t.strip().lower() not in used and not is_model_repeated(t):
                     record_used_topic(t)
                     return t
         except Exception as e:
             log_daily(f"Notice: news_agent for Tech returned ({e})")
 
-        fallback = "Next-Generation AI Innovations and Major Technological Breakthroughs"
-        record_used_topic(fallback)
-        return fallback
-
-    # 5. History & Ancient Mysteries (Slot: CH1-L2)
-    elif "history" in content_type.lower() or "history" in category.lower():
-        try:
-            from agents.topic_suggester import fetch_ai_topic_suggestions, rank_topics_by_ovs
-            suggestions = fetch_ai_topic_suggestions("Indian Mysteries & Ancient Engineering", count=5, use_ai=True)
-            valid = [c for c in suggestions if c.strip().lower() not in used]
-            if valid:
-                ranked = rank_topics_by_ovs(valid, "Indian Mysteries & Ancient Engineering")
-                chosen = ranked[0]
-                record_used_topic(chosen)
-                return chosen
-        except Exception:
-            pass
-
-        unused = [t for t in CURATED_HISTORY_TOPICS if t.strip().lower() not in used]
-        chosen = random.choice(unused if unused else CURATED_HISTORY_TOPICS)
-        record_used_topic(chosen)
-        return chosen
-
-    # 6. Interesting Facts & Strange Phenomena (Slot: CH1-S3)
-    else:
-        try:
-            from agents.topic_suggester import fetch_ai_topic_suggestions, rank_topics_by_ovs
-            suggestions = fetch_ai_topic_suggestions("Interesting Facts", count=5, use_ai=True)
-            valid = [c for c in suggestions if c.strip().lower() not in used]
-            if valid:
-                ranked = rank_topics_by_ovs(valid, "Interesting Facts")
-                chosen = ranked[0]
-                record_used_topic(chosen)
-                return chosen
-        except Exception:
-            pass
-
-        unused = [t for t in CURATED_FACTS_TOPICS if t.strip().lower() not in used]
-        chosen = random.choice(unused if unused else CURATED_FACTS_TOPICS)
+        # Curated evergreen fresh tech specifications topics
+        curated_tech = [
+            "OnePlus 13 vs iQOO 13 Full Comparison: Snapdragon 8 Elite, 6000mAh Battery & India Price",
+            "Realme GT 7 Pro First Look: India's Most Affordable Snapdragon 8 Elite Flagship Specs",
+            "Samsung Galaxy S25 Ultra Leaks: 200MP Camera, Slim Titanium Design & Launch Date",
+            "Vivo X200 Pro Camera Review: 200MP Zeiss APO Telephoto & Dimensity 9400 Power",
+            "Best 5G Mobiles to Buy Under ₹20,000 in India: Top Battery, Camera & Processor Picks",
+            "Redmi Note 14 Pro Plus India Launch: 6200mAh Battery, Curved AMOLED & Price Specs",
+            "Apple iPhone 17 Air Ultra-Thin Leaks: Design, A19 Chip & Battery Reality Check",
+            "Moto Edge 50 Ultra vs Nothing Phone 2: Which Flagship Phone Gives Best Value?",
+        ]
+        unused = [t for t in curated_tech if t.strip().lower() not in used and not is_model_repeated(t)]
+        if not unused:
+            unused = [t for t in curated_tech if t.strip().lower() not in used]
+        chosen = random.choice(unused if unused else curated_tech)
         record_used_topic(chosen)
         return chosen
 
