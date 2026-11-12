@@ -71,9 +71,9 @@ def get_client():
 
 
 MODELS = [
+    "gemini-3.5-flash",
     "gemini-3.5-flash-lite",
-    "gemini-3.1-flash-lite",
-    "gemini-3.8-flash",
+    "gemini-3.6-flash",
 ]
 
 
@@ -90,7 +90,7 @@ def _call_gemini_with_retry(contents, model, max_retries=2):
         ex = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         try:
             fut = ex.submit(active_client.models.generate_content, model=model, contents=contents)
-            return fut.result(timeout=18.0)
+            return fut.result(timeout=45.0)
         except Exception as error:
             err_str = str(error)
             is_quota_err = "429" in err_str or "RESOURCE_EXHAUSTED" in err_str or "503" in err_str or "UNAVAILABLE" in err_str
@@ -1441,7 +1441,7 @@ def _parse_and_save_package(text, default_title=None):
 
     # Generate and save Phase 5 structured visual plan (output/visual_plan.json)
     try:
-        build_structured_visual_plan(sections, visual_plan, topic=topic)
+        build_structured_visual_plan(sections, visual_plan, topic=default_title or "")
     except Exception as v_plan_err:
         print(f"⚠️ Structured visual plan generation notice: {v_plan_err}")
 

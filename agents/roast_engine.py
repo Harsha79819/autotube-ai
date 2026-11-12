@@ -28,7 +28,7 @@ except ImportError:
     def generate_text_cascade(prompt: str, **kwargs) -> str:
         from google import genai
         client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-        return client.models.generate_content(model="gemini-3.8-flash", contents=prompt).text
+        return client.models.generate_content(model="gemini-3.5-flash", contents=prompt).text
 
 ROAST_PERSONA_PROMPT = """You are an ultra-witty, sarcastic Telugu AI roast commentator inspired by Grok AI, 'In a Nutshell', '301 Diaries', and 'Incognito'.
 You are that smart, sarcastic best friend sitting next to the viewer, breaking down movies, trailers, tech gadgets, reality shows, or pop culture events with sharp, observational irony.

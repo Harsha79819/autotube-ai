@@ -940,7 +940,7 @@ def generate_thumbnail_prompts(topic_data: dict, gemini_call_fn=None) -> list[st
             from agents.script_agent import get_client
             client = get_client()
             def _call_gem(prompt):
-                for m in ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]:
+                for m in ["gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-3.6-flash"]:
                     try:
                         resp = client.models.generate_content(
                             model=m,
@@ -997,7 +997,7 @@ def rank_thumbnails_by_gemini(candidates, topic_data, gemini_call_fn=None):
             from agents.script_agent import get_client
             client = get_client()
             def _call_gem(prompt):
-                for m in ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]:
+                for m in ["gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-3.6-flash"]:
                     try:
                         resp = client.models.generate_content(
                             model=m,
