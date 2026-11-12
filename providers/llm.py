@@ -31,8 +31,8 @@ except ImportError:
             return os.getenv("GEMINI_API_KEY", "")
 
 ACTIVE_MODELS = [
-    "gemini-3.5-flash",
     "gemini-3.5-flash-lite",
+    "gemini-3.5-flash",
     "gemini-3.6-flash",
 ]
 

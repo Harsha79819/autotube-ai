@@ -549,7 +549,7 @@ def verify_visual_with_gemini(image_path: str, query_text: str) -> bool:
             f"without showing unrelated stock items (like machinery, random concerts, or unrelated persons)?\n\n"
             f"Reply strictly with either YES or NO."
         )
-        for m_name in ["gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-3.6-flash"]:
+        for m_name in ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.6-flash"]:
             try:
                 resp = client.models.generate_content(
                     model=m_name,
@@ -670,7 +670,7 @@ def rewrite_query_for_flux(
                     f"Scene query: {query_text}\n"
                     f"Rewritten prompt:"
                 )
-                for m_name in ["gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-3.6-flash"]:
+                for m_name in ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.6-flash"]:
                     try:
                         response = client.models.generate_content(
                             model=m_name,
@@ -702,7 +702,7 @@ def rewrite_query_for_flux(
                     f"Scene query: {query_text}\n"
                     f"Rewritten prompt:"
                 )
-                for m_name in ["gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-3.6-flash"]:
+                for m_name in ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.6-flash"]:
                     try:
                         response = client.models.generate_content(
                             model=m_name,
@@ -733,7 +733,7 @@ def rewrite_query_for_flux(
                     f"Scene query: {query_text}\n"
                     f"Rewritten prompt:"
                 )
-                for m_name in ["gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-3.6-flash"]:
+                for m_name in ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.6-flash"]:
                     try:
                         response = client.models.generate_content(
                             model=m_name,
@@ -762,7 +762,7 @@ def rewrite_query_for_flux(
                 f"Query to rewrite: {query_text}\n"
                 f"Rewritten prompt:"
             )
-            for m_name in ["gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-3.6-flash"]:
+            for m_name in ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.6-flash"]:
                 try:
                     response = client.models.generate_content(
                         model=m_name,
