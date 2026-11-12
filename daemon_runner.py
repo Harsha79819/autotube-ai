@@ -157,12 +157,15 @@ class ProcessSupervisor:
             "true",
         ]
         self.log_daemon(f"Spawning Streamlit server on port {self.port}...")
+        env = os.environ.copy()
+        env["PYTHONUNBUFFERED"] = "1"
         proc = subprocess.Popen(
             cmd,
             cwd=str(ROOT),
             stdin=subprocess.DEVNULL,
             stdout=server_out,
             stderr=subprocess.STDOUT,
+            env=env,
             start_new_session=True,
         )
         server_out.close()
