@@ -393,6 +393,19 @@ class CloudflareQuickTunnelManager(BaseTunnelManager):
             self.stop()
             return ""
 
+        # Validate that Cloudflare hasn't randomly generated a flagged domain (e.g. 'not allowed by policy')
+        time.sleep(1.0)
+        try:
+            import requests
+            resp = requests.get(self.public_url, timeout=4, headers={"User-Agent": "Mozilla/5.0"})
+            if "not allowed by policy" in resp.text.lower() or resp.status_code == 403:
+                print(f"⚠️ Cloudflare randomly assigned a flagged domain ({self.public_url}). Re-rolling for a clean tunnel URL...")
+                self.stop()
+                time.sleep(1.5)
+                return self.start(timeout_sec=timeout_sec)
+        except Exception:
+            pass
+
         TUNNEL_URL_FILE.write_text(self.public_url, encoding="utf-8")
 
         print("\n" + "=" * 70)
