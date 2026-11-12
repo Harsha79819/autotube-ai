@@ -93,8 +93,14 @@ CATEGORY_FEEDS = {
         "https://ntvtelugu.com/entertainment/feed",
     ],
     "Tech News": [
-        "https://news.google.com/rss/search?q=technology+AI+when:1d&hl=en-IN&gl=IN&ceid=IN:en",
-        "https://news.google.com/rss/headlines/section/topic/TECHNOLOGY?hl=en-IN&gl=IN&ceid=IN:en",
+        "https://news.google.com/rss/search?q=smartphone+launch+India+OR+mobile+specs+leak+when:1d&hl=en-IN&gl=IN&ceid=IN:en",
+        "https://news.google.com/rss/search?q=gadgets+camera+features+technology+when:1d&hl=en-IN&gl=IN&ceid=IN:en",
+        "https://news.google.com/rss/search?q=AI+tools+cyber+security+scam+alert+when:1d&hl=en-IN&gl=IN&ceid=IN:en",
+    ],
+    "Interesting Facts": [
+        "https://news.google.com/rss/search?q=bizarre+science+mystery+discovery+when:7d&hl=en-IN&gl=IN&ceid=IN:en",
+        "https://news.google.com/rss/search?q=unbelievable+facts+space+ocean+earth+when:7d&hl=en-IN&gl=IN&ceid=IN:en",
+        "https://news.google.com/rss/search?q=Indian+temple+architecture+mystery+OR+unsolved+when:7d&hl=en-IN&gl=IN&ceid=IN:en",
     ],
     "Roasting": [
         "https://news.google.com/rss/search?q=Bigg+Boss+Telugu+controversy+OR+fight+when:1d&hl=en-IN&gl=IN&ceid=IN:en",
@@ -138,7 +144,13 @@ NOISE_PATTERNS = [
     "quickreads", "live updates", "photos:", "web story", "horoscope",
     "weather update", "cricket score", "gold rate", "stock market",
     "in pics", "view gallery", "astrology", "panchangam", "daily horoscope",
-    "weekly horoscope", "zodiac sign", "bse", "nse", "sensex", "nifty"
+    "weekly horoscope", "zodiac sign", "bse", "nse", "sensex", "nifty",
+    # Corporate B2B & PR press release noise
+    "executive", "executives", "appoints", "named", "names three", "quarterly results",
+    "enterprise cloud", "valuation", "funding round", "b2b", "leads round", "names vp",
+    "chief executive", "board of directors", "merger talks", "acquires stake", "hiring",
+    "financial results", "reports q1", "reports q2", "reports q3", "reports q4",
+    "earnings call", "share price", "q1 results", "q2 results", "q3 results", "q4 results"
 ]
 
 HINDI_BB_MARKERS = [
@@ -367,8 +379,11 @@ def _reshape_headline_deterministically(headline: str, category_key: str) -> str
         if not re.search(r"box office|update|shock|teaser|trailer", h, flags=re.I):
             return f"{h} - Official Buzz, Fans Reaction & Massive Update!"
     elif category_key == "Tech News":
-        if not re.search(r"breakthrough|revealed|exposed|features", h, flags=re.I):
-            return f"{h}: What This Next-Gen Breakthrough Means for Everyone!"
+        if not re.search(r"shock|truth|twist|scam|hidden|exposed|secret|alert", h, flags=re.I):
+            return f"{h} - The Truth You Need to Know!"
+    elif category_key in ("Interesting Facts", "Indian Mysteries & Ancient Engineering"):
+        if not re.search(r"mystery|secret|shock|truth|unbelievable|revealed", h, flags=re.I):
+            return f"{h} - Unbelievable Mystery & Facts Explained!"
     return h
 
 

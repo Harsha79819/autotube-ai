@@ -1262,10 +1262,9 @@ Return ONLY a JSON object:
 If unsafe, set safe: false and category to one of ["hate_speech", "violence", "toxicity", "sexual_content", "dangerous_content"].
 """
             models_to_try = [
-                "gemini-flash-lite-latest",
-                "gemini-flash-latest",
-                "gemini-3.5-flash-lite",
                 "gemini-3.8-flash",
+                "gemini-3.5-flash-lite",
+                "gemini-3.1-flash-lite",
             ]
 
             for m in models_to_try:
@@ -1457,6 +1456,7 @@ def validate_visual_assets(assets_dir=None, fallback_dir=None):
                             pass
 
                     # 2. Try visual_plan.json fallback
+                    # 2. Try visual_plan.json fallback
                     if not b_ent or not headline:
                         vp_file = root / "output" / "visual_plan.json"
                         if vp_file.exists():
@@ -1472,7 +1472,51 @@ def validate_visual_assets(assets_dir=None, fallback_dir=None):
                             except Exception:
                                 pass
 
-                    # 3. Read metadata for run context
+                    # 3. Try section_map.txt and visual_plan.txt fallbacks
+                    if not b_ent or not headline:
+                        smap_file = root / "output" / "section_map.txt"
+                        if smap_file.exists():
+                            try:
+                                current_sec = None
+                                for s_line in smap_file.read_text(encoding="utf-8").splitlines():
+                                    s_line = s_line.strip()
+                                    sec_m = re.match(r"SECTION\s+(\d+)", s_line, re.IGNORECASE)
+                                    if sec_m:
+                                        current_sec = int(sec_m.group(1))
+                                    elif current_sec == b_num and s_line.startswith("NARRATION:"):
+                                        narr_clean = s_line[len("NARRATION:"):].strip()
+                                        narr_clean = re.sub(r"[*_#`~]", "", narr_clean)
+                                        if not headline:
+                                            headline = narr_clean
+                                        if not b_ent:
+                                            from agents.image_agent import detect_named_entity
+                                            _ok, _ent, _ = detect_named_entity(narr_clean)
+                                            if _ok:
+                                                b_ent = _ent
+                                        break
+                            except Exception:
+                                pass
+
+                    if not b_ent:
+                        vptxt_file = root / "output" / "visual_plan.txt"
+                        if vptxt_file.exists():
+                            try:
+                                for v_line in vptxt_file.read_text(encoding="utf-8").splitlines():
+                                    v_line = v_line.strip()
+                                    if re.match(rf"^{b_num}\.\s*", v_line):
+                                        v_clean = re.sub(rf"^{b_num}\.\s*", "", v_line)
+                                        first_part = v_clean.split("|")[0].strip()
+                                        from agents.image_agent import detect_named_entity
+                                        _ok, _ent, _ = detect_named_entity(first_part)
+                                        if _ok:
+                                            b_ent = _ent
+                                        elif not headline:
+                                            headline = first_part
+                                        break
+                            except Exception:
+                                pass
+
+                    # 4. Read metadata for run context
                     meta_file = root / "output" / "metadata.json"
                     if meta_file.exists():
                         try:
@@ -1480,9 +1524,6 @@ def validate_visual_assets(assets_dir=None, fallback_dir=None):
                             topic_str = m_d.get("title", "")
                         except Exception:
                             pass
-
-                    if not headline:
-                        headline = f"Scene {b_num} • Key Highlight"
 
                     # Find existing reference photo dynamically
                     av_p = None
@@ -1496,33 +1537,46 @@ def validate_visual_assets(assets_dir=None, fallback_dir=None):
                             if ref_p:
                                 av_p = str(ref_p)
 
-                    # Dynamic category and badge label
-                    combined_ctx = f"{topic_str} {headline}".lower()
-                    if is_bigg_boss_context(combined_ctx):
-                        subtext = "Bigg Boss Telugu 10 • Star Maa"
-                        badge_label = f"{b_ent.upper()} • BIGG BOSS 10" if b_ent else "HIGHLIGHT • BIGG BOSS 10"
-                    elif any(k in combined_ctx for k in ["movie", "cinema", "film", "teaser", "trailer", "box office"]):
-                        subtext = "Tollywood Special • AutoTube"
-                        badge_label = f"{b_ent.upper()} • TOLLYWOOD" if b_ent else "HIGHLIGHT • TOLLYWOOD"
-                    else:
-                        subtext = "AutoTube Exclusive Update"
-                        badge_label = f"{b_ent.upper()} • EXCLUSIVE" if b_ent else "HIGHLIGHT • EXCLUSIVE"
-
-                    if generate_typography_card(
-                        headline_text=headline,
-                        output_path=str(img_path),
-                        topic_category="entertainment",
-                        aspect_ratio="9:16",
-                        badge_label=badge_label,
-                        avatar_image_path=av_p,
-                        subtext=subtext,
-                    ):
+                    # PRIORITY: If genuine contestant photo exists, crop & use it DIRECTLY! Never render a dummy card
+                    if av_p and Path(av_p).exists() and Path(av_p).stat().st_size > 2000:
                         from providers.image import clean_and_crop_image
+                        shutil.copy2(av_p, str(img_path))
                         clean_and_crop_image(img_path, aspect_ratio="9:16")
                         replaced_canva = True
                         replaced.append(filename)
-                        print(f"🛡️ [Asset Safety] Replaced defective {filename} ({reason}) with Canva Editorial Card ({badge_label})")
-                        reason += f" -> replaced with Canva card ({badge_label})"
+                        print(f"🛡️ [Asset Safety] Restored verified contestant portrait for {filename} ({b_ent}) from {av_p}")
+                        reason += f" -> restored contestant portrait ({b_ent})"
+                    else:
+                        # Fallback to high-grade editorial card with actual topic/contestant text (never 'Scene X • Key Highlight')
+                        if not headline:
+                            headline = f"{b_ent} Key Update" if b_ent else (topic_str[:45] if topic_str else "Bigg Boss 10 Exclusive")
+
+                        combined_ctx = f"{topic_str} {headline} {b_ent}".lower()
+                        if is_bigg_boss_context(combined_ctx) or "bigg boss" in combined_ctx:
+                            subtext = "Bigg Boss Telugu 10 • Star Maa"
+                            badge_label = f"{b_ent.upper()} • BIGG BOSS 10" if b_ent else "BIGG BOSS 10 • UPDATE"
+                        elif any(k in combined_ctx for k in ["movie", "cinema", "film", "teaser", "trailer", "box office"]):
+                            subtext = "Tollywood Special • AutoTube"
+                            badge_label = f"{b_ent.upper()} • TOLLYWOOD" if b_ent else "HIGHLIGHT • TOLLYWOOD"
+                        else:
+                            subtext = "Trending News • AutoTube"
+                            badge_label = f"{b_ent.upper()} • EXCLUSIVE" if b_ent else "TOP HIGHLIGHT"
+
+                        if generate_typography_card(
+                            headline_text=headline,
+                            output_path=str(img_path),
+                            topic_category="entertainment",
+                            aspect_ratio="9:16",
+                            badge_label=badge_label,
+                            avatar_image_path=av_p,
+                            subtext=subtext,
+                        ):
+                            from providers.image import clean_and_crop_image
+                            clean_and_crop_image(img_path, aspect_ratio="9:16")
+                            replaced_canva = True
+                            replaced.append(filename)
+                            print(f"🛡️ [Asset Safety] Generated clean Editorial Card for {filename} ({badge_label})")
+                            reason += f" -> replaced with editorial card ({badge_label})"
                 except Exception as canva_err:
                     print(f"⚠️ Canva replacement note: {canva_err}")
 

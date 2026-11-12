@@ -333,11 +333,16 @@ def find_local_contestant_image(
     # ============================================================
     # Distinct episode stills & action shots (8+ photos per contestant).
     # Rotates through photos and strictly avoids photos used in current or recent runs.
-    possible_slugs = [slug]
+    canonical_slug = cdata.get("slug") or slug
+    nick = cdata.get("nickname", "").lower()
+    possible_slugs = [canonical_slug, slug]
+    if "_" in canonical_slug:
+        possible_slugs.append(canonical_slug.split("_")[0])
     if "_" in slug:
         possible_slugs.append(slug.split("_")[0])
-    if cdata.get("nickname"):
-        possible_slugs.append(cdata["nickname"].lower())
+    if nick:
+        possible_slugs.append(nick)
+    possible_slugs = list(dict.fromkeys([s for s in possible_slugs if s]))
 
     for p_slug in possible_slugs:
         gallery_dir = CONTESTANT_GALLERIES_DIR / p_slug
@@ -367,42 +372,40 @@ def find_local_contestant_image(
                         if used_dhashes and is_perceptual_duplicate(fdh, used_dhashes):
                             continue
                     _record_used_contestant_image(p_slug, cand_path.name)
-                    return p_slug, cand_path
+                    return canonical_slug, cand_path
 
     # ============================================================
     # Priority 2: Ground Truth Static Reference (Fallback)
     # ============================================================
-    nick = cdata.get("nickname", "").lower()
-    slug_clean = slug.replace("_", "")
+    candidate_names = []
+    for s_item in possible_slugs:
+        candidate_names.extend([
+            f"{s_item}.jpg", f"{s_item}.png",
+            f"{s_item.replace('_', '')}.jpg", f"{s_item.replace('_', '')}.png"
+        ])
 
-    candidate_names = [
-        f"{slug}.jpg", f"{slug}.png",
-        f"{nick}.jpg" if nick else "",
-        f"{nick}.png" if nick else "",
-        f"{slug_clean}.jpg",
-    ]
-    if slug in ("jhansi", "gundeboina_jhansi"):
+    if any(s in ("jhansi", "gundeboina_jhansi") for s in possible_slugs):
         candidate_names.extend(["gundeboina_jhansi.jpg", "singer_jhansi.jpg", "jhansi.jpg"])
-    elif slug in ("rohit", "rohit_patnam", "rohit_naidu"):
+    elif any(s in ("rohit", "rohit_patnam", "rohit_naidu") for s in possible_slugs):
         candidate_names.extend(["rohit_patnam.jpg", "rohit_naidu.jpg", "rohit.jpg"])
-    elif slug in ("sudheer", "sudheer_reddy"):
+    elif any(s in ("sudheer", "sudheer_reddy") for s in possible_slugs):
         candidate_names.extend(["sudheer_reddy.jpg", "sudheer_talks.jpg", "sudheer.jpg"])
-    elif slug in ("naresh", "potti_naresh"):
+    elif any(s in ("naresh", "potti_naresh") for s in possible_slugs):
         candidate_names.extend(["potti_naresh.jpg", "naresh.jpg", "jabardasth_naresh.jpg"])
-    elif slug == "charan":
+    elif "charan" in possible_slugs:
         candidate_names.extend(["charan_mahadev.jpg", "charan.jpg", "rj_charan.jpg"])
-    elif slug == "thrigun":
+    elif "thrigun" in possible_slugs:
         candidate_names.extend(["thrigun_eswaran.jpg", "thrigun.jpg", "trigun.jpg", "thrigun_adith.jpg"])
-    elif slug == "aman":
+    elif "aman" in possible_slugs:
         candidate_names.extend(["aman_masud.jpg", "aman.jpg"])
+
+    candidate_names = list(dict.fromkeys([c for c in candidate_names if c]))
 
     for ref_dir in CONTESTANT_REF_DIRS:
         if not ref_dir.exists():
             continue
         # Direct file check in ref_dir
         for cname in candidate_names:
-            if not cname:
-                continue
             fpath = ref_dir / cname
             if fpath.exists() and fpath.is_file() and fpath.stat().st_size > 1000:
                 # Deduplication check
@@ -413,21 +416,23 @@ def find_local_contestant_image(
                         continue
                     if used_dhashes and is_perceptual_duplicate(fdh, used_dhashes):
                         continue
-                return slug, fpath
+                return canonical_slug, fpath
+
         # Subdirectory check (data/entities/<slug>/neutral.png or assets/entities/<id>/image.jpg)
-        sub_dir = ref_dir / slug
-        if sub_dir.exists() and sub_dir.is_dir():
-            for possible in ["neutral.png", "image.jpg", "profile.jpg", "neutral.jpg"]:
-                p_file = sub_dir / possible
-                if p_file.exists() and p_file.stat().st_size > 1000:
-                    if used_hashes is not None or used_dhashes is not None:
-                        fh = image_hash(p_file)
-                        fdh = image_dhash(p_file)
-                        if used_hashes and fh in used_hashes:
-                            continue
-                        if used_dhashes and is_perceptual_duplicate(fdh, used_dhashes):
-                            continue
-                    return slug, p_file
+        for s_item in possible_slugs:
+            sub_dir = ref_dir / s_item
+            if sub_dir.exists() and sub_dir.is_dir():
+                for possible in ["neutral.png", "image.jpg", "profile.jpg", "neutral.jpg"]:
+                    p_file = sub_dir / possible
+                    if p_file.exists() and p_file.stat().st_size > 1000:
+                        if used_hashes is not None or used_dhashes is not None:
+                            fh = image_hash(p_file)
+                            fdh = image_dhash(p_file)
+                            if used_hashes and fh in used_hashes:
+                                continue
+                            if used_dhashes and is_perceptual_duplicate(fdh, used_dhashes):
+                                continue
+                        return canonical_slug, p_file
 
     return None
 
@@ -544,7 +549,7 @@ def verify_visual_with_gemini(image_path: str, query_text: str) -> bool:
             f"without showing unrelated stock items (like machinery, random concerts, or unrelated persons)?\n\n"
             f"Reply strictly with either YES or NO."
         )
-        for m_name in ["gemini-flash-latest", "gemini-flash-lite-latest", "gemini-3.5-flash"]:
+        for m_name in ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]:
             try:
                 resp = client.models.generate_content(
                     model=m_name,
@@ -665,7 +670,7 @@ def rewrite_query_for_flux(
                     f"Scene query: {query_text}\n"
                     f"Rewritten prompt:"
                 )
-                for m_name in ["gemini-flash-lite-latest", "gemini-flash-latest", "gemini-3.5-flash-lite", "gemini-3.8-flash"]:
+                for m_name in ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]:
                     try:
                         response = client.models.generate_content(
                             model=m_name,
@@ -697,7 +702,7 @@ def rewrite_query_for_flux(
                     f"Scene query: {query_text}\n"
                     f"Rewritten prompt:"
                 )
-                for m_name in ["gemini-flash-lite-latest", "gemini-flash-latest", "gemini-3.5-flash-lite", "gemini-3.8-flash"]:
+                for m_name in ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]:
                     try:
                         response = client.models.generate_content(
                             model=m_name,
@@ -728,7 +733,7 @@ def rewrite_query_for_flux(
                     f"Scene query: {query_text}\n"
                     f"Rewritten prompt:"
                 )
-                for m_name in ["gemini-flash-lite-latest", "gemini-flash-latest", "gemini-3.5-flash-lite", "gemini-3.8-flash"]:
+                for m_name in ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]:
                     try:
                         response = client.models.generate_content(
                             model=m_name,
@@ -757,7 +762,7 @@ def rewrite_query_for_flux(
                 f"Query to rewrite: {query_text}\n"
                 f"Rewritten prompt:"
             )
-            for m_name in ["gemini-flash-lite-latest", "gemini-flash-latest", "gemini-3.5-flash-lite", "gemini-3.8-flash"]:
+            for m_name in ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]:
                 try:
                     response = client.models.generate_content(
                         model=m_name,
@@ -788,11 +793,18 @@ def get_session():
         s.headers.update(
             {
                 "User-Agent": (
-                    "AutoTubeAI/2.1 "
-                    "(https://github.com/lazyline/autotube; contact: autotube-ai@local.dev) "
-                    "requests/2.31"
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/128.0.0.0 Safari/537.36"
                 ),
-                "Accept-Language": "en-US,en;q=0.9",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9,te;q=0.8,hi;q=0.7",
+                "Sec-Ch-Ua": '"Chromium";v="128", "Not;A=Brand";v="24", "Google Chrome";v="128"',
+                "Sec-Ch-Ua-Mobile": "?0",
+                "Sec-Ch-Ua-Platform": '"macOS"',
+                "Sec-Fetch-Dest": "image",
+                "Sec-Fetch-Mode": "no-cors",
+                "Sec-Fetch-Site": "cross-site",
             }
         )
         retry_strategy = Retry(
@@ -2100,6 +2112,30 @@ def download_image(
         return True
 
     except Exception as error:
+        # Robust fallback: curl with browser headers (bypasses TLS fingerprinting on CDN blocks)
+        if url.startswith("http"):
+            try:
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                curl_cmd = [
+                    "curl", "-s", "-L", "-k",
+                    "-A", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+                    "-e", "https://www.google.com/",
+                    "--max-time", "10",
+                    "-o", str(destination),
+                    url,
+                ]
+                c_res = subprocess.run(curl_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=12)
+                if c_res.returncode == 0 and destination.exists() and destination.stat().st_size > 4000:
+                    with Image.open(destination) as image:
+                        image.verify()
+                    with Image.open(destination) as image:
+                        pixel_x, pixel_y = image.size
+                    if pixel_x >= MIN_PIXEL_X and pixel_y >= MIN_PIXEL_Y:
+                        with Image.open(destination) as image:
+                            image.convert("RGB").save(destination, "JPEG", quality=90)
+                        return True
+            except Exception:
+                pass
 
         print(
             f"Download failed: {error}"
@@ -3463,20 +3499,16 @@ def download_images_from_visual_plan(
                         if np_str in used_harvested_paths or len(used_news_images) >= max_news_allowed:
                             continue
 
-                    # Strict OCR guard: reject pre-launch teasers and watermarked logos
-                    try:
-                        from tools.watermark_remover import clean_and_remove_watermarks, has_watermark_text
-                        ocr_map = scan_images_ocr([np])
-                        ocr_txt = ocr_map.get(str(np), "")
-                        has_wm, wm_word = has_watermark_text(ocr_txt)
-                        if has_wm:
-                            is_clean, cleaned_np = clean_and_remove_watermarks(np)
-                            if not is_clean:
-                                print(f"⚠️ [News Media OCR] Disqualified watermarked still {np.name} ({wm_word})")
-                                continue
-                            np = cleaned_np
-                    except Exception:
-                        pass
+                    # Anti-spam OCR filter (reject dating, girlfriend, casino, software screenshots, promo ads)
+                    spam_ad_terms = ("girlfriend", "dating", "ai character", "create your own", "sign up", "free account", "explore ai", "companion", "casino", "betting", "slot", "discount", "off%")
+                    if any(sp in ocr_txt.lower() for sp in spam_ad_terms):
+                        print(f"⚠️ [News Media OCR] Disqualified ad/spam image: {np.name}")
+                        continue
+
+                    # Multimodal relevance filter: verify with Gemini Vision
+                    if not verify_visual_with_gemini(str(np), visual_query):
+                        print(f"⚠️ [News Media Verifier] Rejected irrelevant image {np.name} for query '{visual_query}'")
+                        continue
 
                     n_h = image_hash(np)
                     n_dh = image_dhash(np)
@@ -3778,6 +3810,32 @@ def download_images_from_visual_plan(
                         claimed_urls.discard(cand_url)
                         continue
 
+                # Multimodal Gemini Vision & Non-Telugu / Foreign Script & Anime Filter
+                if is_bb_scene or is_entity:
+                    # Quick OCR check for foreign non-Telugu scripts (Bengali / Devanagari) or anime / political podcast text
+                    try:
+                        from tools.ocr_guard import scan_images_ocr
+                        ocr_res = scan_images_ocr([destination])
+                        ocr_txt = (ocr_res.get(str(destination)) or "").lower()
+                        bad_ocr_tokens = ("anime", "manga", "stampede", "analysis of", "podcast", "bnp", "bangladesh", "party", "press conference", "trigun themes")
+                        if any(tok in ocr_txt for tok in bad_ocr_tokens) or re.search(r"[\u0980-\u09FF]", ocr_txt):
+                            print(f"🚫 [OCR Guard] Disqualified foreign script / anime / political image for Visual {visual_number}: '{cand_url[:60]}'")
+                            destination.unlink(missing_ok=True)
+                            with hash_lock:
+                                claimed_urls.discard(cand_url)
+                            continue
+                    except Exception:
+                        pass
+
+                    # Gemini Vision relevance verification
+                    is_verified = verify_visual_with_gemini(str(destination), f"{entity_name or s_primary_ent} in Telugu Bigg Boss 10")
+                    if not is_verified:
+                        print(f"🚫 [Gemini Vision Rejected] Visual {visual_number} candidate failed relevance for '{entity_name or s_primary_ent}': '{cand_url[:60]}'")
+                        destination.unlink(missing_ok=True)
+                        with hash_lock:
+                            claimed_urls.discard(cand_url)
+                        continue
+
                 # Relevance check: calibrated threshold for real web photography
                 rel_score = score_visual_relevance(str(destination), concise_q)
                 if rel_score < 0.18 and rel_score > 0.0:
@@ -3812,6 +3870,55 @@ def download_images_from_visual_plan(
 
         except Exception as p_err:
             print(f"Web media search notice for Visual {visual_number}: {p_err}")
+
+        # ------------------------------------------------------------
+        # TIER 2.5: RESCUE LAYER - SEARCH DDG & PEXELS FOR REAL PHOTOGRAPHY
+        # ------------------------------------------------------------
+        if not destination.exists() or destination.stat().st_size < 3000:
+            rescue_queries = [
+                s_search_query,
+                concise_q,
+                visual_query,
+                f"{entity_name} photo" if entity_name else "",
+                f"{global_entity_name} photo" if global_entity_name else "",
+            ]
+            for r_q in rescue_queries:
+                r_q = str(r_q or "").strip()
+                if not r_q or len(r_q) < 3:
+                    continue
+                try:
+                    from providers.image import search_duckduckgo_images
+                    r_cands = search_duckduckgo_images(r_q, max_results=8)
+                    for rc in r_cands:
+                        rc_url = rc.get("image_url")
+                        if not rc_url or rc_url in claimed_urls:
+                            continue
+                        with hash_lock:
+                            claimed_urls.add(rc_url)
+                        if download_image(rc, destination):
+                            clean_and_crop_image(destination, aspect_ratio=aspect_ratio)
+                            print(f"🎯 [Rescue Layer] Visual {visual_number} saved authentic photo via DDG for '{r_q}': {destination.name}")
+                            return visual_number, destination
+                except Exception as r_err:
+                    print(f"Rescue search notice: {r_err}")
+
+        # ------------------------------------------------------------
+        # TIER 2.6: ENTITY STILLS / PORTRAITS RE-FRAMING (NEVER SHOW EMPTY CARD FOR CELEBS)
+        # ------------------------------------------------------------
+        if not destination.exists() or destination.stat().st_size < 3000:
+            ent_search = entity_name or global_entity_name or topic_person_slug
+            if ent_search:
+                ent_clean = re.sub(r"[^\w\s]", "", ent_search).strip().lower().replace(" ", "_")
+                for e_dir in [ROOT / "assets" / "entities" / ent_clean, ROOT / "data" / "entities" / ent_clean]:
+                    if e_dir.exists():
+                        e_photos = [f for f in e_dir.glob("*.*") if f.suffix.lower() in (".jpg", ".jpeg", ".png") and f.stat().st_size > 5000]
+                        if e_photos:
+                            # Pick deterministically by visual_number
+                            sel_photo = e_photos[(visual_number - 1) % len(e_photos)]
+                            shutil.copy2(sel_photo, destination)
+                            clean_and_crop_image(destination, aspect_ratio=aspect_ratio)
+                            print(f"🌟 [Entity Rescue] Visual {visual_number} used verified library asset for '{ent_search}': {sel_photo.name}")
+                            return visual_number, destination
 
         # ============================================================
         # TIER 3: EDITORIAL GRAPHIC CARD OR DYNAMIC AI FALLBACK

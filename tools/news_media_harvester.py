@@ -118,7 +118,8 @@ VERIFIED_DOMAINS = [
 DISALLOWED_IMAGE_TOKENS = [
     "logo", "icon", "banner", "author", "advertisement", "header", "footer",
     "whatsapp", "telegram", "facebook", "twitter", "share", "profile", "avatar",
-    "scorecardresearch", "google-analytics", "favicon"
+    "scorecardresearch", "google-analytics", "favicon", "girlfriend", "dating",
+    "companion", "character", "anime", "casino", "betting", "slot", "promo", "ad_"
 ]
 
 def record_discovered_article(url: str, title: str = "", query: str = "", image_count: int = 0):

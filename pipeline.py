@@ -626,7 +626,7 @@ def create_final_video(
 ):
     """Create final video with optional captions and outro."""
     if captions is None:
-        captions = (aspect_ratio == "16:9")
+        captions = True
 
     if captions:
         sub_ass = Path("output/subtitles.ass")
@@ -821,6 +821,8 @@ def create_metadata(
     title, description, tags = generate_metadata(
         topic,
         script,
+        aspect_ratio=aspect_ratio,
+        channel=channel,
     )
 
     out_dir = Path(run_dir) if run_dir else Path("output")
@@ -1189,8 +1191,8 @@ def generate_multi_media_video(
         )
 
     media_files = media_files or []
-    if captions is None:
-        captions = (aspect_ratio == "16:9")
+    if captions is None or aspect_ratio == "9:16":
+        captions = True
 
     # 100% Strict Workspace Isolation: Purge lingering artifacts, previous scripts & old scraped images
     try:
@@ -1206,15 +1208,51 @@ def generate_multi_media_video(
     except Exception:
         pass
 
-    # Auto-resolve channel routing for audience segmentation (e.g. Entertainment -> Channel 2)
-    if not youtube_channel or youtube_channel == "Channel 1 (Primary)":
-        try:
-            from agents.youtube_agent import resolve_target_channel
-            routed = resolve_target_channel(content_type=content_type, topic=topic)
-            if routed:
-                youtube_channel = routed
-        except Exception:
-            pass
+    # --------------------------------------------------------
+    # OMNI-ROUTE INTELLIGENCE (Dynamic Channel, Voice, Captions)
+    # --------------------------------------------------------
+    try:
+        from analytics.omni_router import route_topic_spec
+        omni_spec = route_topic_spec(
+            topic_idea=topic,
+            requested_category=content_type,
+            force_channel=youtube_channel if youtube_channel else None,
+            force_aspect=aspect_ratio if aspect_ratio else None,
+        )
+        print(f"🧭 [Omni-Route] Topic '{topic[:45]}...' routed to: {omni_spec['target_channel']} (OVS: {omni_spec['omni_viral_score']}, Voice: {omni_spec['voice_mode']})")
+
+        # 1. Channel Assignment
+        if not youtube_channel:
+            youtube_channel = omni_spec["target_channel"]
+        elif any(k in topic.lower() for k in ("bigg boss", "bb10", "tollywood", "cinema", "roast", "review", "nominations", "elimination")):
+            youtube_channel = "Channel 2 (Secondary)"
+        elif any(k in topic.lower() for k in ("science", "isro", "nasa", "quantum", "facts", "secret", "mystery", "tech")):
+            youtube_channel = "Channel 1 (Primary)"
+
+        # 2. Voice Auto-Selection (Guarantee Shruti Female Voice for Bigg Boss & Entertainment Roasts)
+        voice_str = str(voice or "").lower()
+        if not ("clone" in voice_str or "own" in voice_str):
+            if "channel 2" in str(youtube_channel).lower() or any(k in topic.lower() for k in ("bigg boss", "bb10", "tollywood", "cinema", "roast", "nominations")):
+                if voice_str in ("", "am_adam", "adam", "af_heart", "mohan", "te-in-mohanneural"):
+                    print("🎙️ [Omni-Route] Auto-selecting te-IN-ShrutiNeural (Female) for Bigg Boss/Entertainment roasts.")
+                    voice = "te-IN-ShrutiNeural"
+            elif "channel 1" in str(youtube_channel).lower() or any(k in topic.lower() for k in ("facts", "science", "mystery", "tech")):
+                if voice_str in ("", "am_adam", "adam", "af_heart"):
+                    print("🎙️ [Omni-Route] Auto-selecting recommended voice for Channel 1.")
+                    voice = omni_spec.get("recommended_voice", "te-IN-ShrutiNeural")
+
+        # 3. Always enforce captions
+        captions = True
+    except Exception as omni_err:
+        print(f"⚠️ Omni-Route integration notice: {omni_err}")
+        if not youtube_channel:
+            try:
+                from agents.youtube_agent import resolve_target_channel
+                routed = resolve_target_channel(content_type=content_type, topic=topic)
+                if routed:
+                    youtube_channel = routed
+            except Exception:
+                pass
 
     # Optional Feature 1: Content Intelligence Assessment (Non-breaking, Disabled by Default)
     content_intel_report = None

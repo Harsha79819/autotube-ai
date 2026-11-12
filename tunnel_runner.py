@@ -428,12 +428,12 @@ def resolve_tunnel_manager(mode: str = "auto", port: int = 8501, host: str = "lo
     elif mode == "cloudflare-quick":
         return CloudflareQuickTunnelManager(port=port, host=host)
 
-    # AUTO MODE RESOLUTION:
-    if ngrok_domain and ngrok_token:
-        if ngrok_bin:
-            return NgrokTunnelManager(port=port, host=host, authtoken=ngrok_token, domain=ngrok_domain)
-        else:
-            print("⚠️ NGROK credentials configured, but 'ngrok' binary not found. Falling back to Cloudflare Quick Tunnel.")
+    # AUTO MODE RESOLUTION: Default to Cloudflare Quick Tunnel (No warning pages, 100% free)
+    if cf_bin:
+        return CloudflareQuickTunnelManager(port=port, host=host)
+
+    if ngrok_domain and ngrok_token and ngrok_bin:
+        return NgrokTunnelManager(port=port, host=host, authtoken=ngrok_token, domain=ngrok_domain)
 
     if cf_token and cf_bin:
         return CloudflareNamedTunnelManager(port=port, host=host, token=cf_token, static_domain=cf_domain)
@@ -444,7 +444,7 @@ def main():
     parser = argparse.ArgumentParser(description="AutoTube Remote Tunnel Runner (Ngrok Static / Cloudflare)")
     parser.add_argument("--port", type=int, default=8501, help="Local Streamlit port (default: 8501)")
     parser.add_argument("--host", type=str, default="localhost", help="Local host (default: localhost)")
-    parser.add_argument("--mode", type=str, default="auto", choices=["auto", "ngrok", "cloudflare-named", "cloudflare-quick"], help="Tunnel mode")
+    parser.add_argument("--mode", type=str, default="cloudflare-quick", choices=["cloudflare-quick", "cloudflare-named", "ngrok", "auto"], help="Tunnel mode (default: cloudflare-quick)")
     parser.add_argument("--start-app", action="store_true", help="Also start Streamlit app.py concurrently")
     args = parser.parse_args()
 

@@ -171,17 +171,28 @@ def build_scene_clips(
                 from tools.meme_manager import get_reaction_meme, match_emotion_from_text
                 emo_cat = match_emotion_from_text(scene.narration) or scene.emotion
                 meme_p = None
-                if emo_cat in ("shocked", "overacting", "comedy", "roast", "crying", "headache", "suspicious", "angry"):
+                meme_cats = ("shocked", "overacting", "comedy", "roast", "crying", "headache", "suspicious", "angry", "serious", "neutral")
+                if emo_cat in meme_cats:
                     meme_p = get_reaction_meme(emo_cat, used_memes=used)
                 if meme_p and meme_p.exists():
                     photo = meme_p
                     force = "broll"
                 else:
                     photo = _pick_photo(scene, images, work, banned, used)
-                    force = "broll" if photo else "typography"
+                    if photo:
+                        force = "broll"
+                    elif scene.entities:
+                        force = "solo"
+                    else:
+                        force = "typography"
             else:
                 photo = _pick_photo(scene, images, work, banned, used) if allow_photos else None
-                force = "broll" if photo else "typography"
+                if photo:
+                    force = "broll"
+                elif scene.entities:
+                    force = "solo"
+                else:
+                    force = "typography"
         layers = compose_scene(scene, work, width, height, photo_path=photo, force=force)
 
         is_last = i == len(scenes) - 1

@@ -412,39 +412,37 @@ def print_video_status(
 def resolve_target_channel(content_type: str = "", topic: str = "", category: str = "") -> str:
     """
     Channel Routing Rule:
-      - Channel 1 (Primary) = AI/Tech ONLY.
-        (Nothing else should ever go here — no history, no facts, no movies, no general news outside AI/tech).
-      - Channel 2 (Secondary) = Everything else.
-        (All other content types: History, Interesting Facts, Cinema, General, non-tech News, etc.).
+      - Channel 1 (Primary - Imaginary_facts) = Facts, Mysteries, Science, AI, Gadgets & Tech.
+      - Channel 2 (Secondary - viral_talks_me&mine) = Bigg Boss, Cinema, Tollywood, Roasts, Entertainment & Pop Culture.
     """
     c_lower = str(content_type or "").strip().lower()
     t_lower = str(topic or "").strip().lower()
     cat_lower = str(category or "").strip().lower()
 
-    # Explicitly exclude non-tech formats from Channel 1
-    if any(h in c_lower for h in ("history", "fact", "cinema", "entertainment", "general", "flyer", "custom media", "roast", "sarcas", "funny", "comedy", "movie", "review", "custom topic", "deep dive")):
+    # Entertainment / Bigg Boss / Cinema / Roasting goes strictly to Channel 2
+    if any(h in c_lower for h in ("bigg boss", "bb10", "cinema", "entertainment", "tollywood", "roast", "sarcas", "funny", "comedy", "movie", "review")):
+        return "Channel 2 (Secondary)"
+    if any(h in t_lower for h in ("bigg boss", "bb10", "tollywood", "nagarjuna", "prabhas", "pawan kalyan", "allu arjun", "ram charan")):
         return "Channel 2 (Secondary)"
 
-    # AI / Tech content type markers
-    ai_tech_content_types = ["tech news", "tech", "technology", "ai", "ai news", "ai / technology news", "tech / concept"]
-    if any(k == c_lower or k in c_lower for k in ai_tech_content_types):
+    # Facts, Science, Mysteries, Tech & AI goes strictly to Channel 1 (Imaginary_facts)
+    if any(h in c_lower for h in ("fact", "mystery", "science", "history", "ancient", "tech", "technology", "ai", "gadget")):
+        return "Channel 1 (Primary)"
+    if any(h in cat_lower for h in ("technology", "tech", "science", "fact")):
         return "Channel 1 (Primary)"
 
-    # Category marker (e.g. from Google News RSS categories)
-    if cat_lower in ("technology", "tech"):
-        return "Channel 1 (Primary)"
-
-    # If content_type is "News" or empty, check if topic specifically discusses AI or technology entities
-    ai_tech_keywords = [
-        "artificial intelligence", "openai", "chatgpt", "gemini ai", "deepseek", "claude 3",
+    # Check topic keywords for Facts, Science, Tech
+    facts_tech_keywords = [
+        "quantum", "physics", "universe", "space", "earth", "ocean", "brain", "dream",
+        "creature", "mystery", "secret", "unsolved", "pyramid", "temple", "science",
+        "artificial intelligence", "openai", "chatgpt", "gemini ai", "deepseek",
         "nvidia", "semiconductor", "microchip", "gpu", "robotics",
-        "smartphone", "flagship phone", "processor", "google ai", "apple intelligence"
+        "smartphone", "flagship phone", "processor", "mobile", "battery", "camera"
     ]
-    if any(kw in t_lower for kw in ai_tech_keywords):
+    if any(kw in t_lower for kw in facts_tech_keywords):
         return "Channel 1 (Primary)"
 
-    # Everything else defaults strictly to Channel 2
-    return "Channel 2 (Secondary)"
+    return "Channel 1 (Primary)"
 
 
 def get_channel_credential_paths(channel="Channel 1 (Primary)"):
@@ -545,7 +543,7 @@ def upload_video(
             title,
             previous_title,
             threshold=0.80,
-        ):
+        ) and not is_force_reupload:
 
             print()
             print(
@@ -663,6 +661,9 @@ def upload_video(
                 creds.refresh(
                     Request()
                 )
+                if creds.valid:
+                    with open(token_path, "w", encoding="utf-8") as f_tok:
+                        f_tok.write(creds.to_json())
             except Exception as ref_err:
                 print(f"⚠️ YouTube token refresh failed for {channel}: {ref_err}")
                 creds = None
@@ -800,7 +801,8 @@ def upload_video(
                     status, response = request.next_chunk()
                     if status:
                         print(
-                            f"{int(status.progress() * 100)}% Uploaded"
+                            f"{int(status.progress() * 100)}% Uploaded",
+                            flush=True,
                         )
                     retry_count = 0
                 except Exception as chunk_err:

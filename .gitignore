@@ -217,9 +217,10 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# AutoTube AI local secrets
-client_secret.json
-token.json
+token*.json
+client_secret*.json
+.env*
+!.env.example
 
 # Virtual environments
 voice_test/

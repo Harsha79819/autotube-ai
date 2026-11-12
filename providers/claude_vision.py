@@ -190,11 +190,16 @@ def call_claude_vision_gemini_fallback(
         except Exception:
             pass
 
-    resp = client.models.generate_content(
-        model="gemini-flash-lite-latest",
-        contents=contents,
-    )
-    raw_text = resp.text or ""
+    for m in ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]:
+        try:
+            resp = client.models.generate_content(
+                model=m,
+                contents=contents,
+            )
+            raw_text = resp.text or ""
+            break
+        except Exception:
+            continue
     m = re.search(r"\{.*\}", raw_text, flags=re.DOTALL)
     if m:
         try:

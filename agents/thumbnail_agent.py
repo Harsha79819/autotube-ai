@@ -802,21 +802,31 @@ def create_playwright_canva_thumbnail(title, aspect_ratio="16:9", assets_dir=Non
         from tools.playwright_renderer import render_prasad_tech_thumbnail, build_prasad_tech_thumbnail_params
         from tools.person_cutout import extract_person_cutout
 
-        t_file = (out_dir / "topic.txt") if (out_dir / "topic.txt").exists() else (OUTPUT_DIR / "topic.txt")
+        t_file = (out_dir / "topic.txt")
         topic_text = t_file.read_text(encoding="utf-8").strip() if t_file.exists() else str(title)
 
         # Build Prasad Tech style parameters
         params = build_prasad_tech_thumbnail_params(title=str(title), channel=str(channel), topic=topic_text)
 
-        # Cutout candidate
-        cutout_path = None
-        ent_slug = _find_contestant_slug(f"{title} {topic_text}")
-        if not ent_slug:
-            m_file = (out_dir / "metadata.json") if (out_dir / "metadata.json").exists() else (OUTPUT_DIR / "metadata.json")
-            if m_file.exists():
-                ent_slug = _find_contestant_slug(m_file.read_text(encoding="utf-8"))
+        is_bb_run = any(bb_w in f"{title} {topic_text}".lower() for bb_w in ("bigg boss", "bb10", "బిగ్ బాస్"))
 
-        if not ent_slug and ("bigg boss" in f"{title} {topic_text}".lower() or "bb10" in f"{title} {topic_text}".lower() or "channel 2" in str(channel).lower()):
+        # Cutout candidate: strictly search ONLY current title, current topic, and current run script
+        cutout_path = None
+        search_corpus = f"{title} {topic_text}"
+        s_file = out_dir / "script.txt"
+        if s_file.exists():
+            try:
+                search_corpus += f" {s_file.read_text(encoding='utf-8')[:300]}"
+            except Exception:
+                pass
+
+        ent_slug = _find_contestant_slug(search_corpus)
+
+        # Strict cross-topic firewall: If Bigg Boss, strictly REJECT non-Bigg Boss entities (Prabhas, movie stars, etc.)
+        if is_bb_run and ent_slug in ("prabhas", "kalki_2898_ad_movie", "devara_movie", "dil_raju"):
+            ent_slug = None
+
+        if not ent_slug and is_bb_run:
             ent_slug = "nagarjuna"
 
         if ent_slug:
@@ -825,7 +835,7 @@ def create_playwright_canva_thumbnail(title, aspect_ratio="16:9", assets_dir=Non
                 if ent_dir.exists():
                     for sub in ent_dir.iterdir():
                         if sub.is_dir() and ent_slug.lower() in sub.name.lower():
-                            for em in ["shocked", "angry", "reaction", "image", "surprised", "laughing", "smug", "crying", "neutral"]:
+                            for em in ["portrait_clean", "portrait", "clean", "shocked", "angry", "reaction", "image", "surprised", "laughing", "smug", "crying", "neutral"]:
                                 cand_paths.append(sub / f"{em}.jpg")
                                 cand_paths.append(sub / f"{em}.png")
             person_img_path = next((p for p in cand_paths if p.exists() and p.stat().st_size > 1000), None)
@@ -930,7 +940,7 @@ def generate_thumbnail_prompts(topic_data: dict, gemini_call_fn=None) -> list[st
             from agents.script_agent import get_client
             client = get_client()
             def _call_gem(prompt):
-                for m in ["gemini-flash-lite-latest", "gemini-flash-latest", "gemini-3.5-flash-lite", "gemini-3.8-flash"]:
+                for m in ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]:
                     try:
                         resp = client.models.generate_content(
                             model=m,
@@ -987,7 +997,7 @@ def rank_thumbnails_by_gemini(candidates, topic_data, gemini_call_fn=None):
             from agents.script_agent import get_client
             client = get_client()
             def _call_gem(prompt):
-                for m in ["gemini-flash-lite-latest", "gemini-flash-latest", "gemini-3.5-flash-lite", "gemini-3.8-flash"]:
+                for m in ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]:
                     try:
                         resp = client.models.generate_content(
                             model=m,

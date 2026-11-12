@@ -83,12 +83,12 @@ def get_slot_lead_time_minutes(slot: Dict[str, Any]) -> int:
 DAILY_SLOT_CONFIGS: List[Dict[str, Any]] = [
     {
         "slot_id": "CH1-S1",
-        "slot_name": "Channel 1 — Morning Smartphone Launch & Price Leaks",
+        "slot_name": "Channel 1 — Morning Smartphone Secrets & Hidden Features",
         "scheduled_time": "08:00",
         "channel": "Channel 1 (Primary)",
         "format_type": "short",
         "aspect_ratio": "9:16",
-        "target_duration": "45-55s",
+        "target_duration": "35-45s",
         "category": "Technology",
         "content_type": "Tech News",
         "instagram_upload": True,
@@ -143,14 +143,14 @@ DAILY_SLOT_CONFIGS: List[Dict[str, Any]] = [
     },
     {
         "slot_id": "CH1-S2",
-        "slot_name": "Channel 1 — New Mobile Specs, Features & Comparison",
+        "slot_name": "Channel 1 — Mind-Blowing Facts & Science Mysteries",
         "scheduled_time": "16:00",
         "channel": "Channel 1 (Primary)",
         "format_type": "short",
         "aspect_ratio": "9:16",
-        "target_duration": "45-55s",
-        "category": "Technology",
-        "content_type": "Tech News",
+        "target_duration": "35-45s",
+        "category": "Interesting Facts",
+        "content_type": "Interesting Facts",
         "instagram_upload": True,
         "language_style": DEFAULT_LANGUAGE_STYLE,
         "voice": DEFAULT_TELUGU_VOICE,
@@ -188,12 +188,12 @@ DAILY_SLOT_CONFIGS: List[Dict[str, Any]] = [
     },
     {
         "slot_id": "CH1-S3",
-        "slot_name": "Channel 1 — Future Tech, AI Gadgets & Crazy Inventions",
+        "slot_name": "Channel 1 — Viral Tech Secrets, AI Tools & Scam Alerts",
         "scheduled_time": "19:45",
         "channel": "Channel 1 (Primary)",
         "format_type": "short",
         "aspect_ratio": "9:16",
-        "target_duration": "45-55s",
+        "target_duration": "35-45s",
         "category": "Technology",
         "content_type": "Tech News",
         "instagram_upload": True,
@@ -444,17 +444,22 @@ def fetch_live_slot_topic(slot: Dict[str, Any]) -> str:
 
     # 3. Channel 1 — 100% Pure Tech News, Smartphones & Mobile Specifications (Slots: CH1-S1, CH1-L1, CH1-S2, CH1-S3, CH1-L2)
     else:
-        # Determine specific tech angle based on slot
+        # Determine specific angle based on slot
         if s_id == "CH1-S1":
-            tech_query = "Latest Smartphone Launch Price Leak India Specs"
+            tech_query = "Latest Smartphone Hidden Features Camera Secrets India Specs"
+            slot_cat = "Tech News"
         elif s_id == "CH1-L1":
             tech_query = "Tech News Today Smartphone Specs Flagship Review"
+            slot_cat = "Tech News"
         elif s_id == "CH1-S2":
-            tech_query = "Smartphone Camera Battery Processor Comparison Specs"
+            tech_query = "Mind Blowing Science Mysteries and Unbelievable Earth Facts"
+            slot_cat = "Interesting Facts"
         elif s_id == "CH1-S3":
-            tech_query = "Future Technology AI Gadgets Inventions Wearables"
+            tech_query = "Viral Tech Gadgets Secret Features and Cyber Scam Alerts"
+            slot_cat = "Tech News"
         else:  # CH1-L2
-            tech_query = "Best Mobiles to Buy in India Budget Flagship Smartphone Specs"
+            tech_query = "Deep Science Mysteries Ancient Engineering and Tech Secrets"
+            slot_cat = "Interesting Facts"
 
         # Model-aware novelty filter: extract phone model keywords to prevent repeating same phone
         def is_model_repeated(topic_candidate: str) -> bool:
@@ -469,12 +474,12 @@ def fetch_live_slot_topic(slot: Dict[str, Any]) -> str:
 
         try:
             from agents.topic_suggester import fetch_ai_topic_suggestions, rank_topics_by_ovs
-            suggestions = fetch_ai_topic_suggestions(tech_query, count=6, use_ai=True)
+            suggestions = fetch_ai_topic_suggestions(slot_cat if slot_cat == "Interesting Facts" else tech_query, count=6, use_ai=True)
             valid = [c for c in suggestions if c.strip().lower() not in used and not is_model_repeated(c)]
             if not valid:
                 valid = [c for c in suggestions if c.strip().lower() not in used]
             if valid:
-                ranked = rank_topics_by_ovs(valid, "Tech News")
+                ranked = rank_topics_by_ovs(valid, slot_cat)
                 chosen = ranked[0]
                 record_used_topic(chosen)
                 return chosen
@@ -676,7 +681,7 @@ class MultiSlotDailyScheduler:
                 language_style=slot_conf["language_style"],
                 voice=slot_conf["voice"],
                 tone=slot_conf.get("tone"),
-                captions=(aspect == "16:9"),
+                captions=True,
                 thumbnail=True,
                 metadata=True,
                 youtube_upload=ENABLE_AUTO_UPLOAD,
@@ -708,7 +713,7 @@ class MultiSlotDailyScheduler:
             log_daily(f"   YouTube ID   : {vid_id or 'Uploaded'}")
             log_daily(f"   YouTube Link : https://www.youtube.com/watch?v={vid_id}" if vid_id else "   YouTube Link : N/A")
             log_daily(f"   Channel      : {channel}")
-            log_daily(f"   Instagram    : {ig_res.get('result', {}).get('media_id', 'Skipped') if ig_res else 'N/A'}")
+            log_daily(f"   Instagram    : {(ig_res.get('result') or {}).get('media_id', 'Skipped') if ig_res else 'N/A'}")
             log_daily("=" * 65)
 
             slot_status["status"] = "success"

@@ -768,17 +768,36 @@ def render_prasad_tech_thumbnail(
 
 def build_prasad_tech_thumbnail_params(title: str, channel: str = "Channel 1", topic: str = "") -> dict:
     """
-    Intelligently parses title, topic, and channel into high-CTR Prasad Tech in Telugu thumbnail parameters.
-    Supports both Channel 1 (Pure Tech / Mobiles / Specs) and Channel 2 (Bigg Boss 10 / Cinema).
+    Intelligently parses title, topic, and channel into high-CTR viral thumbnail parameters.
+    Supports:
+    1. Cinema / Tollywood / Celebrity Roasts / Lifestyle / Food / Prabhas (Channel 2 / Viral Talks)
+    2. Bigg Boss 10 (Channel 2 / Bigg Boss only)
+    3. Facts / Science / Space / Mysteries (Channel 1 / Imaginary Facts)
+    4. Tech / Gadgets / Mobiles / Specs (Channel 1 Tech reviews)
     """
     import re
     full_text = f"{title} {topic}".strip().lower()
-    is_bb = "bigg boss" in full_text or "biggboss" in full_text or "channel 2" in channel.lower()
-    is_cinema = "cinema" in full_text or "movie" in full_text or "review" in full_text
+    from utils.season_guard import is_bigg_boss_topic
+    is_bb = is_bigg_boss_topic(full_text)
 
-    # 1. CHANNEL 2: BIGG BOSS 10 & CINEMA
-    if is_bb and not is_cinema:
-        # Detect contestant names
+    is_tech = bool(re.search(
+        r"\b(phone|mobile|smartphone|oneplus|samsung|iphone|iqoo|vivo|realme|xiaomi|redmi|pixel|snapdragon|dimensity|camera\s*sensor|processor|battery\s*mah|gadget|laptop)\b",
+        full_text
+    ))
+
+    is_cinema_celebrity = (
+        any(k in full_text for k in [
+            "prabhas", "allu arjun", "ntr", "ram charan", "mahesh", "chiranjeevi",
+            "pawan kalyan", "balakrishna", "cinema", "movie", "tollywood", "roast",
+            "food", "lifestyle", "diet", "chef", "chefs", "kalki", "salaar", "og",
+            "pushpa", "devara", "game changer", "spirit", "hero", "actor", "heroine",
+            "trailer", "teaser", "box office", "collections", "drama", "entertainment"
+        ])
+        or "channel 2" in channel.lower()
+    ) and not is_bb and not is_tech
+
+    # 1. CHANNEL 2: BIGG BOSS 10 ONLY
+    if is_bb:
         c_names = []
         for c in ["nagarjuna", "vamsi", "aman", "thrigun", "sudheer", "mukesh", "jhansi", "apoorva"]:
             if c in full_text:
@@ -805,24 +824,97 @@ def build_prasad_tech_thumbnail_params(title: str, channel: str = "Channel 1", t
             "brand_logos": ["BB10", "HOT", "STAR"],
             "bg_theme": "danger_red",
         }
-    elif is_cinema:
+
+    # 2. CHANNEL 2: CINEMA / CELEBRITY / TOLLYWOOD / ROASTS / LIFESTYLE
+    elif is_cinema_celebrity:
+        celeb = ""
+        for c_name, c_tel in [
+            ("prabhas", "ప్రభాస్"),
+            ("allu arjun", "అల్లు అర్జున్"),
+            ("ram charan", "రామ్ చరణ్"),
+            ("ntr", "ఎన్టీఆర్"),
+            ("mahesh", "మహేష్ బాబు"),
+            ("pawan", "పవన్ కళ్యాణ్"),
+            ("chiranjeevi", "చిరంజీవి"),
+            ("balakrishna", "బాలకృష్ణ"),
+        ]:
+            if c_name in full_text:
+                celeb = c_tel
+                break
+
+        is_food_diet = any(k in full_text for k in ["food", "diet", "chef", "భోజనం", "ఖర్చు", "cooking", "తిండి", "లంచ్"])
+        if is_food_diet:
+            h_left_y = celeb or "రెబల్ స్టార్"
+            h_left_w = "రాజభోగం! 👑"
+            h_right_w = "లంచ్ ఖర్చు ఎంత? 😱"
+            h_right_y = "10 మంది చెఫ్స్! 👨‍🍳"
+            ev_left_t = "భారీ భోజనం ఖర్చు"
+            ev_left_b = "DAILY EXPENSE 💸"
+            ev_right_t = "10 SPECIAL CHEFS"
+            ev_right_b = "ROYAL FEAST 🍽️"
+            pill = "VIRAL ROAST"
+            logos = ["HOT", "VIRAL", "TREND"]
+            theme = "danger_red"
+        elif any(k in full_text for k in ["roast", "drama", "troll", "mind", "lost"]):
+            h_left_y = celeb or "టాప్ స్టార్"
+            h_left_w = "ఫుల్ రోస్ట్! 🔥"
+            h_right_w = "సోషల్ మీడియా"
+            h_right_y = "రచ్చ రచ్చ! 💥"
+            ev_left_t = "INSIDE SCOOP"
+            ev_left_b = "VIRAL TALKS ⚡"
+            ev_right_t = "HONEST TALK"
+            ev_right_b = "PUBLIC REACTION 😱"
+            pill = "VIRAL ROAST"
+            logos = ["VIRAL", "TREND", "HOT"]
+            theme = "danger_red"
+        else:
+            h_left_y = celeb or "టాప్ మూవీ"
+            h_left_w = "వైరల్ టాక్! 🎬"
+            h_right_w = "షాకింగ్"
+            h_right_y = "నిజాలు! 🔥"
+            ev_left_t = "BOX OFFICE"
+            ev_left_b = "COLLECTIONS 💰"
+            ev_right_t = "HONEST TALK"
+            ev_right_b = "PUBLIC VERDICT ⭐"
+            pill = "CINEMA BUZZ"
+            logos = ["FILM", "HOT", "VIRAL"]
+            theme = "danger_red"
+
         return {
-            "header_left_yellow": "టాప్ మూవీ",
-            "header_left_white": "రివ్యూ 🎬",
-            "header_left_emoji": "🍿",
-            "header_right_white": "హిట్టా?",
-            "header_right_yellow": "ఫట్టా?!",
-            "header_right_emoji": "💥",
-            "evidence_left_text": "BOX OFFICE",
-            "evidence_left_badge": "COLLECTIONS 💰",
-            "evidence_right_text": "HONEST TALK",
-            "evidence_right_badge": "PUBLIC VERDICT ⭐",
-            "episode_pill_text": "CINEMA BUZZ",
-            "brand_logos": ["OTT", "FILM", "VERDICT"],
+            "header_left_yellow": h_left_y,
+            "header_left_white": h_left_w,
+            "header_left_emoji": "🔥",
+            "header_right_white": h_right_w,
+            "header_right_yellow": h_right_y,
+            "header_right_emoji": "😱",
+            "evidence_left_text": ev_left_t,
+            "evidence_left_badge": ev_left_b,
+            "evidence_right_text": ev_right_t,
+            "evidence_right_badge": ev_right_b,
+            "episode_pill_text": pill,
+            "brand_logos": logos,
+            "bg_theme": theme,
+        }
+
+    # 3. CHANNEL 1: FACTS / SCIENCE / SPACE / MYSTERIES
+    elif any(k in full_text for k in ["fact", "facts", "science", "space", "isro", "nasa", "quantum", "mystery", "secret", "history", "ancient", "universe"]) or ("channel 1" in channel.lower() and not is_tech):
+        return {
+            "header_left_yellow": "రహస్యం!",
+            "header_left_white": "నిజమా? 🤯",
+            "header_left_emoji": "🌌",
+            "header_right_white": "తెలిస్తే మైండ్ బ్లాంక్",
+            "header_right_yellow": "షాకింగ్! ⚡",
+            "header_right_emoji": "🔬",
+            "evidence_left_text": "REAL SCIENCE",
+            "evidence_left_badge": "DEEP DIVE 🔍",
+            "evidence_right_text": "UNIVERSE SECRET",
+            "evidence_right_badge": "FACT REVEALED 🧠",
+            "episode_pill_text": "IMAGINARY FACTS",
+            "brand_logos": ["FACT", "ISRO", "SCIENCE"],
             "bg_theme": "tech_purple",
         }
 
-    # 2. CHANNEL 1: PURE TECH / NEW SMARTPHONES / MOBILE SPECIFICATIONS
+    # 4. TECH / SMARTPHONES / GADGETS
     detected_brands = []
     brand_map = {
         "oneplus": "1+",

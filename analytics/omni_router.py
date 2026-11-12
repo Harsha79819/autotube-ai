@@ -182,9 +182,15 @@ def route_topic_spec(
     else:
         aspect = "9:16"
 
-    captions_enabled = (aspect == "16:9")
+    # Captions: Enforce True across all formats (essential for mobile Shorts retention & accessibility)
+    captions_enabled = True
     use_canvas = (aspect != "16:9")
-    voice_mode = "roast_modulated" if ch_slug == "viral_talks_me&mine" else "news_anchor"
+    if ch_slug == "viral_talks_me&mine":
+        voice_mode = "roast_modulated"
+        recommended_voice = "te-IN-ShrutiNeural"  # Telugu Female Voice - Sarcastic & Roasting (Shruti)
+    else:
+        voice_mode = "news_anchor"
+        recommended_voice = "te-IN-MohanNeural"  # Crisp Telugu News/Fact Anchor Voice (Mohan)
     memes_enabled = (ch_slug == "viral_talks_me&mine")
 
     if aspect == "16:9":
@@ -200,9 +206,11 @@ def route_topic_spec(
         "channel_slug": ch_slug,
         "aspect_ratio": aspect,
         "target_duration": duration,
-        "captions": captions_enabled,
+        "captions": True,
+        "captions_enabled": True,
         "use_canvas": use_canvas,
         "voice_mode": voice_mode,
+        "recommended_voice": recommended_voice,
         "memes_enabled": memes_enabled,
         "omni_viral_score": ovs,
         "instagram_reels": (aspect == "9:16"),

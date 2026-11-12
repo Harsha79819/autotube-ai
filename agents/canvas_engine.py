@@ -369,7 +369,9 @@ def make_cutout_layer(cut_path: Path, name: str, accent_hex: str, w: int, h: int
         chip = Image.new("RGBA", (pw, ph), (0, 0, 0, 0))
         ImageDraw.Draw(chip).rounded_rectangle((0, 0, pw - 1, ph - 1), ph // 2, fill=(*accent, 245))
         chip.alpha_composite(chip_txt, (28, 13))
-        _comp(layer, chip, round(cx - pw / 2), min(h - ph - 4, round(bottom - ph / 2)))
+        # Seat chip at bottom base of bust (chest level), never blocking the face/mouth!
+        chip_y = round(bottom - ph - 16)
+        _comp(layer, chip, round(cx - pw / 2), chip_y)
     return layer
 
 
@@ -541,7 +543,12 @@ def compose_scene(scene: Scene, out_dir: Path, w: int = W_DEFAULT, h: int = H_DE
                           kind="typography_card")
         res.layers.append(LayerSpec(_save(make_burst_layer(w, h, emo_hex, h * 0.47, scene.index),
                                           out_dir / f"{tag}_burst.png"), "fade", 0.05))
-        big = render_text(scene.banner, int(w * 0.66), max_lines=5, start=112, min_size=64,
+        # Typography card: punchline headline (concise, max 4 words to avoid clash with subtitles)
+        headline = scene.banner
+        h_words = headline.split()
+        if len(h_words) > 5:
+            headline = " ".join(h_words[:4]) + "..."
+        big = render_text(headline, int(w * 0.70), max_lines=3, start=112, min_size=64,
                           accent=(255, 255, 255, 255), stroke=8, highlight_last=False)
         lay = _blank(w, h)
         lay.alpha_composite(big, ((w - big.width) // 2, int(h * 0.47 - big.height / 2)))

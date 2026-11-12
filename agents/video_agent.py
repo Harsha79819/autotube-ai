@@ -278,8 +278,9 @@ def fallback_script_word_timestamps(voice_file=None, script_file=None):
         except Exception:
             pass
 
-    clean_text = re.sub(r"[#*_~`\[\]()]", " ", script_text)
-    raw_words = [w.strip() for w in clean_text.split() if w.strip()]
+    clean_text = re.sub(r"\b(?:NARRATION|SECTION\s*\d+|VISUAL\s*\d+)\s*:?", " ", script_text, flags=re.IGNORECASE)
+    clean_text = re.sub(r"[#*_~`\[\]()]", " ", clean_text)
+    raw_words = [w.strip() for w in clean_text.split() if w.strip() and w.strip().upper() not in ("NARRATION:", "NARRATION", "SECTION", "VISUAL")]
     if not raw_words:
         raw_words = ["AutoTube", "AI", "Video"]
 

@@ -69,8 +69,7 @@ def get_client():
 METADATA_MODELS = [
     "gemini-3.8-flash",
     "gemini-3.5-flash-lite",
-    "gemini-flash-lite-latest",
-    "gemini-flash-latest",
+    "gemini-3.1-flash-lite",
 ]
 
 
@@ -185,7 +184,28 @@ def valid_metadata(title, description, tags):
 # LOCAL FALLBACK
 # ============================================================
 
-def generate_fallback_metadata(topic, script):
+STOP_WORDS = {
+    "a", "about", "above", "after", "again", "against", "all", "am", "an", "and", "any", "are", 
+    "aren't", "as", "at", "be", "because", "been", "before", "being", "below", "between", "both", 
+    "but", "by", "can", "can't", "cannot", "could", "couldn't", "did", "didn't", "do", "does", 
+    "doesn't", "doing", "don't", "down", "during", "each", "few", "for", "from", "further", 
+    "had", "hadn't", "has", "hasn't", "have", "haven't", "having", "he", "he'd", "he'll", "he's", 
+    "her", "here", "here's", "hers", "herself", "him", "himself", "his", "how", "how's", "i", 
+    "i'd", "i'll", "i'm", "i've", "if", "in", "into", "is", "isn't", "it", "it's", "its", "itself", 
+    "let's", "me", "more", "most", "mustn't", "my", "myself", "no", "nor", "not", "of", "off", 
+    "on", "once", "only", "or", "other", "ought", "our", "ours", "ourselves", "out", "over", 
+    "own", "same", "shan't", "she", "she'd", "she'll", "she's", "should", "shouldn't", "so", 
+    "some", "such", "than", "that", "that's", "the", "their", "theirs", "them", "themselves", 
+    "then", "there", "there's", "these", "they", "they'd", "they'll", "they're", "they've", 
+    "this", "those", "through", "to", "too", "under", "until", "up", "very", "was", "wasn't", 
+    "we", "we'd", "we'll", "we're", "we've", "were", "weren't", "what", "what's", "when", 
+    "when's", "where", "where's", "which", "while", "who", "who's", "whom", "why", "why's", 
+    "with", "won't", "would", "wouldn't", "you", "you'd", "you'll", "you're", "you've", "your", 
+    "yours", "yourself", "yourselves", "across", "means", "next", "gen", "also", "just", "will",
+    "today", "latest", "first", "every", "everyone"
+}
+
+def generate_fallback_metadata(topic, script, aspect_ratio="9:16", channel="Channel 1 (Primary)"):
 
     # Remove Reuters suffix
     clean_topic = re.sub(
@@ -201,12 +221,28 @@ def generate_fallback_metadata(topic, script):
 
     title = sanitize_metadata_title(clean_topic)
 
-    if len(title) > 95:
+    # Smart title boundary: Never slice blind mid-sentence
+    if len(title) > 85:
+        seps = [":", "?", "!", " - "]
+        cut_done = False
+        for sep in seps:
+            if sep in title[:85]:
+                parts = title.split(sep)
+                if len(parts[0].strip()) >= 25:
+                    title = parts[0].strip() + (sep.strip() if sep in ("?", "!") else "!")
+                    cut_done = True
+                    break
+        if not cut_done:
+            trimmed = title[:80].rstrip()
+            if " " in trimmed:
+                trimmed = trimmed.rsplit(" ", 1)[0]
+            if not trimmed.endswith(("?", "!", ".")):
+                trimmed += "!"
+            title = trimmed
 
-        title = title[:92].rstrip()
-
-        if " " in title:
-            title = title.rsplit(" ", 1)[0]
+    is_shorts = (aspect_ratio == "9:16")
+    if is_shorts and "#shorts" not in title.lower() and len(title) <= 75:
+        title = f"{title} #Shorts"
 
     # --------------------------------------------------------
     # DESCRIPTION
@@ -220,6 +256,8 @@ def generate_fallback_metadata(topic, script):
         f"Watch the full video for the latest update "
         f"and important details."
     )
+    if is_shorts and "#shorts" not in description.lower():
+        description += "\n\n#Shorts #Telugu #Viral"
 
     # --------------------------------------------------------
     # TAGS
@@ -231,28 +269,39 @@ def generate_fallback_metadata(topic, script):
     )
 
     tags = []
+    if is_shorts:
+        tags.append("Shorts")
 
     for word in words:
+        w_clean = word.strip().lower()
+        if len(w_clean) >= 3 and w_clean not in STOP_WORDS:
+            if w_clean not in tags:
+                tags.append(w_clean)
 
-        if len(word) >= 3:
+    # Domain-specific high-volume search tags
+    topic_lower = clean_topic.lower()
+    if any(k in topic_lower for k in ("tech", "phone", "mobile", "ai", "gadget", "processor", "camera", "battery", "apple", "samsung", "android")):
+        niche_tags = [
+            "Telugu Tech", "Tech News Telugu", "Tech Facts Telugu", "Smartphone Tricks Telugu",
+            "Smartphones India", "Viral Tech", "Telugu Shorts"
+        ]
+    elif any(k in topic_lower for k in ("fact", "mystery", "space", "earth", "ocean", "science", "secret", "alien", "pyramid", "temple", "unknown")):
+        niche_tags = [
+            "Telugu Facts", "Unknown Facts Telugu", "Amazing Facts", "Mysterious Facts",
+            "Science Facts Telugu", "Interesting Facts Telugu", "Telugu Shorts"
+        ]
+    elif any(k in topic_lower for k in ("bigg boss", "bb10", "eviction", "nominations", "elimination", "nagarjuna", "tollywood")):
+        niche_tags = [
+            "Bigg Boss Telugu 10", "Bigg Boss 10 Telugu", "Bigg Boss Telugu Review",
+            "Bigg Boss Telugu Latest", "Telugu Entertainment", "Telugu Shorts"
+        ]
+    else:
+        niche_tags = [
+            "Telugu Facts", "Trending Telugu", "Viral Shorts", "Telugu Shorts"
+        ]
 
-            tag = word.lower()
-
-            if tag not in tags:
-                tags.append(tag)
-
-    generic_tags = [
-        "breaking news",
-        "latest news",
-        "world news",
-        "international news",
-        "news update",
-        "India news",
-    ]
-
-    for tag in generic_tags:
-
-        if tag not in tags:
+    for tag in niche_tags:
+        if tag not in tags and len(tags) < 15:
             tags.append(tag)
 
     tags = tags[:15]
@@ -315,7 +364,43 @@ def _attach_youtube_chapters(description: str, is_shorts: bool = False, total_du
 # MAIN FUNCTION
 # ============================================================
 
-def generate_metadata(topic, script):
+def _post_process_metadata(title: str, description: str, tags: list, topic: str, script: str, aspect_ratio: str = "9:16", channel: str = "Channel 1 (Primary)"):
+    is_shorts = (aspect_ratio == "9:16")
+
+    # Clean title
+    title = sanitize_metadata_title(title)
+    if is_shorts and "#shorts" not in title.lower() and len(title) <= 75:
+        title = f"{title} #Shorts"
+
+    # Clean description
+    if is_shorts and "#shorts" not in description.lower():
+        description = description.rstrip() + "\n\n#Shorts #Telugu #Viral"
+
+    # Bigg Boss Telugu 10 sanitization
+    if "bigg boss" in topic.lower() or "bigg boss" in script.lower():
+        description = re.sub(r"\bBigg Boss [1-9]\b", "Bigg Boss Telugu 10", description, flags=re.IGNORECASE)
+        description = description.replace("Rohit Patnaik", "Rohit Patnam").replace("Shalini Damera", "Shalini Patel")
+
+    # Clean tags: eliminate stop words
+    clean_tags = []
+    if is_shorts:
+        clean_tags.append("Shorts")
+
+    for t in tags:
+        t_clean = t.strip()
+        if "bigg boss" in topic.lower() or "bigg boss" in script.lower():
+            t_clean = re.sub(r"\bBigg Boss [1-9]\b", "Bigg Boss Telugu 10", t_clean, flags=re.IGNORECASE)
+            t_clean = t_clean.replace("Rohit Patnaik", "Rohit Patnam").replace("Shalini Damera", "Shalini Patel")
+        if t_clean.lower() not in STOP_WORDS and len(t_clean) >= 2 and t_clean not in clean_tags:
+            clean_tags.append(t_clean)
+
+    # Attach chapters if long-form
+    description = _attach_youtube_chapters(description, is_shorts=is_shorts)
+
+    return title, description, clean_tags[:15]
+
+
+def generate_metadata(topic, script, aspect_ratio="9:16", channel="Channel 1 (Primary)"):
 
     prompt = f"""
 You are a professional YouTube SEO expert.
@@ -331,7 +416,7 @@ SCRIPT:
 Return ONLY this exact format:
 
 TITLE:
-[YouTube title under 100 characters]
+[YouTube title under 80 characters]
 
 DESCRIPTION:
 [SEO-friendly description in 2-4 paragraphs]
@@ -346,9 +431,9 @@ Rules:
   * For Telugu Entertainment/Bigg Boss/Cinema: Craft punchy titles in Telugu/Tanglish or English featuring emotional tension and curiosity.
 - BIGG BOSS SEASON 10 GROUND TRUTH: If the topic/script discusses Bigg Boss Telugu, the current show is STRICTLY Bigg Boss Telugu 10 (Season 10). NEVER output tags or descriptions for older seasons like Bigg Boss 7, 8, etc. (NEVER write 'Bigg Boss 7 Telugu').
 - OFFICIAL CONTESTANT SPELLINGS: Use exact verified contestant names: Rohit Patnam (NOT Rohit Patnaik), Shalini Patel (NOT Shalini Damera), Aman Masud, Sudheer Reddy (Sudheer Talks), Gundeboina Jhansi (Singer Jhansi), Charan Mahadev.
-- Keep the title punchy and strictly under 85 characters so it never truncates on mobile screens.
+- Keep the title punchy and strictly under 80 characters so it never truncates on mobile screens.
 - Be factual to the script, do not invent fake claims, but make the angle irresistible to click.
-- Tags: Include core entities, contestant names, movie titles, and high-volume search tags.
+- Tags: Include core entities, contestant names, movie titles, and high-volume search tags. No stop words like 'are', 'for', 'how', 'this'.
 - Return ONLY TITLE, DESCRIPTION and TAGS.
 """
 
@@ -394,19 +479,10 @@ Rules:
                 description,
                 tags
             ):
-                # Post-processing sanitization for Bigg Boss Telugu 10
-                if "bigg boss" in topic.lower() or "bigg boss" in script.lower():
-                    description = re.sub(r"\bBigg Boss [1-9]\b", "Bigg Boss Telugu 10", description, flags=re.IGNORECASE)
-                    description = description.replace("Rohit Patnaik", "Rohit Patnam").replace("Shalini Damera", "Shalini Patel")
-                    clean_tags = []
-                    for t in tags:
-                        t_clean = re.sub(r"\bBigg Boss [1-9]\b", "Bigg Boss Telugu 10", t, flags=re.IGNORECASE)
-                        t_clean = t_clean.replace("Rohit Patnaik", "Rohit Patnam").replace("Shalini Damera", "Shalini Patel")
-                        if t_clean not in clean_tags:
-                            clean_tags.append(t_clean)
-                    tags = clean_tags
+                title, description, tags = _post_process_metadata(
+                    title, description, tags, topic, script, aspect_ratio=aspect_ratio, channel=channel
+                )
 
-                description = _attach_youtube_chapters(description)
                 metadata = {
                     "title": title,
                     "description": description,
@@ -458,7 +534,9 @@ Rules:
             cascade_text = generate_text_cascade(prompt, step_name="metadata", per_provider_timeout=8.0)
             c_title, c_desc, c_tags = parse_metadata(cascade_text)
             if valid_metadata(c_title, c_desc, c_tags):
-                c_desc = _attach_youtube_chapters(c_desc)
+                c_title, c_desc, c_tags = _post_process_metadata(
+                    c_title, c_desc, c_tags, topic, script, aspect_ratio=aspect_ratio, channel=channel
+                )
                 metadata = {
                     "title": c_title,
                     "description": c_desc,
@@ -482,10 +560,15 @@ Rules:
 
     title, description, tags = generate_fallback_metadata(
         topic,
-        script
+        script,
+        aspect_ratio=aspect_ratio,
+        channel=channel
     )
 
-    description = _attach_youtube_chapters(description)
+    title, description, tags = _post_process_metadata(
+        title, description, tags, topic, script, aspect_ratio=aspect_ratio, channel=channel
+    )
+
     metadata = {
         "title": title,
         "description": description,

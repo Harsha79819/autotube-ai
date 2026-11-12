@@ -218,19 +218,19 @@ def load_section_map():
                 continue
 
             if current_section is not None:
-
-                if current_section["narration"]:
-                    current_section["narration"] += " "
-
-                current_section["narration"] += line
+                clean_l = line.strip()
+                if re.match(r"^NARRATION\s*:\s*", clean_l, re.IGNORECASE):
+                    clean_l = re.sub(r"^NARRATION\s*:\s*", "", clean_l, flags=re.IGNORECASE).strip()
+                clean_l = re.sub(r"[*_#`~]", "", clean_l).strip()
+                if clean_l:
+                    if current_section["narration"]:
+                        current_section["narration"] += " "
+                    current_section["narration"] += clean_l
 
     if current_section is not None:
-
         if not current_section["narration"]:
             raise RuntimeError(
-                f"Section "
-                f"{current_section['section']} "
-                "has no narration."
+                f"Section {current_section['section']} has no narration."
             )
 
         sections.append(current_section)
@@ -897,15 +897,15 @@ def write_ass_karaoke_subtitles(items, output_ass="output/subtitles.ass", aspect
 
     if aspect_ratio == "9:16":
         res_x, res_y = 1080, 1920
-        font_size = 58
-        margin_v = 360  # Safe lower-third mobile area for 9:16 Shorts/Reels (above platform UI buttons and captions)
+        font_size = 52
+        margin_v = 240  # True bottom-middle area for 9:16 Shorts (Y ≈ 1680px), cleanly separated below visuals and above platform UI
     elif aspect_ratio == "16:9":
         res_x, res_y = 1920, 1080
-        font_size = 54
+        font_size = 50
         margin_v = 65
     else:  # 1:1
         res_x, res_y = 1080, 1080
-        font_size = 56
+        font_size = 52
         margin_v = 55
 
     script_file = Path("output/script.txt")
@@ -935,7 +935,7 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,{font_name},{font_size},&H0000FFFF,&H00FFFFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,3.5,1.5,2,40,40,{margin_v},1
+Style: Default,{font_name},{font_size},&H0000FFFF,&H00FFFFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,3.8,1.8,2,40,40,{margin_v},1
 Style: OnScreenBadge,{font_name},52,&H0000E5FF,&H00FFFFFF,&H00000000,&HB0111827,-1,0,0,0,100,100,0,0,3,6,2,8,40,40,360,1
 
 [Events]
@@ -1031,10 +1031,10 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             end_str = format_ass_timestamp(c_end)
             dialogues.append(f"Dialogue: 0,{start_str},{end_str},Default,,0,0,0,,{k_text}")
 
-    # Append On-Screen Headline Badges for key beats (Phase 5 Virality)
+    # Append On-Screen Headline Badges only for pure English videos without top banners
     try:
         from config.settings import get_setting
-        if get_setting("ON_SCREEN_TEXT", True) and aspect_ratio == "9:16":
+        if not has_telugu and not has_hindi and get_setting("ON_SCREEN_TEXT", True) and aspect_ratio == "9:16":
             vplan_p = Path("output/visual_plan.json")
             if vplan_p.exists() and dialogues:
                 vplan_data = json.loads(vplan_p.read_text(encoding="utf-8"))

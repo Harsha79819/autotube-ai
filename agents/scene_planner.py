@@ -27,9 +27,10 @@ from typing import Dict, List, Optional, Tuple
 
 from agents.entity_bank import Entity, EntityBank, get_bank
 
-MIN_SCENE_S = 6.0
-MAX_SCENE_S = 9.5
-CUT_WEIGHT = 1.2
+MIN_SCENE_S = 3.5
+MAX_SCENE_S = 8.0
+CUT_WEIGHT = 1.5
+
 
 # --------------------------------------------------------------------------- #
 # Emotion lexicon. Starter list - extend it with the words your scripts really
@@ -118,7 +119,7 @@ def split_sentences(text: str) -> List[str]:
     return [s.strip() for s in _SENT_SPLIT.split(text or "") if s and s.strip()]
 
 
-def extract_banner(text: str, bank: EntityBank, max_words: int = 8) -> str:
+def extract_banner(text: str, bank: EntityBank, max_words: int = 5) -> str:
     """Pick the punchiest short clause of the scene's narration for the top banner."""
     candidates: List[str] = []
     for sent in split_sentences(text):
@@ -126,25 +127,30 @@ def extract_banner(text: str, bank: EntityBank, max_words: int = 8) -> str:
         parts = [p.strip() for p in re.split(r"[,;:—–-]\s+", sent) if p.strip()]
         if len(parts) > 1:
             candidates.extend(parts)
+    scene_ents = {e.slug for e, _ in bank.find_entities(text)}
     best, best_score = "", -1e9
     for cand in candidates:
         words = cand.split()
         n = len(words)
         if n < 2:
             continue
+        cand_ents = {e.slug for e, _ in bank.find_entities(cand)}
+        # Reject candidates mentioning a different entity than what this scene talks about
+        if cand_ents and scene_ents and not cand_ents.intersection(scene_ents):
+            continue
         low = cand.lower()
         emo_hits = sum(1 for emo in _PRIORITY for tok in EMOTION_LEXICON[emo] if tok.lower() in low)
-        has_entity = 1 if bank.find_entities(cand) else 0
+        has_entity = 1 if cand_ents else 0
         score = 2.0 * min(emo_hits, 3) + 1.0 * has_entity
-        score += 2.0 if 3 <= n <= max_words else 0.0
+        score += 2.0 if 2 <= n <= max_words else 0.0
         score += 0.7 if cand.rstrip().endswith(("!", "?")) else 0.0
-        score -= 0.35 * abs(n - 6)
+        score -= 0.35 * abs(n - 4)
         if score > best_score:
             best, best_score = cand, score
     if not best:
         best = " ".join((text or "").split()[:max_words])
     words = best.split()
-    if len(words) > max_words + 2:
+    if len(words) > max_words + 1:
         best = " ".join(words[:max_words]) + "…"
     return best.strip(" ,;:-—–\"'“”")
 
@@ -153,9 +159,9 @@ def extract_banner(text: str, bank: EntityBank, max_words: int = 8) -> str:
 # Consolidation
 # --------------------------------------------------------------------------- #
 def _target_scene_count(total: float) -> int:
-    n = round(total / 7.5)
-    if total >= 56:
-        n = max(8, min(10, n)) if total <= 95 else math.ceil(total / 8.5)
+    n = round(total / 5.5)
+    if total >= 45:
+        n = max(8, min(14, n))
     return max(2, n)
 
 
@@ -167,18 +173,20 @@ def _boundary_strengths(sections: List[dict], bank: EntityBank) -> List[float]:
     out = [1.0] * n
     for i in range(n - 1):
         text = (sections[i].get("narration") or "").strip()
-        s = 0.15
-        if text.endswith(_END_PUNCT):
-            s += 0.40
+        # Different entities mentioned: mandatory cut (strength = 1.0)
         if ents[i] and ents[i + 1] and ents[i] != ents[i + 1]:
+            out[i] = 1.0
+            continue
+        s = 0.20
+        if text.endswith(_END_PUNCT):
+            s += 0.45
+        if bool(ents[i]) != bool(ents[i + 1]):
             s += 0.30
-        elif bool(ents[i]) != bool(ents[i + 1]):
-            s += 0.15
         if emos[i] != emos[i + 1]:
-            s += 0.15
-        gap = float(sections[i + 1].get("start", 0)) - float(sections[i].get("end", 0))
-        if gap >= 0.30:
             s += 0.20
+        gap = float(sections[i + 1].get("start", 0)) - float(sections[i].get("end", 0))
+        if gap >= 0.25:
+            s += 0.25
         out[i] = min(1.0, s)
     return out
 
@@ -201,6 +209,7 @@ def consolidate(
     k = target_scenes or _target_scene_count(total)
     ideal = min(max(total / k, min_s + 0.5), max_s - 0.5)
     strength = _boundary_strengths(secs, bank)
+    ents = [{e.slug for e, _ in bank.find_entities(s.get("narration", ""))} for s in secs]
 
     prefix = [0.0]
     for d in durs:
@@ -214,6 +223,14 @@ def consolidate(
         for i in range(j):  # group = sections i..j-1
             if dp[i] == INF:
                 continue
+
+            # Hard boundary: Never merge sections if they talk about different named entities
+            group_ents = [ents[idx] for idx in range(i, j) if ents[idx]]
+            if len(group_ents) > 1:
+                first_ent = group_ents[0]
+                if any(e != first_ent and not e.intersection(first_ent) for e in group_ents[1:]):
+                    continue
+
             d = prefix[j] - prefix[i]
             cost = ((d - ideal) / ideal) ** 2
             if d < min_s:

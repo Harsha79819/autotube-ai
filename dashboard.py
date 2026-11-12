@@ -556,7 +556,7 @@ def create_final_video(
     outro_clip=None,
 ):
     """Create final video with optional captions burning and outro."""
-    should_burn = burn_captions if burn_captions is not None else captions
+    should_burn = True if aspect_ratio == "9:16" else (burn_captions if burn_captions is not None else captions)
 
     # Check if subtitles were already generated in parallel stage
     sub_ass = Path("output/subtitles.ass")
@@ -2967,6 +2967,7 @@ with st.container():
         if is_telugu_lang:
             voice_options = [
                 "👩 Shruti (Telugu Creator / Anchor) - Conversational",
+                "🔥 👩 Shruti (Telugu Female - Sarcastic & Roasting)",
                 "👨 Mohan (Telugu Creator / Anchor) - Natural Spoken Delivery",
                 "🤖 Clone My Voice with AI (Local XTTS-v2 / OmniVoice)",
                 "🎙️ Use My Own Voice Recording (Upload Audio)",
@@ -2980,6 +2981,8 @@ with st.container():
             ]
         else:
             voice_options = [
+                "👩 Shruti (Telugu Creator / Anchor) - Conversational",
+                "🔥 👩 Shruti (Telugu Female - Sarcastic & Roasting)",
                 "👨 Adam (Male Creator) - Fast, Crisp & Natural",
                 "👩 Heart (Female Creator) - Smooth & Conversational",
                 "👨 Michael (News Anchor) - Professional & Authoritative",
@@ -2988,7 +2991,6 @@ with st.container():
                 "🤖 Clone My Voice with AI (Local XTTS-v2 / OmniVoice)",
                 "🎙️ Use My Own Voice Recording (Upload Audio)",
                 "👨 Mohan (Telugu Creator / Anchor) - Natural Spoken Delivery",
-                "👩 Shruti (Telugu Creator / Anchor) - Conversational",
                 "👨 Madhur (Hindi Male Anchor) - Edge-TTS (Fallback)",
                 "👩 Swara (Hindi Female Anchor) - Edge-TTS (Fallback)",
             ]
@@ -3673,7 +3675,7 @@ with st.container():
                                 language_style=language_style,
                                 voice=voice,
                                 voice_sample=active_voice_sample,
-                                captions=captions,
+                                captions=True if aspect_ratio == "9:16" else captions,
                                 thumbnail=thumbnail,
                                 metadata=metadata,
                                 youtube_upload=youtube_upload,

@@ -497,7 +497,7 @@ def cmd_stop():
     free_port_if_in_use(port)
 
     try:
-        subprocess.run(["pkill", "-f", "streamlit run.*app.py"], capture_output=True)
+        subprocess.run(["pkill", "-f", "streamlit run.*(app|dashboard)\.py"], capture_output=True)
         subprocess.run(["pkill", "-f", "tunnel_runner.py"], capture_output=True)
         subprocess.run(["pkill", "-f", "ngrok http"], capture_output=True)
         subprocess.run(["pkill", "-f", "cloudflared tunnel"], capture_output=True)
@@ -518,7 +518,7 @@ def main():
     parser.add_argument("--foreground", action="store_true", help="Run supervisor attached in terminal for debugging")
     parser.add_argument("--run-supervisor", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--port", type=int, default=8501, help="Streamlit port (default: 8501)")
-    parser.add_argument("--mode", type=str, default="auto", choices=["auto", "ngrok", "cloudflare-named", "cloudflare-quick"], help="Tunnel mode")
+    parser.add_argument("--mode", type=str, default="cloudflare-quick", choices=["cloudflare-quick", "cloudflare-named", "ngrok", "auto"], help="Tunnel mode (default: cloudflare-quick)")
     args = parser.parse_args()
 
     if args.start:

@@ -71,10 +71,9 @@ def get_client():
 
 
 MODELS = [
-    "gemini-flash-lite-latest",
     "gemini-3.5-flash-lite",
-    "gemini-flash-latest",
-    "gemini-pro-latest",
+    "gemini-3.1-flash-lite",
+    "gemini-3.8-flash",
 ]
 
 
@@ -88,10 +87,10 @@ def _call_gemini_with_retry(contents, model, max_retries=2):
     active_client = get_client()
 
     for attempt in range(1, max_retries + 1):
+        ex = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         try:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
-                fut = ex.submit(active_client.models.generate_content, model=model, contents=contents)
-                return fut.result(timeout=18.0)
+            fut = ex.submit(active_client.models.generate_content, model=model, contents=contents)
+            return fut.result(timeout=18.0)
         except Exception as error:
             err_str = str(error)
             is_quota_err = "429" in err_str or "RESOURCE_EXHAUSTED" in err_str or "503" in err_str or "UNAVAILABLE" in err_str
@@ -122,11 +121,13 @@ def _call_gemini_with_retry(contents, model, max_retries=2):
                 )
                 time.sleep(backoff)
                 try:
-                    client = genai.Client(api_key=API_KEY)
+                    active_client = genai.Client(api_key=API_KEY)
                 except Exception:
                     pass
                 continue
             raise
+        finally:
+            ex.shutdown(wait=False)
 
 
 
@@ -160,17 +161,27 @@ def clean_response(text):
 # DYNAMIC 4-ACTION OUTRO CALLS TO ACTION (LIKE, SUBSCRIBE, SHARE, COMMENT)
 # ============================================================
 
-TELUGU_DYNAMIC_CTAS = [
+TELUGU_BIGG_BOSS_CTAS = [
     "నెక్స్ట్ ఎవరి ఎలిమినేషన్ జరుగుతుందో కామెంట్ చేయండి! మరిన్ని క్రేజీ అప్‌డేట్స్ కోసం లైక్, షేర్, సబ్‌స్క్రైబ్ చేసుకోండి!",
-    "ఈ ట్విస్ట్‌పై మీ అభిప్రాయాన్ని కామెంట్లో చెప్పండి! జెన్యూన్ కంటెంట్ కోసం వెంటనే లైక్, షేర్, సబ్‌స్క్రైబ్ చేసుకోండి బాస్!",
     "హౌస్‌లో ఎవరి గేమ్ మీకు నచ్చిందో కింద కామెంట్ చేసి, లైక్, షేర్, సబ్‌స్క్రైబ్‌తో మన ఛానల్‌కి సపోర్ట్ చేయండి!",
-    "ఈ సినిమా లేదా ట్విస్ట్‌పై మీరేమనుకుంటున్నారో కామెంట్ బాక్స్‌లో రాసి, ఇప్పుడే లైక్, షేర్, సబ్‌స్క్రైబ్ చేసుకోండి!",
-    "మీరు ఎవరికి సపోర్ట్ చేస్తున్నారో కామెంట్లో చెప్పండి! లేటెస్ట్ వైరల్ అప్‌డేట్స్ కోసం లైక్, షేర్, సబ్‌స్క్రైబ్ చేయండి!",
+    "మీరు ఈ వారం ఎవరికి ఓట్ వేస్తున్నారో కామెంట్లో చెప్పండి! లేటెస్ట్ వైరల్ అప్‌డేట్స్ కోసం లైక్, షేర్, సబ్‌స్క్రైబ్ చేయండి!",
+]
+
+TELUGU_CINEMA_ROAST_CTAS = [
+    "ఈ వీడియో లేదా రోస్ట్‌పై మీరేమనుకుంటున్నారో కింద కామెంట్ చేసి, లైక్, షేర్ మరియు సబ్‌స్క్రైబ్ చేసుకోండి!",
+    "ఈ టాపిక్‌పై మీ అభిప్రాయాన్ని కామెంట్లో చెప్పండి! జెన్యూన్ కంటెంట్ కోసం వెంటనే లైక్, షేర్, సబ్‌స్క్రైబ్ చేసుకోండి బాస్!",
     "బాస్, మీ ఒపీనియన్ ఏంటో కింద కామెంట్ చేసి, లైక్ గుద్ది, ఫ్రెండ్స్‌కి షేర్ కొట్టి, వెంటనే సబ్‌స్క్రైబ్ చేసుకోండి!",
-    "దీనిపై మీ ఆలోచన కింద కామెంట్ చేయండి! నెక్స్ట్ లెవెల్ వీడియోల కోసం లైక్, షేర్, సబ్‌స్క్రైబ్ చేసుకోవడం మర్చిపోకండి!",
-    "ఈ కాంట్రవర్సీపై మీరేమంటారో కామెంట్ చేయండి! డైలీ ఎంటర్‌టైన్‌మెంట్ కోసం లైక్, షేర్, సబ్‌స్క్రైబ్ చేయండి బాస్!",
     "కంటెంట్ కిక్ ఇస్తే కామెంట్ బాక్స్‌లో చెప్పండి, లైక్ వేసి, ఫ్రెండ్స్‌కి షేర్ చేసి, వెంటనే సబ్‌స్క్రైబ్ చేసుకోండి!",
     "మీ ఒపీనియన్ కామెంట్ చేసి, లైక్, షేర్ మరియు సబ్‌స్క్రైబ్‌తో మన viral talks ఛానల్‌ని ఫుల్ సపోర్ట్ చేయండి బాస్!",
+]
+
+TELUGU_DYNAMIC_CTAS = [
+    "ఈ టాపిక్‌పై మీ అభిప్రాయాన్ని కామెంట్లో చెప్పండి! జెన్యూన్ కంటెంట్ కోసం వెంటనే లైక్, షేర్, సబ్‌స్క్రైబ్ చేసుకోండి బాస్!",
+    "బాస్, మీ ఒపీనియన్ ఏంటో కింద కామెంట్ చేసి, లైక్ గుద్ది, ఫ్రెండ్స్‌కి షేర్ కొట్టి, వెంటనే సబ్‌స్క్రైబ్ చేసుకోండి!",
+    "దీనిపై మీ ఆలోచన కింద కామెంట్ చేయండి! నెక్స్ట్ లెవెల్ వీడియోల కోసం లైక్, షేర్, సబ్‌స్క్రైబ్ చేసుకోవడం మర్చిపోకండి!",
+    "ఈ వీడియో నచ్చితే కామెంట్ బాక్స్‌లో చెప్పండి, లైక్ వేసి, ఫ్రెండ్స్‌కి షేర్ చేసి, వెంటనే సబ్‌స్క్రైబ్ చేసుకోండి!",
+    "కంటెంట్ కిక్ ఇస్తే కామెంట్ బాక్స్‌లో చెప్పండి, లైక్ వేసి, ఫ్రెండ్స్‌కి షేర్ చేసి, వెంటనే సబ్‌స్క్రైబ్ చేసుకోండి!",
+    "మీ ఒపీనియన్ కామెంట్ చేసి, లైక్, షేర్ మరియు సబ్‌స్క్రైబ్‌తో మన ఛానల్‌ని ఫుల్ సపోర్ట్ చేయండి బాస్!",
 ]
 
 ENGLISH_DYNAMIC_CTAS = [
@@ -268,32 +279,26 @@ def ensure_dynamic_outro_cta(script: str, topic: str = "", is_indic: bool = True
     cta_pool = TELUGU_DYNAMIC_CTAS if is_indic else ENGLISH_DYNAMIC_CTAS
     t_low = str(topic or "").lower()
     from utils.season_guard import is_bigg_boss_topic
-    if is_indic and is_bigg_boss_topic(topic):
-        chosen_cta = rng.choice([
-            "నెక్స్ట్ ఎవరి ఎలిమినేషన్ జరుగుతుందో కామెంట్ చేయండి! మరిన్ని క్రేజీ అప్‌డేట్స్ కోసం లైక్, షేర్, సబ్‌స్క్రైబ్ చేసుకోండి!",
-            "హౌస్‌లో ఎవరి గేమ్ మీకు నచ్చిందో కింద కామెంట్ చేసి, లైక్, షేర్, సబ్‌స్క్రైబ్‌తో మన ఛానల్‌కి సపోర్ట్ చేయండి!",
-            "మీరు ఈ వారం ఎవరికి ఓట్ వేస్తున్నారో కామెంట్లో చెప్పండి! లేటెస్ట్ వైరల్ అప్‌డేట్స్ కోసం లైక్, షేర్, సబ్‌స్క్రైబ్ చేయండి!",
-        ])
-    elif is_indic and any(k in t_low for k in ["movie", "cinema", "film", "teaser", "trailer", "review"]):
-        chosen_cta = rng.choice([
-            "ఈ సినిమా లేదా ట్విస్ట్‌పై మీరేమనుకుంటున్నారో కామెంట్ బాక్స్‌లో రాసి, ఇప్పుడే లైక్, షేర్, సబ్‌స్క్రైబ్ చేసుకోండి!",
-            "ఈ మూవీపై మీ అభిప్రాయాన్ని కామెంట్లో చెప్పండి! జెన్యూన్ కంటెంట్ కోసం వెంటనే లైక్, షేర్, సబ్‌స్క్రైబ్ చేసుకోండి బాస్!",
-        ])
+    if is_indic:
+        if is_bigg_boss_topic(topic):
+            chosen_cta = rng.choice(TELUGU_BIGG_BOSS_CTAS)
+        elif any(k in t_low for k in ["movie", "cinema", "film", "teaser", "trailer", "review", "prabhas", "actor", "hero", "star", "roast", "food", "lifestyle", "tollywood", "drama"]):
+            chosen_cta = rng.choice(TELUGU_CINEMA_ROAST_CTAS)
+        else:
+            chosen_cta = rng.choice(TELUGU_DYNAMIC_CTAS)
     else:
-        chosen_cta = rng.choice(cta_pool)
+        chosen_cta = rng.choice(ENGLISH_DYNAMIC_CTAS)
 
-    # Check if the very last sentence already has all three keywords
-    last_sents = [s.strip() for s in re.split(r"(?<=[.!?।])\s+", lines[-1]) if s.strip()]
-    if last_sents:
-        last_sent = last_sents[-1]
-        last_sent_lower = last_sent.lower()
-        has_all_three = (
-            ("లైక్" in last_sent_lower and "షేర్" in last_sent_lower and "సబ్‌స్క్రైబ్" in last_sent_lower)
-            if is_indic else
-            ("like" in last_sent_lower and "share" in last_sent_lower and "subscribe" in last_sent_lower)
-        )
-        if has_all_three and len(last_sent.split()) <= 20:
-            return "\n".join(lines)
+    # Check if the last line or sentence already contains like & subscribe keywords
+    last_block = " ".join(lines[-2:]).lower() if len(lines) >= 2 else lines[-1].lower()
+    has_existing_cta = (
+        ("లైక్" in last_block and "సబ్‌స్క్రైబ్" in last_block)
+        if is_indic else
+        ("like" in last_block and "subscribe" in last_block)
+    )
+    if has_existing_cta:
+        # Script already has a clean CTA; do not append a redundant outro
+        return "\n".join(lines)
 
     tel_kws = ["లైక్", "సబ్‌స్క్రైబ్", "షేర్", "కామెంట్"]
     eng_kws = ["like", "subscribe", "share", "comment"]
@@ -652,11 +657,16 @@ def build_structured_visual_plan(sections, visual_plan, topic: str = ""):
         else:
             consecutive_entity_count = 1
 
-        if consecutive_entity_count > 2 and is_bb:
-            # Rotate to an active housemate, host, or house interior to prevent repetitive visuals!
+        # Anti-Monotony Rotation: Only rotate if the sentence does NOT explicitly name this contestant!
+        explicitly_named = False
+        if primary_entity:
+            first_n = primary_entity.lower().split()[0]
+            explicitly_named = (first_n in narr_lower) or any(t in narr for t in ["త్రిగుణ్", "అమన్", "సుధీర్", "వంశీ", "నాగార్జున", "ఝాన్సీ", "రోహిత్"])
+
+        if consecutive_entity_count > 2 and is_bb and not explicitly_named:
+            # Rotate to a generic house reaction or house interior, never invent a wrong contestant!
             rotation_candidates = [
-                "Temper Vamsi", "Thrigun Eswaran", "Aman Masud", "Sudheer Reddy",
-                "Auto Ram Prasad", "Nagarjuna Akkineni", "Bigg Boss Telugu 10 Living Room"
+                "Bigg Boss Telugu 10 Living Room", "Bigg Boss Telugu 10 House", "Nagarjuna Akkineni"
             ]
             for cand in rotation_candidates:
                 if cand.lower() != primary_entity.lower():
@@ -2749,7 +2759,7 @@ CRITICAL VIRALITY RULES:
 ============================================================
 Host: Akkineni Nagarjuna
 Official Season 10 Active Housemates:
-- Vamsi Krishna (Temper Vamsi - MUST spell in Telugu as టెంపర్ వంశీ, NEVER టెప్పర్!) [CURRENT CAPTAIN THIS WEEK!]
+- Vamsi Krishna (Temper Vamsi) [CURRENT CAPTAIN THIS WEEK!]
 - Thrigun Eswaran (Actor Thrigun / Adith Arun)
 - Aman Masud (Actor)
 - Sudheer Reddy (Sudheer Talks YouTuber / Sudheer)
@@ -2763,9 +2773,6 @@ Official Season 10 Active Housemates:
 - Swetha
 - Neethu Natraj
 CRITICAL GROUND TRUTH: THIS WEEK NO ELIMINATION! Temper Vamsi is the current Captain.
-CRITICAL FORMAT RULES:
-- Include ONLY ONE clear Call to Action (CTA) at the very end. NEVER repeat CTA twice!
-- Focus exclusively on active housemates! DO NOT mention past evicted contestants unless specifically reviewing past episodes.
 
 Eliminated Contestants:
 - Rohit Patnam (Rohit Naidu Patnam) [ELIMINATED / EVICTED - NO LONGER IN HOUSE!]

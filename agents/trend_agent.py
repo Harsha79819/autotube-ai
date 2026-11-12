@@ -1346,11 +1346,9 @@ Candidates:
 
         text = ""
         for model_name in [
-            "gemini-flash-lite-latest",
-            "gemini-flash-latest",
-            "gemini-3.5-flash-lite",
             "gemini-3.8-flash",
-            "gemini-pro-latest",
+            "gemini-3.5-flash-lite",
+            "gemini-3.1-flash-lite",
         ]:
             try:
                 response = client.models.generate_content(

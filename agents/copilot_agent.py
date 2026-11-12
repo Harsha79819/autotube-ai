@@ -21,11 +21,9 @@ FAILED_QUEUE_DIR = ROOT / "failed_queue"
 API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 
 MODELS = [
-    "gemini-2.5-flash",
-    "gemini-2.0-flash",
-    "gemini-1.5-flash",
-    "gemini-2.0-flash-lite",
-    "gemini-flash-lite-latest",
+    "gemini-3.8-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite",
 ]
 
 _client = None

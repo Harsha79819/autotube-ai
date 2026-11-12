@@ -49,6 +49,11 @@ def prepare_script_for_tts(raw_text: str) -> str:
     pacing sounds completely natural, fluent, and human-like."""
     text = str(raw_text or "").strip()
 
+    # Strip script formatting headers and labels (e.g., NARRATION:, SECTION 1 | VISUAL 1)
+    text = re.sub(r"(?i)^SECTION\s*\d+\s*(?:\|\s*VISUAL\s*\d+)?\s*", "", text, flags=re.MULTILINE)
+    text = re.sub(r"(?i)^\s*NARRATION:\s*", "", text, flags=re.MULTILINE)
+    text = re.sub(r"(?i)\bNARRATION:\s*", "", text)
+
     # Ensure native Telugu script (తెలుగు లిపి) if Romanized Tanglish is detected
     try:
         from utils.transliterate_telugu import ensure_telugu_script
@@ -158,6 +163,27 @@ def prepare_script_for_tts(raw_text: str) -> str:
     text = re.sub(r"\s*--\s*", " — ", text)
     text = re.sub(r"(?:\s*\.\s*){3,}", " ... ", text)
     text = re.sub(r"\s+", " ", text).strip()
+
+    # Deduplicate repeated consecutive words or 2-word phrases (e.g. 'నరేష్ నరేష్' -> 'నరేష్', 'పొట్టి నరేష్ పొట్టి నరేష్' -> 'పొట్టి నరేష్')
+    words = text.split()
+    deduped_words = []
+    w_idx = 0
+    while w_idx < len(words):
+        w = words[w_idx]
+        clean_w = re.sub(r"[,;!?.—–-]", "", w)
+        if deduped_words and clean_w and clean_w == re.sub(r"[,;!?.—–-]", "", deduped_words[-1]):
+            w_idx += 1
+            continue
+        if w_idx + 1 < len(words) and len(deduped_words) >= 2:
+            p1 = re.sub(r"[,;!?.—–-]", "", deduped_words[-2]) + " " + re.sub(r"[,;!?.—–-]", "", deduped_words[-1])
+            p2 = clean_w + " " + re.sub(r"[,;!?.—–-]", "", words[w_idx + 1])
+            if p1 == p2:
+                w_idx += 2
+                continue
+        deduped_words.append(w)
+        w_idx += 1
+    text = " ".join(deduped_words)
+
     return text
 
 
@@ -591,8 +617,12 @@ async def generate_modulated_telugu_speech(
     if not beats_text and sm_file.exists():
         try:
             sm_raw = sm_file.read_text(encoding="utf-8")
-            parts = re.split(r"SECTION \d+ \| VISUAL \d+\n", sm_raw)
-            beats_text = [p.strip() for p in parts if p.strip()]
+            parts = re.split(r"SECTION \d+ \| VISUAL \d+\n?", sm_raw)
+            for p in parts:
+                clean_p = re.sub(r"(?i)^\s*NARRATION:\s*", "", p).strip()
+                clean_p = re.sub(r"[*_#`~]", "", clean_p)
+                if clean_p:
+                    beats_text.append(clean_p)
         except Exception:
             pass
 

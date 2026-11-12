@@ -53,6 +53,7 @@ def make_tts_text(text):
         return ""
 
     if re.search(r"[\u0C00-\u0C7F]", text):
+        text = re.sub(r"[*_#`~\[\]]", "", text)
         try:
             from edge_tts_generator import prepare_script_for_tts
             text = prepare_script_for_tts(text)
@@ -287,11 +288,6 @@ def make_tts_text(text):
             "three thousand three hundred and ten crore rupees",
         "crore rupees": "crore rupees",
         "crorerupees": "crore rupees",
-        "టెప్పర్ వంశీ": "టెంపర్ వంశీ",
-        "టెప్పర్": "టెంపర్",
-        "ఆటో ర్యామ్": "ఆటో రామ్",
-        "దేబ్జాని": "డెబ్‌జానీ",
-        "నీతు నట్రాజ్": "నీతూ నట్రాజ్",
     }
 
     for old, new in pronunciation_replacements.items():

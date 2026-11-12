@@ -119,6 +119,54 @@ class EntityBank:
                     ent.cutouts[exp] = p
             self.entities[ent.slug] = ent
 
+        # Also register known contestants from data/contestants.json and data/bb10_contestants.py
+        try:
+            from data.bb10_contestants import CONTESTANTS_BB10
+            for slug, cdata in CONTESTANTS_BB10.items():
+                if slug in self.entities:
+                    existing = self.entities[slug]
+                    existing.aliases = list(set(existing.aliases + cdata.get("aliases", [])))
+                    existing.block = list(set(existing.block + [b.lower() for b in cdata.get("negative_tokens", [])]))
+                    continue
+                display = cdata.get("full_name") or slug.replace("_", " ").title()
+                ent = Entity(
+                    slug=slug,
+                    display_name=display,
+                    folder=self.root / slug,
+                    aliases=cdata.get("aliases", []),
+                    show="bigg_boss_telugu",
+                    season=10,
+                    accent="#FFC400",
+                    block=[b.strip().lower() for b in cdata.get("negative_tokens", []) if b],
+                )
+                self.entities[slug] = ent
+        except Exception as exc:
+            pass
+
+        try:
+            cj_path = ROOT / "data" / "contestants.json"
+            if cj_path.exists():
+                c_json = json.loads(cj_path.read_text(encoding="utf-8"))
+                for slug, cdata in c_json.items():
+                    if slug in self.entities:
+                        existing = self.entities[slug]
+                        existing.aliases = list(set(existing.aliases + cdata.get("search_terms", [])))
+                        continue
+                    display = cdata.get("full_name") or slug.replace("_", " ").title()
+                    ent = Entity(
+                        slug=slug,
+                        display_name=display,
+                        folder=self.root / slug,
+                        aliases=cdata.get("search_terms", []),
+                        show="bigg_boss_telugu",
+                        season=10,
+                        accent="#FFC400",
+                        block=[b.strip().lower() for b in cdata.get("negative_tokens", []) if b],
+                    )
+                    self.entities[slug] = ent
+        except Exception as exc:
+            pass
+
         index: List[Tuple[str, str]] = []
         for ent in self.entities.values():
             names = {ent.display_name, ent.folder.name.replace("_", " ")} | set(ent.aliases)

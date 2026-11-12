@@ -31,11 +31,9 @@ except ImportError:
             return os.getenv("GEMINI_API_KEY", "")
 
 ACTIVE_MODELS = [
-    "gemini-flash-lite-latest",
+    "gemini-3.5-flash-lite",
     "gemini-3.1-flash-lite",
-    "gemini-flash-latest",
-    "gemini-3.5-flash",
-    "gemini-3.6-flash",
+    "gemini-3.8-flash",
 ]
 
 OPENAI_MODELS = [
@@ -69,10 +67,10 @@ def call_gemini(prompt: str, api_key: str = None) -> tuple[str, str]:
 
     for model_name in ACTIVE_MODELS:
         t0 = time.time()
+        ex = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         try:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
-                fut = ex.submit(client.models.generate_content, model=model_name, contents=prompt)
-                resp = fut.result(timeout=15.0)
+            fut = ex.submit(client.models.generate_content, model=model_name, contents=prompt)
+            resp = fut.result(timeout=15.0)
 
             text = ""
             try:
@@ -97,6 +95,8 @@ def call_gemini(prompt: str, api_key: str = None) -> tuple[str, str]:
                 print(f"⚠️ Gemini model {model_name} notice ({err_str[:80]}), trying next model...")
             last_err = err
             continue
+        finally:
+            ex.shutdown(wait=False)
 
     record_call("gemini", False, error=str(last_err))
     raise RuntimeError(f"Gemini cascade failed: {last_err}")

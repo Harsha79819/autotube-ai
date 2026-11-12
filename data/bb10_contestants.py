@@ -54,17 +54,17 @@ CONTESTANTS_BB10: Dict[str, Dict] = {
     "aman": {
         "full_name": "Aman Masud",
         "aliases": ["aman", "aman masud", "aman masood", "అమన్", "అమన్ మసూద్"],
-        "negative_tokens": ["verma", "nau", "hindi", "season 9"],
+        "negative_tokens": ["verma", "nau", "hindi", "season 9", "bangladesh", "bnp", "politician", "narayanganj", "bengali", "party", "press conference", "rally", "election", "dhaka", "masuduzzaman"],
     },
     "thrigun": {
         "full_name": "Thrigun Eswaran",
         "aliases": ["thrigun", "trigun", "thrigun eswaran", "త్రిగుణ్", "త్రిగుణ్ ఈశ్వరన్"],
-        "negative_tokens": [],
+        "negative_tokens": ["anime", "manga", "vash", "stampede", "badlands", "cartoon", "analysis of", "podcast", "review", "theme", "themes", "gun", "tri-gun"],
     },
     "temper vamsi": {
         "full_name": "Temper Vamsi",
         "aliases": ["temper vamsi", "vamsi", "టెంపర్ వంశీ", "వంశీ"],
-        "negative_tokens": [],
+        "negative_tokens": ["chiranjeevi", "balakrishna"],
         "is_captain": True,
     },
     "charan": {
@@ -77,7 +77,7 @@ CONTESTANTS_BB10: Dict[str, Dict] = {
     "sudheer": {
         "full_name": "Sudheer Reddy",
         "aliases": ["sudheer", "sudheer reddy", "sudheer talks", "సుధీర్", "సుధీర్ రెడ్డి"],
-        "negative_tokens": ["rashmi", "sudigali"],
+        "negative_tokens": ["rashmi", "sudigali", "kannada", "serial"],
     },
     "nagarjuna": {
         "full_name": "Akkineni Nagarjuna",
@@ -169,7 +169,10 @@ PAST_SEASONS_KNOWN_NAMES: List[str] = [
 
 IRRELEVANT_DOMAINS_AND_PATHS: List[str] = [
     "careers.", "/fashion/", "/lifestyle/", "/apparel/", "/clothing/",
-    "boutique", "etsy.com", "pinterest.com/pin/", "aliexpress"
+    "boutique", "etsy.com", "pinterest.com/pin/", "aliexpress",
+    "girlfriend", "dating", "companion", "ai-character", "aigirlfriend",
+    "adult", "erotic", "casino", "gambling", "betting", "game", "slot",
+    "software", "tutorial", "tool", "pricing", "free-trial"
 ]
 
 

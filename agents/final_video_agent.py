@@ -20,7 +20,7 @@ from supervisor import autonomous_recover
 
 @autonomous_recover("final_video_agent")
 def create_final_video(
-    add_captions=False,
+    add_captions=True,
     aspect_ratio="9:16",
     burn_captions=None,
     captions=None,
@@ -33,6 +33,8 @@ def create_final_video(
         add_captions = burn_captions
     elif captions is not None:
         add_captions = captions
+    elif aspect_ratio == "9:16":
+        add_captions = True
 
     if input_video is None:
         input_video = "output/video.mp4"
@@ -227,10 +229,10 @@ def create_final_video(
 
             if aspect_ratio == "9:16":
                 style = (
-                    f"force_style='FontName={font_family},FontSize=38,Bold=1,"
-                    "PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,"
-                    "BorderStyle=1,Outline=2.8,Shadow=1.5,Alignment=2,"
-                    "MarginV=360,MarginR=80,MarginL=80'"
+                    f"force_style='FontName={font_family},FontSize=42,Bold=1,"
+                    "PrimaryColour=&H0000FFFF,OutlineColour=&H00000000,"
+                    "BorderStyle=1,Outline=3.5,Shadow=1.5,Alignment=2,"
+                    "MarginV=240,MarginR=50,MarginL=50'"
                 )
             elif aspect_ratio == "16:9":
                 style = (
