@@ -103,25 +103,16 @@ chmod +x "$APP_DIR/scripts/auto_sync.sh" || true
 chmod +x "$APP_DIR/scripts/oracle_setup.sh" || true
 
 # Helper: autotube-url
-sudo tee /usr/local/bin/autotube-url > /dev/null << 'EOF'
+sudo tee /usr/local/bin/autotube-url > /dev/null << EOF
 #!/usr/bin/env bash
-URL_FILE="/home/ubuntu/autotube-ai/output/tunnel_url.txt"
-if [ ! -f "$URL_FILE" ]; then
-    # Look in relative directory
-    URL_FILE="$(dirname "$(readlink -f "$0")")/../output/tunnel_url.txt"
-fi
-
-# Fallback: search anywhere in app directory
-if [ ! -f "$URL_FILE" ]; then
-    URL_FILE=$(find /home -name "tunnel_url.txt" 2>/dev/null | head -n 1)
-fi
+URL_FILE="$APP_DIR/output/tunnel_url.txt"
 
 echo "======================================================================"
 echo "🌐 AUTOTUBE AI MOBILE ACCESS LINK"
 echo "======================================================================"
-if [ -f "$URL_FILE" ] && [ -s "$URL_FILE" ]; then
-    URL=$(cat "$URL_FILE")
-    echo -e "\n\033[1;32m👉 Mobile Link: $URL\033[0m\n"
+if [ -f "\$URL_FILE" ] && [ -s "\$URL_FILE" ]; then
+    URL=\$(cat "\$URL_FILE")
+    echo -e "\n\033[1;32m👉 Mobile Link: \$URL\033[0m\n"
     echo "Open this link in Safari/Chrome on your phone or tablet."
 else
     echo "Tunnel is initializing or URL file not found yet. Please check back in 10 seconds:"
