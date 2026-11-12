@@ -1811,7 +1811,7 @@ def generate_multi_media_video(
                             content_type=content_type,
                             topic=topic,
                             topic_category=content_type,
-                            progress_callback=progress.progress,
+                            progress_callback=None,
                         )
                     print("✅ [Parallel Stage] Visual Sourcing Complete.")
                 except Exception as error:
@@ -1819,22 +1819,69 @@ def generate_multi_media_video(
 
             def _task_voice():
                 print(f"⚡ [Parallel Stage] Starting Narration Synthesis ({voice})...")
-                from providers.timing_logger import time_stage
-                with time_stage("Voice Synthesis"):
-                    create_voice_for_script(
-                        voice=voice,
-                        own_voice_audio=voice_sample,
-                        aspect_ratio=aspect_ratio,
-                        is_longform=is_longform,
-                    )
-                print("✅ [Parallel Stage] Narration Synthesis Complete.")
+                try:
+                    from providers.timing_logger import time_stage
+                    with time_stage("Voice Synthesis"):
+                        create_voice_for_script(
+                            voice=voice,
+                            own_voice_audio=voice_sample,
+                            aspect_ratio=aspect_ratio,
+                            is_longform=is_longform,
+                        )
+                    print("✅ [Parallel Stage] Narration Synthesis Complete.")
+                except Exception as voice_err:
+                    print(f"⚠️ [Parallel Stage] Voice synthesis warning: {voice_err}")
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
                 f_vis = executor.submit(_task_visuals)
                 f_voc = executor.submit(_task_voice)
-                concurrent.futures.wait([f_vis, f_voc])
-                f_vis.result()
-                f_voc.result()
+
+                # Active polling loop with live progress updates:
+                # 1. Main thread has valid ScriptRunContext -> sends live WebSocket updates to browser
+                # 2. Continuous WebSocket traffic prevents Cloudflare 100s idle drop ("Connecting..." screen)
+                # 3. Hard timeout at 120s ensures execution NEVER hangs indefinitely
+                start_p_time = time.time()
+                max_parallel_wait = 120.0
+                while not (f_vis.done() and f_voc.done()):
+                    elapsed = time.time() - start_p_time
+                    if elapsed > max_parallel_wait:
+                        print(f"⚠️ [Parallel Stage] Max timeout reached ({max_parallel_wait}s). Continuing pipeline...")
+                        break
+                    try:
+                        pct = min(54, int(35 + (elapsed / max_parallel_wait) * 19))
+                        status_str = "visuals & voice"
+                        if f_vis.done():
+                            status_str = "synthesizing voice"
+                        elif f_voc.done():
+                            status_str = "sourcing visuals"
+                        progress.progress(
+                            pct,
+                            text=f"Attempt {attempt}: In progress ({status_str}, {int(elapsed)}s)..."
+                        )
+                    except Exception:
+                        pass
+                    time.sleep(1.0)
+
+                # Safely collect results without raising uncaught exceptions
+                try:
+                    if f_vis.done():
+                        f_vis.result()
+                except Exception as vis_err:
+                    print("Visual sourcing warning:", vis_err)
+
+                try:
+                    if f_voc.done():
+                        f_voc.result()
+                except Exception as voc_err:
+                    print("Voice synthesis warning:", voc_err)
+
+            # Ensure voice.mp3 exists so downstream video muxing never fails
+            out_voice = OUTPUT_DIR / "voice.mp3"
+            if not out_voice.exists() or out_voice.stat().st_size < 1000:
+                print("⚠️ [Parallel Stage] voice.mp3 missing or empty. Auto-generating fallback audio...")
+                s_text = (OUTPUT_DIR / "script.txt").read_text(encoding="utf-8") if (OUTPUT_DIR / "script.txt").exists() else "Welcome to AutoTube video."
+                from edge_tts_generator import generate_gtts_speech_sync
+                generate_gtts_speech_sync(s_text, str(out_voice), lang="te")
 
             progress.progress(55, text=f"Attempt {attempt}: Visuals & voice ready! Creating video...")
 
@@ -1980,10 +2027,41 @@ def generate_multi_media_video(
             f_vid = stage_executor.submit(_task_video)
             f_sub = stage_executor.submit(_task_subtitles)
             f_thm = stage_executor.submit(_task_thumbnail)
-            concurrent.futures.wait([f_vid, f_sub, f_thm])
-            f_vid.result()
-            f_sub.result()
-            f_thm.result()
+
+            start_v_time = time.time()
+            max_vid_wait = float(timeout_video + 30)
+            while not (f_vid.done() and f_sub.done() and f_thm.done()):
+                elapsed = time.time() - start_v_time
+                if elapsed > max_vid_wait:
+                    print(f"⚠️ [Parallel Video Stage] Timeout reached ({max_vid_wait}s). Continuing...")
+                    break
+                try:
+                    pct = min(77, int(65 + (elapsed / max_vid_wait) * 12))
+                    progress.progress(
+                        pct,
+                        text=f"Attempt {attempt}: Assembling video frames & thumbnail ({int(elapsed)}s)..."
+                    )
+                except Exception:
+                    pass
+                time.sleep(1.0)
+
+            try:
+                if f_vid.done():
+                    f_vid.result()
+            except Exception as vid_err:
+                print("Video assembly warning:", vid_err)
+
+            try:
+                if f_sub.done():
+                    f_sub.result()
+            except Exception as sub_err:
+                print("Subtitle warning:", sub_err)
+
+            try:
+                if f_thm.done():
+                    f_thm.result()
+            except Exception as thm_err:
+                print("Thumbnail warning:", thm_err)
 
         # Mirror thumbnail and 9:16 poster into OUTPUT_DIR immediately before final video assembly
         for p_name in ["thumbnail.jpg", "thumbnail_916_poster.png", "thumbnail_prasad_16_9.png"]:

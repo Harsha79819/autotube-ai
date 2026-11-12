@@ -1434,9 +1434,23 @@ async def create_voice(
             )
             used_mode = f"Edge-TTS ({edge_voice_id})"
         except Exception as edge_err:
-            print(f"⚠️ Edge-TTS notice: {edge_err}. Attempting fast local fallback...")
+            print(f"⚠️ Edge-TTS notice: {edge_err}. Attempting gTTS neural fallback...")
             fb_done = False
-            if sys.platform == "darwin":
+            try:
+                from edge_tts_generator import generate_gtts_speech_sync
+                lang = "te" if is_telugu_text else ("hi" if is_hindi_text else "en")
+                generate_gtts_speech_sync(speech_text, output_mp3, lang=lang)
+                if os.path.exists(output_mp3) and os.path.getsize(output_mp3) > 1000:
+                    subprocess.run(
+                        ["ffmpeg", "-y", "-i", output_mp3, "-ar", "24000", "-ac", "1", "-avoid_negative_ts", "make_zero", output_wav],
+                        check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                    )
+                    used_mode = f"gTTS Fallback ({lang})"
+                    fb_done = True
+            except Exception as g_err:
+                print(f"gTTS fallback note: {g_err}")
+
+            if not fb_done and sys.platform == "darwin":
                 chosen_voice = "Geeta" if is_telugu_text else ("Lekha" if is_hindi_text else "Rishi")
                 temp_aiff = "output/temp_system_fallback.aiff"
                 try:
