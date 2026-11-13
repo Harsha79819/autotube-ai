@@ -308,8 +308,31 @@ def create_final_video(
     final_timeout = int(max(420, in_dur * 2.5))
 
     try:
-        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=final_timeout)
-        if result.returncode == 0 and os.path.exists(output_video) and os.path.getsize(output_video) > 1000:
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            universal_newlines=True,
+        )
+        last_log = 0
+        out_lines = []
+        st_proc = time.time()
+        for line in proc.stdout:
+            out_lines.append(line)
+            if len(out_lines) > 50:
+                out_lines.pop(0)
+            now = time.time()
+            if now - st_proc > final_timeout:
+                proc.kill()
+                raise TimeoutError(f"Final assembly timed out after {final_timeout}s")
+            if "frame=" in line and now - last_log >= 2.5:
+                last_log = now
+                print(f"🎬 [Final Assembly Progress] {line.strip()}", flush=True)
+
+        proc.wait(timeout=15)
+        if proc.returncode == 0 and os.path.exists(output_video) and os.path.getsize(output_video) > 1000:
             if include_outro and not is_shorts:
                 from agents.video_agent import append_outro
                 outro_path = outro_clip or "assets/outro/like_subscribe_share_comment.mp4"
@@ -327,7 +350,8 @@ def create_final_video(
             print("=" * 60)
             return output_video
         else:
-            print(f"⚠️ FFmpeg final assembly notice: {result.stdout[:200] if result else ''}. Trying clean fallback...")
+            err_snip = "".join(out_lines)
+            print(f"⚠️ FFmpeg final assembly notice: {err_snip[:200]}. Trying clean fallback...")
     except Exception as render_err:
         print(f"⚠️ FFmpeg final assembly exception: {render_err}. Trying clean fallback...")
 

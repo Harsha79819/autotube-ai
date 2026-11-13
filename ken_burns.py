@@ -318,10 +318,34 @@ def assemble_with_transitions(
     ]
 
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_calc)
-        if r.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+            universal_newlines=True,
+        )
+        last_progress_print = 0
+        err_lines = []
+        start_time_proc = time.time()
+        for line in proc.stderr:
+            err_lines.append(line)
+            if len(err_lines) > 50:
+                err_lines.pop(0)
+            now = time.time()
+            if now - start_time_proc > timeout_calc:
+                proc.kill()
+                raise TimeoutError(f"xfade assembly timed out after {timeout_calc}s")
+            if "frame=" in line and now - last_progress_print >= 2.0:
+                last_progress_print = now
+                print(f"🎬 [FFmpeg Assembly] {line.strip()}", flush=True)
+
+        proc.wait(timeout=15)
+        if proc.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+            print("✅ [FFmpeg Assembly] Successfully assembled scene transitions!")
             return str(output_path)
-        err_msg = r.stderr or "xfade transition assembly failed"
+        err_msg = "".join(err_lines) or "xfade transition assembly failed"
         print(f"⚠️ Warning: xfade assembly failed ({err_msg[:200]}...). Falling back to concat demuxer.")
     except Exception as e:
         print(f"⚠️ Warning: Exception during xfade assembly: {e}. Falling back to concat demuxer.")
