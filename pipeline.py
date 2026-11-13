@@ -2011,10 +2011,11 @@ def generate_multi_media_video(
                 except Exception as th_err:
                     print(f"⚠️ Thumbnail parallel task notice: {th_err}")
 
+        target_dur_sec = getattr(profile, "target_seconds", 60.0) if "profile" in locals() else 60.0
+        timeout_video = int(max(420, target_dur_sec * 2.5))
+
         def _task_video():
             print("⚡ [Parallel Task] Starting Ken Burns Video Assembly...")
-            target_dur_sec = getattr(profile, "target_seconds", 60.0) if "profile" in locals() else 60.0
-            timeout_video = int(max(420, target_dur_sec * 2.5))
             run_stage_with_timeout(
                 "Ken Burns Video Assembly",
                 timeout_video,
