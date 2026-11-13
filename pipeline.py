@@ -1488,6 +1488,23 @@ def generate_multi_media_video(
                 elapsed_str = self.get_elapsed_str()
                 if text and not text.startswith("["):
                     text = f"[{elapsed_str}] {text}"
+
+                # Persist live status to disk so any browser session or mobile refresh sees it immediately!
+                try:
+                    status_data = {
+                        "status": "RUNNING",
+                        "topic": topic,
+                        "stage": text,
+                        "progress": val,
+                        "started_at": self.start_time,
+                        "updated_at": time.time(),
+                    }
+                    (OUTPUT_DIR / "pipeline_status.json").write_text(
+                        json.dumps(status_data, indent=2), encoding="utf-8"
+                    )
+                except Exception:
+                    pass
+
                 if self.callback:
                     try:
                         self.callback(val, text)
@@ -2746,6 +2763,21 @@ def generate_multi_media_video(
             print("📝 [Experiment Logger] Logged run safely to data/experiment_log.json")
     except Exception as exp_err:
         print(f"Experiment logger notice: {exp_err}")
+
+    try:
+        status_data = {
+            "status": "COMPLETED",
+            "topic": topic,
+            "stage": "🎉 Video Generation Complete!",
+            "progress": 100,
+            "video_file": str(OUTPUT_DIR / "final_video.mp4"),
+            "completed_at": time.time(),
+        }
+        (OUTPUT_DIR / "pipeline_status.json").write_text(
+            json.dumps(status_data, indent=2), encoding="utf-8"
+        )
+    except Exception:
+        pass
 
     return {
         "status": "APPROVED" if review_approved else "SKIPPED_UNPUBLISHED",

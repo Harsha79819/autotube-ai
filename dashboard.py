@@ -2456,6 +2456,47 @@ except Exception:
 
 
 # ============================================================
+# LIVE CLOUD PIPELINE STATUS MONITOR
+# ============================================================
+status_file = Path("output/pipeline_status.json")
+if status_file.exists():
+    try:
+        p_status = json.loads(status_file.read_text(encoding="utf-8"))
+        p_state = p_status.get("status", "IDLE")
+        if p_state == "RUNNING":
+            p_top = p_status.get("topic", "")
+            p_stage = p_status.get("stage", "Processing...")
+            p_pct = int(p_status.get("progress", 10))
+            p_start = float(p_status.get("started_at", time.time()))
+            p_elapsed = int(time.time() - p_start)
+
+            st.markdown(
+                f"""
+                <div style="background: rgba(6, 182, 212, 0.15); border: 1.5px solid #06B6D4; border-radius: 16px; padding: 1.25rem; margin: 1rem 0; box-shadow: 0 4px 20px rgba(6, 182, 212, 0.2);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <span style="font-weight: 700; color: #22D3EE; font-size: 1.1rem;">⚡ [GCP Cloud Active] Video Generation in Progress...</span>
+                        <span style="background: rgba(6, 182, 212, 0.25); color: #67E8F9; font-weight: 700; padding: 3px 10px; border-radius: 8px; font-size: 0.85rem;">{p_elapsed}s elapsed</span>
+                    </div>
+                    <div style="color: #F1F5F9; font-size: 0.95rem; margin-bottom: 6px;">
+                        <strong>Topic:</strong> {p_top}
+                    </div>
+                    <div style="color: #94A3B8; font-size: 0.88rem; margin-bottom: 12px;">
+                        <strong>Current Stage:</strong> {p_stage}
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+            st.progress(p_pct)
+            m_col1, m_col2 = st.columns([3, 1])
+            with m_col2:
+                if st.button("🔄 Refresh Live Progress", key="btn_refresh_live_prog", use_container_width=True):
+                    st.rerun()
+    except Exception:
+        pass
+
+
+# ============================================================
 # MAIN COLUMNS
 # ============================================================
 
@@ -3747,7 +3788,26 @@ with st.container():
     )
 
     raw_video = Path("output/video.mp4")
-    effective_video = final_video if final_video.exists() else (raw_video if raw_video.exists() else None)
+
+    # If output/final_video.mp4 doesn't exist or is empty, look in output/runs/ for the latest completed video!
+    if not (final_video.exists() and final_video.stat().st_size > 1000):
+        runs_dir = Path("output/runs")
+        if runs_dir.exists():
+            run_folders = sorted(runs_dir.glob("run_*"), key=os.path.getmtime, reverse=True)
+            for rf in run_folders:
+                cand = rf / "final_video.mp4"
+                if cand.exists() and cand.stat().st_size > 1000:
+                    final_video = cand
+                    cand_th = rf / "thumbnail.jpg"
+                    if cand_th.exists():
+                        thumbnail_file = cand_th
+                    try:
+                        shutil.copyfile(cand, Path("output/final_video.mp4"))
+                    except Exception:
+                        pass
+                    break
+
+    effective_video = final_video if (final_video.exists() and final_video.stat().st_size > 1000) else (raw_video if (raw_video.exists() and raw_video.stat().st_size > 1000) else None)
 
     if result or effective_video:
 
