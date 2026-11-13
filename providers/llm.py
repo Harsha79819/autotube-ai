@@ -121,26 +121,53 @@ def call_gemini(prompt: str, api_key: str = None) -> tuple[str, str]:
 
 
 def call_groq(prompt: str, api_key: str = None) -> tuple[str, str]:
-    """Call Groq API using Llama 3.3 70B (~320 tokens/sec, generous free tier)."""
+    """Call Groq API using Llama 3.3 70B (~320 tokens/sec, generous free tier). Supports direct REST fallback."""
     key = api_key or os.getenv("GROQ_API_KEY", "").strip()
     if not key:
         raise ValueError("GROQ_API_KEY is not configured.")
 
-    from groq import Groq
-    client = Groq(api_key=key)
+    client = None
+    try:
+        from groq import Groq
+        client = Groq(api_key=key)
+    except ImportError:
+        client = None
+
     last_err = None
 
     for model in GROQ_MODELS:
         t0 = time.time()
         try:
-            completion = client.chat.completions.create(
-                model=model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.7,
-                max_tokens=2500,
-            )
+            if client is not None:
+                completion = client.chat.completions.create(
+                    model=model,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.7,
+                    max_tokens=2500,
+                )
+                content = completion.choices[0].message.content or ""
+            else:
+                resp = requests.post(
+                    "https://api.groq.com/openai/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": model,
+                        "messages": [{"role": "user", "content": prompt}],
+                        "temperature": 0.7,
+                        "max_tokens": 2500,
+                    },
+                    timeout=25,
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    content = (data.get("choices", [{}])[0].get("message", {}).get("content") or "").strip()
+                else:
+                    raise RuntimeError(f"HTTP {resp.status_code}: {resp.text[:120]}")
+
             dur_ms = (time.time() - t0) * 1000
-            content = completion.choices[0].message.content or ""
             if content.strip():
                 record_call("groq", True, duration_ms=dur_ms)
                 return content.strip(), f"Groq ({model})"
@@ -298,7 +325,7 @@ def generate_text_cascade(prompt: str, api_key: str = None, step_name: str = "sc
     Enforces per-provider timeout (~35s) so a stalled provider fails over quickly
     rather than consuming the entire stage budget.
     """
-    configured_order = os.getenv("LLM_PROVIDER_ORDER", "gemini,openai,groq,ollama,pollinations,openrouter")
+    configured_order = os.getenv("LLM_PROVIDER_ORDER", "groq,gemini,openai,ollama,pollinations,openrouter")
     providers = [p.strip().lower() for p in configured_order.split(",") if p.strip()]
 
     provider_map = {

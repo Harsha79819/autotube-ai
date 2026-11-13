@@ -3081,6 +3081,27 @@ NARRATION: <narration strictly discussing this visual>
         except Exception as multi_err:
             print(f"Multi-candidate script generation notice: {multi_err}. Falling back to standard model loop...")
 
+    # Try prioritized multi-provider cascade first if configured order starts with groq or openai
+    configured_order = os.getenv("LLM_PROVIDER_ORDER", "groq,gemini,openai,ollama,pollinations,openrouter").strip().lower()
+    if configured_order.startswith("groq") or configured_order.startswith("openai"):
+        try:
+            from providers.llm import generate_text_cascade
+            c_raw = generate_text_cascade(prompt, step_name="script_agent_primary", per_provider_timeout=35.0)
+            c_clean = clean_response(c_raw)
+            if len(c_clean) >= 300:
+                c_script = _parse_and_save_package(c_clean, default_title=fallback_title)
+                if c_script:
+                    print()
+                    print("=" * 60)
+                    print("PRIORITY MULTI-PROVIDER CASCADE SCRIPT GENERATED SUCCESSFULLY")
+                    print("=" * 60)
+                    print()
+                    is_indic = bool(re.search(r"[\u0C00-\u0C7F]", c_script))
+                    c_script = ensure_dynamic_outro_cta(c_script, topic=topic, is_indic=is_indic)
+                    return _validate_and_remedy_script(c_script, topic, profile, content_type, fallback_title, india_directive)
+        except Exception as primary_cascade_err:
+            print(f"Primary cascade notice: {primary_cascade_err}. Continuing with standard model loop...")
+
     model_errors = []
 
     for model in MODELS:
