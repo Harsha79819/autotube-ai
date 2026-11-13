@@ -2083,14 +2083,20 @@ def generate_multi_media_video(
             ),
         )
 
+        timeout_final_stage = int(max(480, getattr(profile, "target_seconds", 60.0) * 3.0)) if "profile" in locals() else 480
         run_stage_with_timeout(
             "Final Video Assembly",
-            180,
+            timeout_final_stage,
             create_final_video,
             captions=captions,
             aspect_ratio=aspect_ratio,
             include_outro=include_outro,
         )
+
+        # Fallback promotion if final_video.mp4 wasn't written
+        if not (OUTPUT_DIR / "final_video.mp4").exists() and (OUTPUT_DIR / "video.mp4").exists():
+            print("⚡ [Pipeline Promotion] Promoting video.mp4 directly to final_video.mp4...")
+            shutil.copyfile(str(OUTPUT_DIR / "video.mp4"), str(OUTPUT_DIR / "final_video.mp4"))
 
         # Mirror current run outputs into run_dir
         import shutil

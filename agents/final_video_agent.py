@@ -283,8 +283,8 @@ def create_final_video(
         "-color_trc", "bt709",
         "-color_range", "tv",
         "-c:v", "libx264",
-        "-preset", "fast",
-        "-crf", "18",
+        "-preset", "veryfast",
+        "-crf", "19",
         "-pix_fmt", "yuv420p",
         "-c:a", "aac",
         "-b:a", "192k",
@@ -298,28 +298,41 @@ def create_final_video(
     print()
     print("Running FFmpeg Final Assembly...")
     print()
-    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=180)
 
-    if result.returncode == 0 and os.path.exists(output_video):
-        if include_outro and not is_shorts:
-            from agents.video_agent import append_outro
-            outro_path = outro_clip or "assets/outro/like_subscribe_share_comment.mp4"
-            if not os.path.exists(outro_path):
-                outro_path = "assets/outro/like_share_subscribe.mp4"
-            print("🎬 Appending 5-second Like, Subscribe, Share & Comment outro...")
-            append_outro(output_video, outro_clip_path=outro_path, output_path=output_video)
-        elif is_shorts and include_outro:
-            print("ℹ️ Shorts (9:16) strict retention: Outro omitted to maximize audience completion and loops.")
+    # Adaptive timeout based on input video duration
+    dur_probe = subprocess.run([
+        "ffprobe", "-v", "error", "-show_entries", "format=duration",
+        "-of", "default=nw=1:nk=1", input_video
+    ], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    in_dur = float(dur_probe.stdout.strip() or 60.0)
+    final_timeout = int(max(420, in_dur * 2.5))
 
-        print("=" * 60)
-        print("FINAL VIDEO CREATED!")
-        print(f"{target_w}x{target_h} ({aspect_ratio})")
-        print(output_video)
-        print("=" * 60)
-        return output_video
+    try:
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=final_timeout)
+        if result.returncode == 0 and os.path.exists(output_video) and os.path.getsize(output_video) > 1000:
+            if include_outro and not is_shorts:
+                from agents.video_agent import append_outro
+                outro_path = outro_clip or "assets/outro/like_subscribe_share_comment.mp4"
+                if not os.path.exists(outro_path):
+                    outro_path = "assets/outro/like_share_subscribe.mp4"
+                print("🎬 Appending 5-second Like, Subscribe, Share & Comment outro...")
+                append_outro(output_video, outro_clip_path=outro_path, output_path=output_video)
+            elif is_shorts and include_outro:
+                print("ℹ️ Shorts (9:16) strict retention: Outro omitted to maximize audience completion and loops.")
 
-    print("⚠️ FFmpeg final assembly notice. Trying clean fallback...")
+            print("=" * 60)
+            print("FINAL VIDEO CREATED!")
+            print(f"{target_w}x{target_h} ({aspect_ratio})")
+            print(output_video)
+            print("=" * 60)
+            return output_video
+        else:
+            print(f"⚠️ FFmpeg final assembly notice: {result.stdout[:200] if result else ''}. Trying clean fallback...")
+    except Exception as render_err:
+        print(f"⚠️ FFmpeg final assembly exception: {render_err}. Trying clean fallback...")
+
     if os.path.exists(input_video):
+        print(f"⚡ [Safety Fallback] Promoting {input_video} directly to {output_video}...")
         shutil.copyfile(input_video, output_video)
         return output_video
 
