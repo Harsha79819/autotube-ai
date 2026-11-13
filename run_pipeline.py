@@ -14,6 +14,21 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
+
+# Auto-re-exec into project virtualenv if executed with system python
+if not os.environ.get("_AUTOTUBE_VENV_ACTIVE"):
+    candidates = [
+        ROOT / ".venv" / "bin" / "python3",
+        ROOT / ".venv" / "bin" / "python",
+        ROOT / "venv" / "bin" / "python3",
+        ROOT / "venv" / "bin" / "python",
+    ]
+    for v_py in candidates:
+        if v_py.exists() and sys.executable != str(v_py.resolve()):
+            env = os.environ.copy()
+            env["_AUTOTUBE_VENV_ACTIVE"] = "1"
+            os.execve(str(v_py), [str(v_py)] + sys.argv, env)
+
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
