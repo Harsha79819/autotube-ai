@@ -56,11 +56,15 @@ API_KEY = get_gemini_api_key()
 client = genai.Client(api_key=API_KEY) if API_KEY else None
 
 
-def get_client():
-    """Lazily load or refresh the Gemini client from environment/secrets."""
+def get_client(rotate=False):
+    """Lazily load or refresh the Gemini client from environment/secrets with multi-key rotation support."""
     global client
-    if client is None:
-        key = get_gemini_api_key()
+    if client is None or rotate:
+        try:
+            from agents.env_loader import get_gemini_api_key, rotate_gemini_api_key
+            key = rotate_gemini_api_key() if rotate else get_gemini_api_key()
+        except Exception:
+            key = os.getenv("GEMINI_API_KEY", "")
         if not key:
             raise RuntimeError(
                 "GEMINI_API_KEY is not configured. "
@@ -94,8 +98,16 @@ def _call_gemini_with_retry(contents, model, max_retries=2):
             return fut.result(timeout=45.0)
         except Exception as error:
             err_str = str(error)
-            is_quota_err = "429" in err_str or "RESOURCE_EXHAUSTED" in err_str or "503" in err_str or "UNAVAILABLE" in err_str
+            is_quota_err = "429" in err_str or "402" in err_str or "RESOURCE_EXHAUSTED" in err_str or "503" in err_str or "UNAVAILABLE" in err_str
             if is_quota_err:
+                try:
+                    from agents.env_loader import get_all_gemini_api_keys
+                    if len(get_all_gemini_api_keys()) > 1:
+                        print(f"🔄 [Key Rotation] Quota reached on active Gemini key. Rotating to next key in pool...")
+                        active_client = get_client(rotate=True)
+                        continue
+                except Exception:
+                    pass
                 if attempt < max_retries:
                     backoff = 2.0 * attempt
                     print(f"⚠️ Model {model} rate limited or overloaded (attempt {attempt}/{max_retries}). Backing off {backoff:.1f}s...")

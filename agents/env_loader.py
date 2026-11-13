@@ -111,13 +111,63 @@ def sync_secrets_to_env():
         pass
 
 
+import re
+import threading
+
 sync_secrets_to_env()
 
+_GEMINI_KEY_INDEX = 0
+_KEY_LOCK = threading.Lock()
 
-def get_gemini_api_key() -> str:
-    """Returns GEMINI_API_KEY from environment, session state, or secrets."""
+
+def get_all_gemini_api_keys() -> list:
+    """
+    Returns a deduplicated list of all configured Gemini API keys.
+    Supports:
+    1. Comma/newline/semicolon separated list in GEMINI_API_KEY
+    2. GEMINI_API_KEYS variable
+    3. Numbered keys GEMINI_API_KEY_1 through GEMINI_API_KEY_20
+    """
     sync_secrets_to_env()
-    return get_secret("GEMINI_API_KEY", "")
+    keys = []
+
+    def _add_parts(val: str):
+        if not val:
+            return
+        for part in re.split(r"[,;\n\r\t ]+", val.strip()):
+            part = part.strip()
+            if part and len(part) >= 15 and part not in keys:
+                keys.append(part)
+
+    # 1. Main GEMINI_API_KEY (can be single or comma-separated)
+    _add_parts(get_secret("GEMINI_API_KEY", ""))
+
+    # 2. GEMINI_API_KEYS
+    _add_parts(get_secret("GEMINI_API_KEYS", ""))
+
+    # 3. Numbered keys GEMINI_API_KEY_1 .. GEMINI_API_KEY_20
+    for i in range(1, 21):
+        _add_parts(get_secret(f"GEMINI_API_KEY_{i}", ""))
+
+    return keys
+
+
+def get_gemini_api_key(rotate: bool = False) -> str:
+    """Returns the current active Gemini API key from the pool, optionally rotating to the next."""
+    global _GEMINI_KEY_INDEX
+    keys = get_all_gemini_api_keys()
+    if not keys:
+        return ""
+    with _KEY_LOCK:
+        if rotate:
+            _GEMINI_KEY_INDEX = (_GEMINI_KEY_INDEX + 1) % len(keys)
+        idx = _GEMINI_KEY_INDEX % len(keys)
+        return keys[idx]
+
+
+def rotate_gemini_api_key() -> str:
+    """Rotates to the next available Gemini API key in the pool and returns it."""
+    return get_gemini_api_key(rotate=True)
 
 
 def get_pexels_api_key() -> str:

@@ -22,13 +22,17 @@ from providers.tracker import record_call, record_step_provider
 load_dotenv()
 
 try:
-    from agents.env_loader import get_gemini_api_key
+    from agents.env_loader import get_gemini_api_key, get_all_gemini_api_keys
 except ImportError:
     try:
-        from env_loader import get_gemini_api_key
+        from env_loader import get_gemini_api_key, get_all_gemini_api_keys
     except ImportError:
         def get_gemini_api_key():
             return os.getenv("GEMINI_API_KEY", "")
+
+        def get_all_gemini_api_keys():
+            k = os.getenv("GEMINI_API_KEY", "")
+            return [k] if k else []
 
 ACTIVE_MODELS = [
     "gemini-2.0-flash",
@@ -58,49 +62,62 @@ OPENROUTER_MODELS = [
 
 
 def call_gemini(prompt: str, api_key: str = None) -> tuple[str, str]:
-    """Call Google Gemini API across configured flash models with per-model timeout to avoid hangs."""
-    key = api_key or get_gemini_api_key()
-    if not key:
+    """Call Google Gemini API across configured flash models with per-model timeout and multi-key rotation."""
+    keys = [api_key] if api_key else get_all_gemini_api_keys()
+    if not keys:
         raise ValueError("GEMINI_API_KEY is not configured.")
 
-    client = genai.Client(api_key=key)
     last_err = None
 
-    for model_name in ACTIVE_MODELS:
-        t0 = time.time()
-        ex = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    for key_idx, key in enumerate(keys, start=1):
         try:
-            fut = ex.submit(client.models.generate_content, model=model_name, contents=prompt)
-            resp = fut.result(timeout=15.0)
-
-            text = ""
-            try:
-                text = getattr(resp, "text", "") or ""
-            except Exception:
-                text = ""
-
-            if not text and hasattr(resp, "candidates") and resp.candidates:
-                parts = getattr(resp.candidates[0].content, "parts", [])
-                text = "".join(getattr(p, "text", "") for p in parts if getattr(p, "text", None))
-
-            dur_ms = (time.time() - t0) * 1000
-            if text and text.strip():
-                record_call("gemini", True, duration_ms=dur_ms)
-                return text.strip(), f"Gemini ({model_name})"
-        except Exception as err:
-            dur_ms = (time.time() - t0) * 1000
-            err_str = str(err)
-            if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
-                print(f"⚠️ Gemini model {model_name} rate limit (429), failing over immediately ({dur_ms:.0f}ms)...")
-            else:
-                print(f"⚠️ Gemini model {model_name} notice ({err_str[:80]}), trying next model...")
-            last_err = err
+            client = genai.Client(api_key=key)
+        except Exception as client_init_err:
+            last_err = client_init_err
             continue
-        finally:
-            ex.shutdown(wait=False)
+
+        for model_name in ACTIVE_MODELS:
+            t0 = time.time()
+            ex = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+            try:
+                fut = ex.submit(client.models.generate_content, model=model_name, contents=prompt)
+                resp = fut.result(timeout=15.0)
+
+                text = ""
+                try:
+                    text = getattr(resp, "text", "") or ""
+                except Exception:
+                    text = ""
+
+                if not text and hasattr(resp, "candidates") and resp.candidates:
+                    parts = getattr(resp.candidates[0].content, "parts", [])
+                    text = "".join(getattr(p, "text", "") for p in parts if getattr(p, "text", None))
+
+                dur_ms = (time.time() - t0) * 1000
+                if text and text.strip():
+                    record_call("gemini", True, duration_ms=dur_ms)
+                    key_tag = f" [Key #{key_idx}]" if len(keys) > 1 else ""
+                    return text.strip(), f"Gemini ({model_name}){key_tag}"
+            except Exception as err:
+                dur_ms = (time.time() - t0) * 1000
+                err_str = str(err)
+                is_quota = "429" in err_str or "402" in err_str or "RESOURCE_EXHAUSTED" in err_str
+                if is_quota:
+                    if len(keys) > 1 and key_idx < len(keys):
+                        print(f"⚠️ Gemini Key #{key_idx} exhausted/rate limited. Failing over to Key #{key_idx + 1}...")
+                        last_err = err
+                        break
+                    else:
+                        print(f"⚠️ Gemini model {model_name} rate limit (429), failing over immediately ({dur_ms:.0f}ms)...")
+                else:
+                    print(f"⚠️ Gemini model {model_name} notice ({err_str[:80]}), trying next model...")
+                last_err = err
+                continue
+            finally:
+                ex.shutdown(wait=False)
 
     record_call("gemini", False, error=str(last_err))
-    raise RuntimeError(f"Gemini cascade failed: {last_err}")
+    raise RuntimeError(f"Gemini cascade failed across {len(keys)} key(s): {last_err}")
 
 
 def call_groq(prompt: str, api_key: str = None) -> tuple[str, str]:
