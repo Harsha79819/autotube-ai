@@ -190,7 +190,7 @@ def call_claude_vision_gemini_fallback(
         except Exception:
             pass
 
-    for m in ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.6-flash"]:
+    for m in ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.0-flash-lite"]:
         try:
             resp = client.models.generate_content(
                 model=m,

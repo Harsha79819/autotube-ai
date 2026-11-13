@@ -95,11 +95,13 @@ def generate_search_queries(chunk: str, topic_category: str = "tech", gemini_cal
                 if api_key:
                     client = genai.Client(api_key=api_key)
                     def _default_call(p):
-                        resp = client.models.generate_content(
-                            model="gemini-2.5-flash",
-                            contents=p,
-                        )
-                        return resp.text
+                        for m in ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.0-flash-lite"]:
+                            try:
+                                resp = client.models.generate_content(model=m, contents=p)
+                                return resp.text
+                            except Exception:
+                                continue
+                        return ""
                     gemini_call_fn = _default_call
             except Exception:
                 pass

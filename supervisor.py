@@ -99,7 +99,7 @@ Return ONLY a JSON object with keys:
   "recommended_action": "concrete fallback action to heal without human input"
 }}
 """
-            for model_id in ["gemini-flash-lite-latest", "gemini-flash-latest", "gemini-3.5-flash-lite", "gemini-3.8-flash"]:
+            for model_id in ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.0-flash-lite"]:
                 try:
                     resp = client.models.generate_content(model=model_id, contents=prompt)
                     raw_text = getattr(resp, "text", "")
@@ -262,7 +262,9 @@ def heal_network_or_quota(stage_name, context=None):
             "movie", "cinema", "trailer", "box office", "actor", "celebrity", "film",
             "hollywood", "tollywood", "bollywood", "song", "bigg boss", "bb10", "star maa",
             "elimination", "nomination", "engaged", "engagement", "contestant", "housemate",
-            "drama", "shiva", "priyanka jain", "hero", "heroine", "director", "producer"
+            "drama", "shiva", "priyanka jain", "hero", "heroine", "director", "producer",
+            "review", "crime", "punch", "donga", "koduku", "teaser", "glimpse", "ott",
+            "release", "censor", "cast", "theatre", "theater", "boxoffice", "shoot", "series"
         }
         phone_kw = {"smartphone", "iphone", "pixel", "galaxy", "phone", "oneplus", "snapdragon", "dimensity", "amoled", "oppo", "vivo", "redmi", "realme", "iqoo"}
         tech_kw = {"tech", "technology", "ai", "artificial intelligence", "software", "hardware", "gadget", "gadgets", "laptop", "pc", "computer", "algorithm", "robot"}
@@ -277,7 +279,7 @@ def heal_network_or_quota(stage_name, context=None):
 
         if any_kw(facts_kw) or "fact" in content_type_ctx or "curiosity" in content_type_ctx or "science" in content_type_ctx:
             category = "facts"
-        elif any_kw(ent_kw) or "entertainment" in content_type_ctx or "cinema" in content_type_ctx or "movie" in content_type_ctx or "reality" in content_type_ctx or "bigg boss" in raw_topic_lower:
+        elif any_kw(ent_kw) or "entertainment" in content_type_ctx or "cinema" in content_type_ctx or "movie" in content_type_ctx or "reality" in content_type_ctx or "bigg boss" in raw_topic_lower or "review" in raw_topic_lower:
             category = "entertainment"
         elif any_kw(finance_kw) or "finance" in content_type_ctx:
             category = "finance"
@@ -382,6 +384,63 @@ def heal_network_or_quota(stage_name, context=None):
                             (f"Drop your thoughts below, hit the like button, and subscribe for more comedy breakdowns!",
                              f"like share and subscribe animation youtube studio | comedy entertaining video closing call to action"),
                         ]
+            elif cat == "entertainment":
+                if tel:
+                    base = [
+                        (f"హాయ్ ఫ్రెండ్స్! {tel_topic} కి సంబంధించి ఇండస్ట్రీలో వైరల్ అవుతున్న క్రేజీ అప్‌డేట్ ఇప్పుడు చూద్దాం.",
+                         f"{clean_topic} official movie poster | {clean_topic} theatrical release poster hd"),
+                        (f"ముఖ్యంగా ఈ ప్రాజెక్ట్ కి సంబంధించి బయటకు వచ్చిన విశేషాలు ఆడియన్స్‌లో విపరీతమైన క్యూరియాసిటీని పెంచాయి.",
+                         f"{clean_topic} actor hero character look | {clean_topic} movie scene still"),
+                        (f"స్టోరీ లైన్ మరియు స్క్రీన్ ప్లే విషయంలో సరికొత్త ప్రజెంటేషన్ ఇచ్చినట్లు టాక్ వినిపిస్తోంది.",
+                         f"{clean_topic} director at shooting set | cinematic film making studio"),
+                        (f"సినిమాలోని కీలక సన్నివేశాలు మరియు డైలాగ్స్ థియేటర్లలో ప్రేక్షకులను ఎంతగానో అలరిస్తున్నాయి.",
+                         f"{clean_topic} high voltage cinema scene | emotional dramatic dialogue still"),
+                        (f"బ్యాక్‌గ్రౌండ్ స్కోర్ మరియు విజువల్స్ సినిమాకి ప్రత్యేక ఆకర్షణగా నిలిచాయని కామెంట్స్ వస్తున్నాయి.",
+                         f"{clean_topic} movie musical celebration | grand cinema visual"),
+                        (f"నటీనటుల పెర్ఫార్మెన్స్ గురించి మాట్లాడితే, ప్రతీ పాత్ర తమ బెస్ట్ ఇచ్చారని తెలుస్తోంది.",
+                         f"{clean_topic} lead actor intense expression | movie character closeup"),
+                        (f"కామెడీ మరియు ఎంటర్‌టైన్‌మెంట్ ఎలిమెంట్స్ యూత్‌కి బాగా కనెక్ట్ అవుతున్నాయని రిపోర్ట్స్ చెబుతున్నాయి.",
+                         f"{clean_topic} entertaining comedy scene | hilarious expression still"),
+                        (f"బాక్సాఫీస్ వద్ద కూడా ఈ చిత్రానికి మంచి రెస్పాన్స్ మరియు కలెక్షన్స్ నమోదవుతున్నాయి.",
+                         f"{clean_topic} housefull cinema hall | audience cheering in theatre screen"),
+                        (f"ప్రేక్షకుల నుండి వస్తున్న లైవ్ పబ్లిక్ టాక్ కూడా చాలా ఉత్సాహంగా ఉంది.",
+                         f"{clean_topic} public talk outside theater | fans celebration outside cinema"),
+                        (f"మొత్తానికి ఈ సినిమా లేదా అప్‌డేట్ ఎంటర్‌టైన్‌మెంట్ లవర్స్‌కి ఒక మంచి ట్రీట్ అని చెప్పొచ్చు.",
+                         f"{clean_topic} iconic movie celebration still | cinema highlights"),
+                        (f"సోషల్ మీడియాలో కూడా దీనికి సంబంధించిన క్లిప్స్ విపరీతంగా ట్రెండ్ అవుతున్నాయి.",
+                         f"{clean_topic} viral social media trend | audience reaction meme"),
+                        (f"మరి ఈ సినిమా లేదా అప్‌డేట్ పై మీ ఒపీనియన్ ఏంటి బాస్? మీరు చూశారా?",
+                         f"{clean_topic} audience verdict discussion | cinema critic review desk"),
+                        (f"కింద కామెంట్స్‌లో చెప్పండి, మరిన్ని మూవీ అప్‌డేట్స్ కోసం లైక్ కొట్టి సబ్‌స్క్రైబ్ చేసుకోండి!",
+                         f"like share and subscribe animation youtube studio | cinema entertainment channel closing"),
+                    ]
+                else:
+                    base = [
+                        (f"Welcome to the latest entertainment breakdown covering {clean_topic}.",
+                         f"{clean_topic} official movie poster | {clean_topic} theatrical release poster hd"),
+                        (f"Major updates surrounding this release have set entertainment feeds buzzing.",
+                         f"{clean_topic} actor hero character look | {clean_topic} movie scene still"),
+                        (f"Key dramatic sequences and punch dialogues are capturing wide viewer attention.",
+                         f"{clean_topic} high voltage cinema scene | emotional dramatic dialogue still"),
+                        (f"The soundtrack and visual scale deliver a high-energy cinematic experience.",
+                         f"{clean_topic} movie musical celebration | grand cinema visual"),
+                        (f"Lead performances have garnered praise from movie lovers and reviewers alike.",
+                         f"{clean_topic} lead actor intense expression | movie character closeup"),
+                        (f"Audience word-of-mouth highlights sharp comedic timing and strong entertainment value.",
+                         f"{clean_topic} entertaining comedy scene | hilarious expression still"),
+                        (f"Box office numbers reflect enthusiastic viewer turnout across theaters.",
+                         f"{clean_topic} housefull cinema hall | audience cheering in theatre screen"),
+                        (f"Live reviews from viewers praise the sheer entertainment factor delivered on screen.",
+                         f"{clean_topic} public talk outside theater | fans celebration outside cinema"),
+                        (f"Viral clips and fan discussions continue trending across all platforms.",
+                         f"{clean_topic} viral social media trend | audience reaction meme"),
+                        (f"Overall, it stands out as one of the most talked-about highlights of the season.",
+                         f"{clean_topic} iconic movie celebration still | cinema highlights"),
+                        (f"What were your biggest impressions from this development?",
+                         f"{clean_topic} audience verdict discussion | cinema critic review desk"),
+                        (f"Share your thoughts below, hit the like button, and subscribe for daily entertainment breakdowns!",
+                         f"like share and subscribe animation youtube studio | cinema entertainment channel closing"),
+                    ]
             elif cat == "finance":
                 if tel:
                     base = [
@@ -662,7 +721,7 @@ def heal_network_or_quota(stage_name, context=None):
                         (f"If you enjoyed this scientific deep-dive, hit like, share it with friends, and subscribe for more fascinating breakdowns!",
                          f"like share and subscribe animation youtube studio | science educational channel closing call to action"),
                     ]
-            else:  # tech, entertainment, general
+            else:  # tech, general
                 if tel:
                     base = [
                         (f"బాస్, {tel_topic} విషయంలో ప్రస్తుతం జరుగుతున్న సరికొత్త పరిణామాలు చూశారా?",
@@ -674,15 +733,15 @@ def heal_network_or_quota(stage_name, context=None):
                         (f"వివిధ వర్గాల నుండి వస్తున్న స్పందనలను బట్టి చూస్తే, ఇది ప్రస్తుతం సెంటర్ ఆఫ్ అట్రాక్షన్ గా నిలిచింది.",
                          f"{clean_topic} community discussion panel | experts talking about {clean_topic}"),
                         (f"ప్రధానంగా ఇందులో గుర్తించాల్సిన మరో ముఖ్యమైన పాయింట్ ఏమిటంటే దీని ప్రాముఖ్యత రోజురోజుకూ పెరుగుతోంది.",
-                         f"{clean_topic} data insights charts | modern visual analytics screen"),
+                         f"{clean_topic} key highlights showcase | {clean_topic} visual presentation"),
                         (f"మరిన్ని తాజా పరిణామాలు త్వరలోనే ప్రజల్లోకి మరింత వేగంగా చేరనున్నాయి.",
-                         f"{clean_topic} future outlook and impact | dynamic global trends visual"),
+                         f"{clean_topic} future outlook and impact | dynamic visual presentation"),
                         (f"సమగ్ర విశ్లేషణలో ఇది ఒక కీలకమైన మలుపుగా పరిశీలకులు భావిస్తున్నారు.",
                          f"{clean_topic} public reaction and impact | diverse audience engagement"),
-                        (f"ఈ పరిణామం వల్ల రాబోయే రోజుల్లో మార్కెట్ లో మరియు సమాజంలో పలు మార్పులు చోటుచేసుకోనున్నాయి.",
-                         f"{clean_topic} market transformation concept | trending global shift visual"),
+                        (f"ఈ పరిణామం వల్ల రాబోయే రోజుల్లో పలు కీలక మార్పులు చోటుచేసుకోనున్నాయి.",
+                         f"{clean_topic} notable updates visual | {clean_topic} real world scene"),
                         (f"నిపుణులు సైతం ఈ అంశంపై భిన్నమైన అభిప్రాయాలు మరియు అంచనాలను వ్యక్తం చేస్తున్నారు.",
-                         f"{clean_topic} industry analyst interview | professional commentary desk"),
+                         f"{clean_topic} media coverage broadcast | professional commentary studio"),
                         (f"అధికారిక ప్రకటనలు మరియు వాస్తవాల ఆధారంగా చూస్తే ఇందులో ఎన్నో ఆసక్తికరమైన విషయాలు ఉన్నాయి.",
                          f"{clean_topic} verified facts documentation | official release briefing"),
                         (f"ప్రజాభిప్రాయం కూడా ఈ విషయంపై చాలా ఉత్కంఠభరితంగా ఉంది.",
@@ -705,19 +764,19 @@ def heal_network_or_quota(stage_name, context=None):
                         (f"Analysts and industry observers are closely following the emerging implications.",
                          f"{clean_topic} community discussion panel | experts talking about {clean_topic}"),
                         (f"Understanding the core fundamentals provides valuable clarity on where things are heading.",
-                         f"{clean_topic} data insights charts | modern visual analytics screen"),
+                         f"{clean_topic} key highlights showcase | {clean_topic} visual presentation"),
                         (f"The broader impact across related sectors is becoming increasingly evident.",
-                         f"{clean_topic} future outlook and impact | dynamic global trends visual"),
+                         f"{clean_topic} future outlook and impact | dynamic visual presentation"),
                         (f"Overall, this marks a defining milestone with significant long-term potential.",
                          f"{clean_topic} public reaction and impact | diverse audience engagement"),
                         (f"Fresh updates from credible sources add even more context to these proceedings.",
-                         f"{clean_topic} data insights charts | modern visual analytics screen"),
+                         f"{clean_topic} notable updates visual | {clean_topic} real world scene"),
                         (f"Community members and specialists continue sharing nuanced perspectives on this matter.",
                          f"{clean_topic} audience live feedback | community conversation studio"),
                         (f"Strategic shifts observed today will likely set the benchmark for future milestones.",
                          f"{clean_topic} strategic future perspective | forward looking innovative design"),
                         (f"Following these developments closely reveals exciting new opportunities on the horizon.",
-                         f"{clean_topic} market transformation concept | trending global shift visual"),
+                         f"{clean_topic} media coverage broadcast | professional commentary studio"),
                         (f"Every detail uncovered so far underscores the importance of staying informed.",
                          f"{clean_topic} verified facts documentation | official release briefing"),
                         (f"What are your key takeaways regarding this development? Share below!",

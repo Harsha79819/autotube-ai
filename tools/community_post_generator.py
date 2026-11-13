@@ -89,7 +89,7 @@ def generate_community_poll(
         - Return valid JSON only with keys: "poll_question", "options", "call_to_action", "hashtags".
         """
 
-        for model_name in ["gemini-flash-lite-latest", "gemini-3.1-flash-lite", "gemini-3.8-flash"]:
+        for model_name in ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.0-flash-lite"]:
             try:
                 resp = client.models.generate_content(model=model_name, contents=prompt)
                 txt = getattr(resp, "text", "").strip()

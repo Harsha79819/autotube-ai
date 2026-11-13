@@ -30,11 +30,9 @@ except ImportError:
 API_KEY = get_gemini_api_key()
 
 MODELS = [
-    "gemini-2.5-flash",
     "gemini-2.0-flash",
     "gemini-1.5-flash",
     "gemini-2.0-flash-lite",
-    "gemini-flash-lite-latest",
 ]
 
 _client = None

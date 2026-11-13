@@ -71,13 +71,10 @@ def get_client():
 
 
 MODELS = [
-    "gemini-2.5-flash",
     "gemini-2.0-flash",
     "gemini-1.5-flash",
     "gemini-2.0-flash-lite",
-    "gemini-3.5-flash-lite",
-    "gemini-3.5-flash",
-    "gemini-3.6-flash",
+    "gemini-1.5-pro",
 ]
 
 
@@ -125,7 +122,7 @@ def _call_gemini_with_retry(contents, model, max_retries=2):
                 )
                 time.sleep(backoff)
                 try:
-                    active_client = genai.Client(api_key=API_KEY)
+                    active_client = genai.Client(api_key=get_gemini_api_key())
                 except Exception:
                     pass
                 continue
