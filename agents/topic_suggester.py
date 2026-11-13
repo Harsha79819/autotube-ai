@@ -17,6 +17,7 @@ import os
 import random
 import re
 import requests
+import time
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone

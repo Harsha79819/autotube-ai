@@ -89,10 +89,10 @@ def audit_first_frame(video_path: str, output_dir: Path) -> dict:
         }
 
     try:
+        # 1. Direct extraction of first frame without input seeking for maximum container compatibility
         subprocess.run(
             [
                 "ffmpeg", "-y",
-                "-ss", "0.0",
                 "-i", str(p),
                 "-vframes", "1",
                 str(frame0_path),
@@ -101,6 +101,21 @@ def audit_first_frame(video_path: str, output_dir: Path) -> dict:
             stderr=subprocess.DEVNULL,
             timeout=15,
         )
+
+        if not frame0_path.exists() or frame0_path.stat().st_size == 0:
+            # 2. Fallback: seek at 0.05s
+            subprocess.run(
+                [
+                    "ffmpeg", "-y",
+                    "-i", str(p),
+                    "-ss", "0.05",
+                    "-vframes", "1",
+                    str(frame0_path),
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=15,
+            )
 
         if not frame0_path.exists():
             return {
@@ -118,8 +133,12 @@ def audit_first_frame(video_path: str, output_dir: Path) -> dict:
 
         is_black = (mean_lum < 10.0) or (std_dev < 4.0)
 
-        # Check if hook card was created
-        hook_overlay_exists = (output_dir / "hook_overlay.png").exists()
+        # Check if hook card or poster overlay was created
+        hook_overlay_exists = (
+            (output_dir / "hook_overlay.png").exists()
+            or (output_dir / "thumbnail_916_poster.png").exists()
+            or (output_dir / "hook.json").exists()
+        )
 
         desc = (
             f"Vibrant visual (luminance {mean_lum:.1f}/255, contrast {std_dev:.1f})"

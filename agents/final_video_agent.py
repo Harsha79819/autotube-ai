@@ -14,6 +14,7 @@ import os
 import re
 import shutil
 import subprocess
+import time
 from pathlib import Path
 from supervisor import autonomous_recover
 
@@ -91,12 +92,13 @@ def create_final_video(
                         hook_txt = s_lines[0]
                 except Exception:
                     pass
-            if hook_txt:
-                try:
-                    from agents.hook_card import generate_hook_card
-                    generate_hook_card(hook_txt, output_path=hook_overlay_path, width=target_w, height=target_h)
-                except Exception as e:
-                    print(f"⚠️ Hook card generation notice: {e}")
+            if not hook_txt:
+                hook_txt = "Watch Till End! 🔥"
+            try:
+                from agents.hook_card import generate_hook_card
+                generate_hook_card(hook_txt, output_path=hook_overlay_path, width=target_w, height=target_h)
+            except Exception as e:
+                print(f"⚠️ Hook card generation notice: {e}")
 
         has_hook_overlay = bool(
             os.path.exists(hook_overlay_path) and os.path.getsize(hook_overlay_path) > 500

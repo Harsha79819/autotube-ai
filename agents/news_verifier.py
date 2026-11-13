@@ -2,6 +2,7 @@ import html
 import json
 import re
 import requests
+import time
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone, timedelta
 from pathlib import Path

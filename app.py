@@ -5,6 +5,7 @@ and top-level fatal crash recovery saving to logs/crash_report.txt.
 """
 import os
 import sys
+import time
 import runpy
 import traceback
 from datetime import datetime, timezone

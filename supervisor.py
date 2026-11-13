@@ -846,6 +846,15 @@ def heal_network_or_quota(stage_name, context=None):
             (OUTPUT_DIR / "tts_script.txt").write_text(script, encoding="utf-8")
             (OUTPUT_DIR / "visual_plan.txt").write_text(visual_plan, encoding="utf-8")
             (OUTPUT_DIR / "section_map.txt").write_text(section_map, encoding="utf-8")
+            # Guarantee hook card for Frame-0 hook retention gate
+            hook_file = OUTPUT_DIR / "hook_overlay.png"
+            if not hook_file.exists():
+                try:
+                    from agents.hook_card import generate_hook_card
+                    first_line = final_lines[0] if final_lines else clean_topic
+                    generate_hook_card(hook_text=first_line, output_path=str(hook_file))
+                except Exception:
+                    pass
         except (PermissionError, OSError):
             pass
         return script
