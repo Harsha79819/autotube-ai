@@ -369,8 +369,15 @@ def make_cutout_layer(cut_path: Path, name: str, accent_hex: str, w: int, h: int
         chip = Image.new("RGBA", (pw, ph), (0, 0, 0, 0))
         ImageDraw.Draw(chip).rounded_rectangle((0, 0, pw - 1, ph - 1), ph // 2, fill=(*accent, 245))
         chip.alpha_composite(chip_txt, (28, 13))
-        # Seat chip at bottom base of bust (chest level), never blocking the face/mouth!
-        chip_y = round(bottom - ph - 16)
+        # Seat chip below the chin/mouth: never block the face!
+        # If the cutout is a compact headshot, position below the chin base (bottom + 10)
+        # If the cutout has a full torso, seat at chest level
+        if cut.height < box_h * 0.75:
+            chip_y = round(bottom + 10)
+        else:
+            chip_y = round(bottom - ph - 12)
+        # Safety bound: keep chip within visible canvas and above subtitle safe margin (1650)
+        chip_y = min(chip_y, round(h * 0.84 - ph))
         _comp(layer, chip, round(cx - pw / 2), chip_y)
     return layer
 
@@ -513,13 +520,46 @@ def compose_scene(scene: Scene, out_dir: Path, w: int = W_DEFAULT, h: int = H_DE
         lay.alpha_composite(nm, ((w - nm.width) // 2, int(h * 0.50 - nm.height / 2)))
         res.layers.append(LayerSpec(_save(lay, out_dir / f"{tag}_name.png"), "up", 0.20, True))
     elif layout == "broll" and photo_path and Path(photo_path).exists():
-        # Full-Bleed 9:16 Cinema Motion & Full-Screen Reaction Meme
+        # High-Fidelity 9:16 Cinema Motion & Smart Canvas for Reaction Memes / Photos
         photo = Image.open(photo_path).convert("RGB")
-        bg = _cover(photo, w, h)
-        bg = _vignette(bg, strength=0.32)
-        res = SceneLayers(bg=_save(bg, out_dir / f"{tag}_bg.png", "RGB"), kind="cinema_motion")
-        # Full-screen cinema motion: no boxed card, clean view with room for burned-in subtitles
-        return res
+        aspect = photo.width / max(1, photo.height)
+
+        if aspect >= 1.12:
+            # Widescreen / Landscape photo or reaction meme (e.g. 16:9, 4:3):
+            # Smart Canvas: blurred ambient background + crisp uncropped centered foreground photo
+            bg = _vignette(Image.eval(_cover(photo, w, h).filter(ImageFilter.GaussianBlur(38)), lambda v: int(v * 0.45)), strength=0.35)
+            res = SceneLayers(bg=_save(bg, out_dir / f"{tag}_bg.png", "RGB"), kind="cinema_motion")
+            
+            # Foreground uncropped photo scaled to fit ~92% width, centered vertically slightly above middle
+            card_w = int(w * 0.94)
+            max_card_h = int(h * 0.52)
+            scale = min(card_w / photo.width, max_card_h / photo.height)
+            cw, ch = round(photo.width * scale), round(photo.height * scale)
+            fg_img = photo.resize((cw, ch), Image.LANCZOS)
+
+            # Subtle rounded corners & clean drop shadow
+            lay = _blank(w, h)
+            x0 = (w - cw) // 2
+            y0 = int(h * 0.43 - ch / 2)  # Position around 43% height, leaving bottom 25% clear for subtitles
+            d = ImageDraw.Draw(lay)
+            # Soft dark shadow
+            d.rounded_rectangle((x0 - 8, y0 - 8 + 14, x0 + cw + 8, y0 + ch + 8 + 14), 22, fill=(0, 0, 0, 130))
+            # Clean border
+            d.rounded_rectangle((x0 - 6, y0 - 6, x0 + cw + 6, y0 + ch + 6), 22, fill=(30, 30, 45, 230))
+            # Mask with rounded corners
+            mask = Image.new("L", (cw, ch), 0)
+            ImageDraw.Draw(mask).rounded_rectangle((0, 0, cw - 1, ch - 1), 18, fill=255)
+            lay.paste(fg_img, (x0, y0), mask)
+
+            res.layers.append(LayerSpec(_save(lay, out_dir / f"{tag}_photo.png"), "fade", 0.05))
+            return res
+        else:
+            # Vertical / Portrait photo: Full-bleed cover
+            bg = _cover(photo, w, h)
+            bg = _vignette(bg, strength=0.32)
+            res = SceneLayers(bg=_save(bg, out_dir / f"{tag}_bg.png", "RGB"), kind="cinema_motion")
+            # Full-screen cinema motion: no boxed card, clean view with room for burned-in subtitles
+            return res
     elif layout == "photo_card" and photo_path and Path(photo_path).exists():
         # Framed Canva photo card with blurred backdrop & punchline
         photo = Image.open(photo_path).convert("RGB")

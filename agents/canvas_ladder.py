@@ -161,6 +161,7 @@ def build_scene_clips(
 
     clips: List[str] = []
     durations: List[float] = []
+    used_meme_count = 0
     for i, scene in enumerate(scenes):
         photo = None
         force = None
@@ -171,12 +172,14 @@ def build_scene_clips(
                 from tools.meme_manager import get_reaction_meme, match_emotion_from_text
                 emo_cat = match_emotion_from_text(scene.narration) or scene.emotion
                 meme_p = None
-                meme_cats = ("shocked", "overacting", "comedy", "roast", "crying", "headache", "suspicious", "angry", "serious", "neutral")
-                if emo_cat in meme_cats:
+                # Memes should only be used for punchy reaction moments (max 2 per video), never for serious/neutral narrative beats
+                punchy_meme_cats = ("shocked", "overacting", "comedy", "roast", "crying", "headache", "suspicious", "angry")
+                if emo_cat in punchy_meme_cats and used_meme_count < 2:
                     meme_p = get_reaction_meme(emo_cat, used_memes=used)
                 if meme_p and meme_p.exists():
                     photo = meme_p
                     force = "broll"
+                    used_meme_count += 1
                 else:
                     photo = _pick_photo(scene, images, work, banned, used)
                     if photo:

@@ -164,25 +164,37 @@ def build_contextual_search_query(
     ][:3]
     act_short = " ".join(act_words)
 
-    # Contextualize entity
-    ent_tokens = ent.split()
-    if len(ent_tokens) <= 1 and ent:
-        # Bare single name (e.g., 'Rohit', 'Charan', 'Jhansi')
-        if top and top.lower() not in ent.lower() and len(top.split()) <= 6:
-            core_q = f'"{ent}" "{top}"'
+    # Contextualize entity: never search bare names that collide with foreign entities
+    anchor = ""
+    top_lower = top.lower()
+    if "bigg boss" in top_lower:
+        anchor = "Bigg Boss Telugu 10" if "10" in top_lower else "Bigg Boss Telugu"
+    elif any(k in top_lower for k in ("prabhas", "kalki", "raja saab", "salaar", "spirit")):
+        anchor = "Prabhas Telugu movie"
+    elif any(k in top_lower for k in ("allu arjun", "pushpa")):
+        anchor = "Allu Arjun Pushpa"
+    elif any(k in top_lower for k in ("chiranjeevi", "megaverse")):
+        anchor = "Chiranjeevi Telugu"
+    elif any(k in top_lower for k in ("pawan kalyan", "og", "hari hara")):
+        anchor = "Pawan Kalyan"
+    elif top:
+        top_clean = re.sub(r"[^\w\s]", " ", top)
+        meaningful_words = [w for w in top_clean.split() if w.lower() not in {
+            "roasting", "the", "drama", "episode", "full", "review", "reviewing",
+            "reaction", "call", "game", "changer", "master", "manipulator", "is", "he", "just", "a"
+        }]
+        anchor = " ".join(meaningful_words[:3])
+
+    if ent:
+        if anchor and anchor.lower() not in ent.lower():
+            core_q = f'"{ent}" "{anchor}"'
         elif topic_category in ("cinema", "entertainment", "celebrity"):
-            core_q = f'"{ent}" actor interview recent HD'
+            core_q = f'"{ent}" Telugu actor interview HD'
         else:
-            core_q = f'"{ent}" official recent HD'
-    elif ent:
-        # Multi-word entity name (e.g., 'Ram Charan', 'Rohit Sahni', 'Dil Raju')
-        if top and top.lower() not in ent.lower() and len(top.split()) <= 4:
-            core_q = f'"{ent}" {top}'
-        else:
-            core_q = f'"{ent}"'
+            core_q = f'"{ent}" official HD'
     else:
         # No entity: anchor to topic context
-        core_q = top or "Telugu entertainment"
+        core_q = anchor or top or "Telugu entertainment"
 
     if act_short and act_short.lower() not in core_q.lower():
         core_q = f"{core_q} {act_short}".strip()
@@ -219,6 +231,15 @@ def is_blacklisted_candidate(
     if any(s in c_meta for s in ("stamp", "postage")):
         return True
 
+    # Foreign country / political party collision check
+    if any(fp in c_meta for fp in ("bangladesh", "dhaka", "narayanganj", "bnp", "awami league", "pakistan", "lahore")):
+        if "bangladesh" not in t_low and "pakistan" not in top_low:
+            return True
+
+    # Multi-panel meme grids, template collections, stickers, and clipart packs
+    if any(tg in c_meta for tg in ("meme template", "meme templates", "templates free", "png transparent", "stickers pack", "wallpaper download", "vector clipart", "free download", "meme pack")):
+        return True
+
     # Universal NSFW / Adult / Dating / Bikini / Lingerie / Inappropriate Ad Rejection
     if any(ad in c_meta for ad in (
         "golove", "hot series", "live chat", "livechat", "dating", "bikini", "lingerie",
@@ -229,8 +250,13 @@ def is_blacklisted_candidate(
         return True
 
     # Universal anime / cartoon / illustration rejection for realistic media
-    if any(an in c_meta for an in ("anime", "manga", "cartoon", "illustration", "drawing", "fanart", "sketch", "cosplay", "vash", "stampede", "zerochan", "pixiv", "wallpapercrafter")):
+    if any(an in c_meta for an in ("anime", "manga", "cartoon", "illustration", "drawing", "fanart", "sketch", "cosplay", "vash", "stampede", "zerochan", "pixiv", "wallpapercrafter", "nightow", "trigun themes")):
         if "anime" not in t_low and "manga" not in top_low and "cartoon" not in top_low:
+            return True
+
+    # Thrigun vs Trigun anime / podcast collision check
+    if any(th in t_low or th in top_low for th in ("thrigun", "trigun", "త్రిగుణ్")):
+        if any(bad_th in c_meta for bad_th in ("anime", "manga", "stampede", "vash", "podcast", "analysis of", "themes", "reboot", "badlands")):
             return True
 
     # Cricket collision check
@@ -549,7 +575,7 @@ def verify_visual_with_gemini(image_path: str, query_text: str) -> bool:
             f"without showing unrelated stock items (like machinery, random concerts, or unrelated persons)?\n\n"
             f"Reply strictly with either YES or NO."
         )
-        for m_name in ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.6-flash"]:
+        for m_name in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.6-flash"]:
             try:
                 resp = client.models.generate_content(
                     model=m_name,
@@ -670,7 +696,7 @@ def rewrite_query_for_flux(
                     f"Scene query: {query_text}\n"
                     f"Rewritten prompt:"
                 )
-                for m_name in ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.6-flash"]:
+                for m_name in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.6-flash"]:
                     try:
                         response = client.models.generate_content(
                             model=m_name,
@@ -702,7 +728,7 @@ def rewrite_query_for_flux(
                     f"Scene query: {query_text}\n"
                     f"Rewritten prompt:"
                 )
-                for m_name in ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.6-flash"]:
+                for m_name in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.6-flash"]:
                     try:
                         response = client.models.generate_content(
                             model=m_name,
@@ -733,7 +759,7 @@ def rewrite_query_for_flux(
                     f"Scene query: {query_text}\n"
                     f"Rewritten prompt:"
                 )
-                for m_name in ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.6-flash"]:
+                for m_name in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.6-flash"]:
                     try:
                         response = client.models.generate_content(
                             model=m_name,
@@ -762,7 +788,7 @@ def rewrite_query_for_flux(
                 f"Query to rewrite: {query_text}\n"
                 f"Rewritten prompt:"
             )
-            for m_name in ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.6-flash"]:
+            for m_name in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.6-flash"]:
                 try:
                     response = client.models.generate_content(
                         model=m_name,
@@ -3500,8 +3526,15 @@ def download_images_from_visual_plan(
                             continue
 
                     # Anti-spam OCR filter (reject dating, girlfriend, casino, software screenshots, promo ads)
+                    ocr_txt = ""
+                    try:
+                        from tools.ocr_guard import scan_images_ocr
+                        ocr_dict = scan_images_ocr([np])
+                        ocr_txt = (ocr_dict.get(str(np)) or "").lower()
+                    except Exception:
+                        ocr_txt = ""
                     spam_ad_terms = ("girlfriend", "dating", "ai character", "create your own", "sign up", "free account", "explore ai", "companion", "casino", "betting", "slot", "discount", "off%")
-                    if any(sp in ocr_txt.lower() for sp in spam_ad_terms):
+                    if ocr_txt and any(sp in ocr_txt for sp in spam_ad_terms):
                         print(f"⚠️ [News Media OCR] Disqualified ad/spam image: {np.name}")
                         continue
 

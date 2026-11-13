@@ -175,12 +175,12 @@ def fetch_dynamic_online_meme(
 
         recent_set = set(recent_history or [])
 
-        # Formulate highly specific query
+        # Formulate highly specific query (NEVER search 'template' which returns messy 6-face YouTube collages)
         if actor:
             actor_clean = actor.replace("_", " ")
-            q = f"{actor_clean} {emotion} telugu comedy reaction meme template"
+            q = f"{actor_clean} {emotion} iconic reaction face Telugu movie scene still"
         else:
-            q = f"telugu comedy reaction meme {emotion} clean hd template"
+            q = f"Telugu comedy reaction {emotion} movie scene clean photo"
 
         print(f"🔍 [Dynamic Meme Search] Querying web: '{q}'...")
         hits = search_duckduckgo_images(q, max_results=8)
@@ -188,7 +188,11 @@ def fetch_dynamic_online_meme(
 
         for hit in hits:
             u = hit.get("image_url")
+            hit_title = (hit.get("title") or "").lower()
             if not u:
+                continue
+            # Reject collage titles, multi-pack collections, or templates
+            if any(b in hit_title for b in ("template", "templates", "pack", "collection", "stickers", "download free", "wallpaper", "vector")):
                 continue
             try:
                 r = requests.get(u, headers=headers, timeout=6)
@@ -207,10 +211,10 @@ def fetch_dynamic_online_meme(
                             rgb = im.convert("RGB")
                             rgb.save(out_path, "JPEG", quality=92)
 
-                            # Watermark & branding check
+                            # Watermark, collage & branding check
                             ocr = scan_images_ocr([out_path])
                             txt = ocr.get(str(out_path), "").lower()
-                            if any(b in txt for b in ["kulfy", "shutterstock", "getty", "alamy", "watermark"]):
+                            if any(b in txt for b in ["kulfy", "shutterstock", "getty", "alamy", "watermark", "template", "templates", "meme te", "pack", "stickers"]):
                                 out_path.unlink(missing_ok=True)
                                 continue
 
