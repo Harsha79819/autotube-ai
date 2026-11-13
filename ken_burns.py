@@ -295,6 +295,10 @@ def assemble_with_transitions(
         )
         prev = out
 
+    preset = "veryfast" if len(scene_clips) > 6 else "fast"
+    total_est_dur = sum(valid_durations) if valid_durations else len(scene_clips) * 20.0
+    timeout_calc = int(max(360, total_est_dur * 1.5))
+
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
     cmd = [
         "ffmpeg", "-y",
@@ -302,7 +306,7 @@ def assemble_with_transitions(
         "-filter_complex", ";".join(filter_parts),
         "-map", f"[{prev}]",
         "-c:v", "libx264",
-        "-preset", "fast",
+        "-preset", preset,
         "-crf", "21",
         "-pix_fmt", "yuv420p",
         "-colorspace", "bt709",
@@ -314,7 +318,7 @@ def assemble_with_transitions(
     ]
 
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=max(180, len(scene_clips) * 12))
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_calc)
         if r.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 0:
             return str(output_path)
         err_msg = r.stderr or "xfade transition assembly failed"
@@ -330,13 +334,32 @@ def assemble_with_transitions(
                 escaped = str(Path(clip).resolve()).replace("'", "'\\''")
                 f.write(f"file '{escaped}'\n")
 
+        # 1. Try lightning-fast stream copy first (<1s for entire multi-minute video)
+        try:
+            copy_cmd = [
+                "ffmpeg", "-y",
+                "-f", "concat",
+                "-safe", "0",
+                "-i", str(concat_list_path),
+                "-c", "copy",
+                "-movflags", "+faststart",
+                str(output_path),
+            ]
+            r_copy = subprocess.run(copy_cmd, capture_output=True, text=True, timeout=45)
+            if r_copy.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 1000:
+                print("⚡ [Concat Demuxer] Lightning fast stream copy successful (<1s).")
+                return str(output_path)
+        except Exception as copy_err:
+            print(f"Stream copy notice: {copy_err}, falling back to fast transcode...")
+
+        # 2. Fast re-encode fallback
         concat_cmd = [
             "ffmpeg", "-y",
             "-f", "concat",
             "-safe", "0",
             "-i", str(concat_list_path),
             "-c:v", "libx264",
-            "-preset", "fast",
+            "-preset", "veryfast",
             "-crf", "21",
             "-pix_fmt", "yuv420p",
             "-colorspace", "bt709",
@@ -346,7 +369,7 @@ def assemble_with_transitions(
             "-movflags", "+faststart",
             str(output_path),
         ]
-        r_concat = subprocess.run(concat_cmd, capture_output=True, text=True, timeout=max(180, len(scene_clips) * 10))
+        r_concat = subprocess.run(concat_cmd, capture_output=True, text=True, timeout=timeout_calc)
         if r_concat.returncode != 0 or not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
             raise RuntimeError(f"Both xfade and concat assembly failed: {r_concat.stderr or 'No output produced'}")
         return str(output_path)
