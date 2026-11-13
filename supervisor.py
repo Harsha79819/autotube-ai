@@ -258,7 +258,12 @@ def heal_network_or_quota(stage_name, context=None):
         satire_kw = {"satire", "satirical", "roast", "funny", "humor", "pretend", "lazy", "sarcastic", "joke", "comedy", "prank", "corporate", "office"}
         finance_kw = {"stock", "sensex", "nifty", "market", "finance", "money", "crypto", "bitcoin", "economy", "invest", "trading", "shares", "dividend", "bank", "gold"}
         history_kw = {"history", "ancient", "war", "empire", "king", "dynasty", "mystery", "secrets", "temple", "monument", "mythology", "archaeology", "historical"}
-        ent_kw = {"movie", "cinema", "trailer", "box office", "actor", "celebrity", "film", "hollywood", "tollywood", "bollywood", "song"}
+        ent_kw = {
+            "movie", "cinema", "trailer", "box office", "actor", "celebrity", "film",
+            "hollywood", "tollywood", "bollywood", "song", "bigg boss", "bb10", "star maa",
+            "elimination", "nomination", "engaged", "engagement", "contestant", "housemate",
+            "drama", "shiva", "priyanka jain", "hero", "heroine", "director", "producer"
+        }
         phone_kw = {"smartphone", "iphone", "pixel", "galaxy", "phone", "oneplus", "snapdragon", "dimensity", "amoled", "oppo", "vivo", "redmi", "realme", "iqoo"}
         tech_kw = {"tech", "technology", "ai", "artificial intelligence", "software", "hardware", "gadget", "gadgets", "laptop", "pc", "computer", "algorithm", "robot"}
         facts_kw = {
@@ -272,66 +277,111 @@ def heal_network_or_quota(stage_name, context=None):
 
         if any_kw(facts_kw) or "fact" in content_type_ctx or "curiosity" in content_type_ctx or "science" in content_type_ctx:
             category = "facts"
-        elif any_kw(satire_kw) or "satir" in content_type_ctx or "sarcas" in content_type_ctx or "humor" in content_type_ctx or "roast" in content_type_ctx or "funny" in content_type_ctx:
-            category = "satire"
+        elif any_kw(ent_kw) or "entertainment" in content_type_ctx or "cinema" in content_type_ctx or "movie" in content_type_ctx or "reality" in content_type_ctx or "bigg boss" in raw_topic_lower:
+            category = "entertainment"
         elif any_kw(finance_kw) or "finance" in content_type_ctx:
             category = "finance"
         elif any_kw(history_kw) or "history" in content_type_ctx or "myth" in content_type_ctx:
             category = "history"
-        elif any_kw(ent_kw) or "entertainment" in content_type_ctx or "cinema" in content_type_ctx or "movie" in content_type_ctx:
-            category = "entertainment"
         elif any_kw(phone_kw):
             category = "phone"
         elif any_kw(tech_kw) or "tech" in content_type_ctx:
             category = "tech"
+        elif any_kw(satire_kw) or "satir" in content_type_ctx or "sarcas" in content_type_ctx or "humor" in content_type_ctx or "roast" in content_type_ctx or "funny" in content_type_ctx:
+            category = "satire"
         else:
             category = "general"
 
         def build_beats(cat, tel, duration_type):
             # duration_type: "short" (9), "medium" (13), "long" (24)
             if cat == "satire":
+                is_office_theme = any(w in raw_topic_lower for w in ("office", "corporate", "cubicle", "employee", "workplace", "job", "manager", "excel", "software company"))
                 if tel:
-                    base = [
-                        (f"హాయ్ ఫ్రెండ్స్! {tel_topic} గురించి ఈరోజు మనం మాట్లాడబోయే అసలైన ఫన్నీ విషయాలు చూస్తే మీరు పడిపడి నవ్వుకుంటారు!",
-                         f"{clean_topic} funny office comedy scene | stressed corporate employee looking confused at computer monitor"),
-                        (f"బాస్, నిజంగా కష్టపడటం ఒక ఎత్తైతే, ఆఫీసులో కష్టపడుతున్నట్లు నటించడం ఇంకో పెద్ద కళ!",
-                         f"{clean_topic} busy office desk with papers and laptop | employee pretending to work comedy reaction"),
-                        (f"ముఖ్యంగా ల్యాప్‌టాప్‌లో ఎక్సెల్ షీట్ ఓపెన్ చేసి, కీబోర్డ్ మీద సీరియస్‌గా ఏదో టైప్ చేస్తున్నట్లు ఫేస్ పెట్టడం మొదటి ట్రిక్!",
-                         f"{clean_topic} office worker typing furiously on keyboard | funny corporate meme reaction expression"),
-                        (f"ఎవరైనా అడిగితే 'నేను క్రిటికల్ అనలిసిస్ చేస్తున్నాను' అని గంభీరంగా చెబితే, మేనేజర్ కూడా డిస్టర్బ్ చేయరు!",
-                         f"{clean_topic} corporate team meeting room presentation | employees pretending to pay attention satire"),
-                        (f"మధ్యమధ్యలో కాఫీ కప్పు పట్టుకుని ఆలోచిస్తున్నట్లు నడవడం ప్రొఫెషనల్ యాక్టింగ్ లెవెల్ సుమా!",
-                         f"{clean_topic} employee taking coffee break in office pantry | relaxed corporate worker having coffee"),
-                        (f"మీటింగ్‌లలో అందరూ మాట్లాడుతున్నప్పుడు తల ఊపుతూ సీరియస్ లుక్ ఇస్తే, మీరు ప్రాజెక్ట్ మెయిన్ పిల్లర్ అనుకుంటారు!",
-                         f"{clean_topic} modern corporate office cubicles | person looking busy at desk workplace satire"),
-                        (f"చివరిగా లాగ్ అవుట్ టైమ్ అయ్యేంత వరకు స్క్రీన్ చూస్తూ బిజీగా కనిపించడం ఒక సూపర్ పవర్!",
-                         f"{clean_topic} clock on office wall end of work day | relieved office workers packing bags comedy"),
-                        (f"మరి మీ ఆఫీసులో కూడా ఇలాంటి ప్రో-లెవెల్ యాక్టర్స్ ఎవరైనా ఉన్నారా బాస్?",
-                         f"{clean_topic} laughing colleagues watching screen | funny office meme expression"),
-                        (f"కింద కామెంట్స్ లో చెప్పండి, వీడియో నచ్చితే వెంటనే లైక్ చేసి సబ్‌స్క్రైబ్ చేసుకోండి!",
-                         f"like share and subscribe animation youtube studio | comedy entertaining video closing call to action"),
-                    ]
+                    if is_office_theme:
+                        base = [
+                            (f"హాయ్ ఫ్రెండ్స్! {tel_topic} గురించి ఈరోజు మనం మాట్లాడబోయే అసలైన ఫన్నీ విషయాలు చూస్తే మీరు పడిపడి నవ్వుకుంటారు!",
+                             f"{clean_topic} funny office comedy scene | stressed corporate employee looking confused at computer monitor"),
+                            (f"బాస్, నిజంగా కష్టపడటం ఒక ఎత్తైతే, ఆఫీసులో కష్టపడుతున్నట్లు నటించడం ఇంకో పెద్ద కళ!",
+                             f"{clean_topic} busy office desk with papers and laptop | employee pretending to work comedy reaction"),
+                            (f"ముఖ్యంగా ల్యాప్‌టాప్‌లో ఎక్సెల్ షీట్ ఓపెన్ చేసి, కీబోర్డ్ మీద సీరియస్‌గా ఏదో టైప్ చేస్తున్నట్లు ఫేస్ పెట్టడం మొదటి ట్రిక్!",
+                             f"{clean_topic} office worker typing furiously on keyboard | funny corporate meme reaction expression"),
+                            (f"ఎవరైనా అడిగితే 'నేను క్రిటికల్ అనలిసిస్ చేస్తున్నాను' అని గంభీరంగా చెబితే, మేనేజర్ కూడా డిస్టర్బ్ చేయరు!",
+                             f"{clean_topic} corporate team meeting room presentation | employees pretending to pay attention satire"),
+                            (f"మధ్యమధ్యలో కాఫీ కప్పు పట్టుకుని ఆలోచిస్తున్నట్లు నడవడం ప్రొఫెషనల్ యాక్టింగ్ లెవెల్ సుమా!",
+                             f"{clean_topic} employee taking coffee break in office pantry | relaxed corporate worker having coffee"),
+                            (f"మీటింగ్‌లలో అందరూ మాట్లాడుతున్నప్పుడు తల ఊపుతూ సీరియస్ లుక్ ఇస్తే, మీరు ప్రాజెక్ట్ మెయిన్ పిల్లర్ అనుకుంటారు!",
+                             f"{clean_topic} modern corporate office cubicles | person looking busy at desk workplace satire"),
+                            (f"చివరిగా లాగ్ అవుట్ టైమ్ అయ్యేంత వరకు స్క్రీన్ చూస్తూ బిజీగా కనిపించడం ఒక సూపర్ పవర్!",
+                             f"{clean_topic} clock on office wall end of work day | relieved office workers packing bags comedy"),
+                            (f"మరి మీ ఆఫీసులో కూడా ఇలాంటి ప్రో-లెవెల్ యాక్టర్స్ ఎవరైనా ఉన్నారా బాస్?",
+                             f"{clean_topic} laughing colleagues watching screen | funny office meme expression"),
+                            (f"కింద కామెంట్స్ లో చెప్పండి, వీడియో నచ్చితే వెంటనే లైక్ చేసి సబ్‌స్క్రైబ్ చేసుకోండి!",
+                             f"like share and subscribe animation youtube studio | comedy entertaining video closing call to action"),
+                        ]
+                    else:
+                        base = [
+                            (f"హాయ్ ఫ్రెండ్స్! {tel_topic} గురించి సోషల్ మీడియాలో జరుగుతున్న ఫన్నీ రచ్చ చూశారా? అసలు ఏం జరుగుతుందో ఇప్పుడు చూద్దాం!",
+                             f"{clean_topic} dramatic entertainment moment | {clean_topic} viral discussion"),
+                            (f"బాస్, ఈ విషయంలో జరుగుతున్న డ్రామా చూస్తుంటే ఎవరికైనా మైండ్ బ్లాంక్ అవ్వాల్సిందే!",
+                             f"{clean_topic} shocking scene reaction | {clean_topic} heated discussion"),
+                            (f"ఒకవైపు చూస్తే సీరియస్ ట్విస్ట్‌లు, మరోవైపు చూస్తే కడుపుబ్బా నవ్వించే ఓవరాక్షన్!",
+                             f"{clean_topic} hilarious funny expression | {clean_topic} comedy reaction meme"),
+                            (f"ఆడియన్స్ కూడా ఈ పరిణామాలను చూసి సోషల్ మీడియాలో మీమ్స్‌తో దుమ్మురేపుతున్నారు!",
+                             f"{clean_topic} social media viral memes reaction | audience laughing comedy"),
+                            (f"అసలు వాళ్లు చేస్తున్న పనులకు, చెబుతున్న లాజిక్స్‌కి ఏమైనా సంబంధం ఉందా బాస్?",
+                             f"{clean_topic} confused reaction face | {clean_topic} surprising highlight"),
+                            (f"స్క్రీన్ మీద వీళ్ల యాక్టింగ్ చూస్తుంటే ఆస్కార్ లెవెల్ పర్ఫార్మెన్స్ అండి బాబు!",
+                             f"{clean_topic} dramatic expression close up | {clean_topic} highlight moment"),
+                            (f"ఎవరి వ్యూహాలు వాళ్లవి, ఎవరి గేమ్ ప్లాన్ వాళ్లదే అన్నట్లుగా ఉంది పరిస్థితి!",
+                             f"{clean_topic} dramatic confrontation scene | {clean_topic} intense moment"),
+                            (f"మరి ఈ క్రేజీ డ్రామా మరియు రచ్చపై మీరేమనుకుంటున్నారు బాస్?",
+                             f"{clean_topic} iconic comedy reaction still | {clean_topic} audience verdict"),
+                            (f"కింద కామెంట్స్‌లో చెప్పండి, వీడియో నచ్చితే వెంటనే లైక్ కొట్టి సబ్‌స్క్రైబ్ చేసుకోండి!",
+                             f"like share and subscribe animation youtube studio | comedy entertaining video closing call to action"),
+                        ]
                 else:
-                    base = [
-                        (f"Welcome to the ultimate survival breakdown of {clean_topic}!",
-                         f"{clean_topic} funny office comedy scene | stressed corporate employee looking confused at computer monitor"),
-                        (f"Let's be completely honest: looking extremely busy is truly an Olympic-level corporate art form.",
-                         f"{clean_topic} busy office desk with papers and laptop | employee pretending to work comedy reaction"),
-                        (f"Rule number one: keep complex spreadsheets open and type furiously whenever someone walks by.",
-                         f"{clean_topic} office worker typing furiously on keyboard | funny corporate meme reaction expression"),
-                        (f"If your manager glances over, frown intently at the monitor like you are saving a critical project.",
-                         f"{clean_topic} corporate team meeting room presentation | employees pretending to pay attention satire"),
-                        (f"Always walk down the hallway with urgent determination while carrying an official notebook.",
-                         f"{clean_topic} employee taking coffee break in office pantry | relaxed corporate worker having coffee"),
-                        (f"In team meetings, nod thoughtfully and drop classic buzzwords to look like a visionary leader.",
-                         f"{clean_topic} modern corporate office cubicles | person looking busy at desk workplace satire"),
-                        (f"Block out your calendar with 'strategic focus alignment' to protect your inner peace.",
-                         f"{clean_topic} clock on office wall end of work day | relieved office workers packing bags comedy"),
-                        (f"Have you or your coworkers ever perfected any of these hilarious corporate survival tactics?",
-                         f"{clean_topic} laughing colleagues watching screen | funny office meme expression"),
-                        (f"Drop your best workplace stories in the comments below, hit like, and subscribe for more!",
-                         f"like share and subscribe animation youtube studio | comedy entertaining video closing call to action"),
-                    ]
+                    if is_office_theme:
+                        base = [
+                            (f"Welcome to the ultimate survival breakdown of {clean_topic}!",
+                             f"{clean_topic} funny office comedy scene | stressed corporate employee looking confused at computer monitor"),
+                            (f"Let's be completely honest: looking extremely busy is truly an Olympic-level corporate art form.",
+                             f"{clean_topic} busy office desk with papers and laptop | employee pretending to work comedy reaction"),
+                            (f"Rule number one: keep complex spreadsheets open and type furiously whenever someone walks by.",
+                             f"{clean_topic} office worker typing furiously on keyboard | funny corporate meme reaction expression"),
+                            (f"If your manager glances over, frown intently at the monitor like you are saving a critical project.",
+                             f"{clean_topic} corporate team meeting room presentation | employees pretending to pay attention satire"),
+                            (f"Always walk down the hallway with urgent determination while carrying an official notebook.",
+                             f"{clean_topic} employee taking coffee break in office pantry | relaxed corporate worker having coffee"),
+                            (f"In team meetings, nod thoughtfully and drop classic buzzwords to look like a visionary leader.",
+                             f"{clean_topic} modern corporate office cubicles | person looking busy at desk workplace satire"),
+                            (f"Block out your calendar with 'strategic focus alignment' to protect your inner peace.",
+                             f"{clean_topic} clock on office wall end of work day | relieved office workers packing bags comedy"),
+                            (f"Have you or your coworkers ever perfected any of these hilarious corporate survival tactics?",
+                             f"{clean_topic} laughing colleagues watching screen | funny office meme expression"),
+                            (f"Drop your best workplace stories in the comments below, hit like, and subscribe for more!",
+                             f"like share and subscribe animation youtube studio | comedy entertaining video closing call to action"),
+                        ]
+                    else:
+                        base = [
+                            (f"Welcome to the most hilarious breakdown of {clean_topic} that everyone is talking about!",
+                             f"{clean_topic} dramatic entertainment moment | {clean_topic} viral discussion"),
+                            (f"Let's be completely real: the drama unfolding around this situation is truly unbelievable.",
+                             f"{clean_topic} shocking scene reaction | {clean_topic} heated discussion"),
+                            (f"On one hand, you have serious twists, and on the other, peak comedic overreaction!",
+                             f"{clean_topic} hilarious funny expression | {clean_topic} comedy reaction meme"),
+                            (f"Internet audiences and meme pages are having an absolute field day reacting to this.",
+                             f"{clean_topic} social media viral memes reaction | audience laughing comedy"),
+                            (f"The logic being thrown around here would leave anyone completely dumbfounded.",
+                             f"{clean_topic} confused reaction face | {clean_topic} surprising highlight"),
+                            (f"Watching this unfold feels like an Oscar-worthy comedic performance.",
+                             f"{clean_topic} dramatic expression close up | {clean_topic} highlight moment"),
+                            (f"Everyone has their own intense strategy, making the whole spectacle even more entertaining.",
+                             f"{clean_topic} dramatic confrontation scene | {clean_topic} intense moment"),
+                            (f"What is your hilarious take on all this unfolding drama?",
+                             f"{clean_topic} iconic comedy reaction still | {clean_topic} audience verdict"),
+                            (f"Drop your thoughts below, hit the like button, and subscribe for more comedy breakdowns!",
+                             f"like share and subscribe animation youtube studio | comedy entertaining video closing call to action"),
+                        ]
             elif cat == "finance":
                 if tel:
                     base = [
