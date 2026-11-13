@@ -298,7 +298,7 @@ def generate_text_cascade(prompt: str, api_key: str = None, step_name: str = "sc
     Enforces per-provider timeout (~35s) so a stalled provider fails over quickly
     rather than consuming the entire stage budget.
     """
-    configured_order = os.getenv("LLM_PROVIDER_ORDER", "gemini,groq,ollama,pollinations,openrouter")
+    configured_order = os.getenv("LLM_PROVIDER_ORDER", "gemini,openai,groq,ollama,pollinations,openrouter")
     providers = [p.strip().lower() for p in configured_order.split(",") if p.strip()]
 
     provider_map = {

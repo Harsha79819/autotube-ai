@@ -256,13 +256,16 @@ def heal_network_or_quota(stage_name, context=None):
 
         # Category Detection
         satire_kw = {"satire", "satirical", "roast", "funny", "humor", "pretend", "lazy", "sarcastic", "joke", "comedy", "prank", "corporate", "office"}
+        bb_kw = {
+            "bigg boss", "bb telugu", "bb10", "star maa", "elimination", "nomination",
+            "contestant", "housemate", "captaincy", "nagarjuna", "bb drama"
+        }
         finance_kw = {"stock", "sensex", "nifty", "market", "finance", "money", "crypto", "bitcoin", "economy", "invest", "trading", "shares", "dividend", "bank", "gold"}
         history_kw = {"history", "ancient", "war", "empire", "king", "dynasty", "mystery", "secrets", "temple", "monument", "mythology", "archaeology", "historical"}
         ent_kw = {
             "movie", "cinema", "trailer", "box office", "actor", "celebrity", "film",
-            "hollywood", "tollywood", "bollywood", "song", "bigg boss", "bb10", "star maa",
-            "elimination", "nomination", "engaged", "engagement", "contestant", "housemate",
-            "drama", "shiva", "priyanka jain", "hero", "heroine", "director", "producer",
+            "hollywood", "tollywood", "bollywood", "song", "engaged", "engagement",
+            "shiva", "priyanka jain", "hero", "heroine", "director", "producer",
             "review", "crime", "punch", "donga", "koduku", "teaser", "glimpse", "ott",
             "release", "censor", "cast", "theatre", "theater", "boxoffice", "shoot", "series"
         }
@@ -277,9 +280,16 @@ def heal_network_or_quota(stage_name, context=None):
         def any_kw(kws):
             return any(k in raw_topic_lower for k in kws)
 
-        if any_kw(facts_kw) or "fact" in content_type_ctx or "curiosity" in content_type_ctx or "science" in content_type_ctx:
+        is_bb = any_kw(bb_kw) or "bigg boss" in raw_topic_lower or bool(re.search(r"\b(bb|bb10|bb\d+)\b", raw_topic_lower))
+        is_satire = any_kw(satire_kw) or "satir" in content_type_ctx or "sarcas" in content_type_ctx or "humor" in content_type_ctx or "roast" in content_type_ctx or "funny" in content_type_ctx
+
+        if is_bb or "reality" in content_type_ctx:
+            category = "reality_tv"
+        elif is_satire:
+            category = "satire"
+        elif any_kw(facts_kw) or "fact" in content_type_ctx or "curiosity" in content_type_ctx or "science" in content_type_ctx:
             category = "facts"
-        elif any_kw(ent_kw) or "entertainment" in content_type_ctx or "cinema" in content_type_ctx or "movie" in content_type_ctx or "reality" in content_type_ctx or "bigg boss" in raw_topic_lower or "review" in raw_topic_lower:
+        elif any_kw(ent_kw) or "entertainment" in content_type_ctx or "cinema" in content_type_ctx or "movie" in content_type_ctx or "review" in raw_topic_lower:
             category = "entertainment"
         elif any_kw(finance_kw) or "finance" in content_type_ctx:
             category = "finance"
@@ -289,8 +299,6 @@ def heal_network_or_quota(stage_name, context=None):
             category = "phone"
         elif any_kw(tech_kw) or "tech" in content_type_ctx:
             category = "tech"
-        elif any_kw(satire_kw) or "satir" in content_type_ctx or "sarcas" in content_type_ctx or "humor" in content_type_ctx or "roast" in content_type_ctx or "funny" in content_type_ctx:
-            category = "satire"
         else:
             category = "general"
 
@@ -384,6 +392,60 @@ def heal_network_or_quota(stage_name, context=None):
                             (f"Drop your thoughts below, hit the like button, and subscribe for more comedy breakdowns!",
                              f"like share and subscribe animation youtube studio | comedy entertaining video closing call to action"),
                         ]
+            elif cat == "reality_tv":
+                vis_tag = "Bigg Boss Telugu" if ("telugu" in raw_topic_lower or is_tel or "bb" in raw_topic_lower) else "Bigg Boss"
+                if tel:
+                    base = [
+                        (f"హాయ్ ఫ్రెండ్స్! బిగ్ బాస్ హౌస్‌లో జరిగిన రచ్చ, లేటెస్ట్ హై-వోల్టేజ్ డ్రామా ఇప్పుడు చూద్దాం.",
+                         f"{vis_tag} house dramatic moment | {vis_tag} contestants argument"),
+                        (f"ముఖ్యంగా హౌస్‌లో కంటెస్టెంట్స్ మధ్య జరిగిన తీవ్ర వాగ్వాదం మరియు నామినేషన్ల గొడవలు పీక్స్‌కి చేరాయి.",
+                         f"{vis_tag} nomination task fight | {vis_tag} housemates intense conflict"),
+                        (f"ఒకరిపై ఒకరు వేసుకున్న నిందలు, ఎమోషనల్ ఓవరాక్షన్ చూసి ఆడియన్స్‌కి కూడా మైండ్ బ్లాంక్ అయిపోయింది.",
+                         f"{vis_tag} contestant emotional reaction tears | {vis_tag} dramatic moment"),
+                        (f"టాస్కుల్లో గెలవడానికి వేసిన ప్లాన్లు, గ్రూపిజం చూస్తుంటే ఇది మైండ్ గేమా లేక ప్యూర్ డ్రామానా అనిపిస్తోంది.",
+                         f"{vis_tag} captaincy task competition | {vis_tag} contestants confrontation"),
+                        (f"సోషల్ మీడియాలో అయితే నెటిజన్లు మీమ్స్ మరియు ట్రోల్స్‌తో హౌస్‌మేట్స్‌ని ఒక రేంజ్‌లో ఏకిపారేస్తున్నారు.",
+                         f"{vis_tag} funny memes social media trolling | viral audience reaction meme"),
+                        (f"అసలు వాళ్లు చేస్తున్న పనులకు, చెబుతున్న లాజిక్స్‌కి ఏమైనా సంబంధం ఉందా అనిపిస్తోంది.",
+                         f"{vis_tag} contestant confused face | {vis_tag} shocking reaction"),
+                        (f"ప్రతీ ఒక్కరూ సేఫ్ గేమ్ ఆడుతూ ఇతరుల మీద నెపం నెట్టే ప్రయత్నం చేస్తున్నారు.",
+                         f"{vis_tag} contestants discussion living room | {vis_tag} house secret talk"),
+                        (f"ఎవరు సేఫ్ అవుతారు, ఈ వారం హౌస్ నుండి ఎవరు ఎలిమినేట్ అవుతారు అనే దానిపై ఓటింగ్ ట్రెండ్స్ ఆసక్తికరంగా మారాయి.",
+                         f"{vis_tag} elimination voting suspense | {vis_tag} host stage"),
+                        (f"హోస్ట్ వీకెండ్ ఎపిసోడ్‌లో ఎవరికి క్లాస్ పీకుతారు అనేది ఇప్పుడు పెద్ద సస్పెన్స్!",
+                         f"{vis_tag} weekend episode host stage | {vis_tag} elimination drama"),
+                        (f"మొత్తానికి ఈ వారం ఎపిసోడ్స్ ఆడియన్స్‌కి మంచి ఎంటర్‌టైన్‌మెంట్ మరియు ఫుల్ టైమ్ పాస్ ఇస్తున్నాయి.",
+                         f"{vis_tag} house highlight moment | {vis_tag} contestants smiling"),
+                        (f"ఆడియన్స్ కూడా ఎవరికి ఓట్లు వేయాలనే దానిపై సోషల్ మీడియాలో పోల్స్ పెడుతున్నారు.",
+                         f"{vis_tag} viral social media poll | audience review discussion"),
+                        (f"మరి ఈ వారం హౌస్‌లో ఎవరి ప్రవర్తన మీకు నచ్చింది? ఎవరు ఎలిమినేట్ అయితే కరెక్ట్ అంటారు బాస్?",
+                         f"{vis_tag} audience verdict discussion | viewers poll reaction"),
+                        (f"కింద కామెంట్స్‌లో మీ ఫేవరెట్ కంటెస్టెంట్ ఎవరో చెప్పండి, మరిన్ని బిగ్ బాస్ అప్‌డేట్స్ కోసం లైక్ కొట్టి సబ్‌స్క్రైబ్ చేసుకోండి!",
+                         f"like share and subscribe animation youtube studio | reality show entertainment channel closing call to action"),
+                    ]
+                else:
+                    base = [
+                        (f"Welcome back! Let's break down the wild high-voltage drama unfolding in the Bigg Boss house today.",
+                         f"{vis_tag} house dramatic moment | {vis_tag} contestants argument"),
+                        (f"The latest nominations sparked heated arguments, with contestants clashing over petty issues.",
+                         f"{vis_tag} nomination task fight | {vis_tag} housemates intense conflict"),
+                        (f"The emotional overreactions and dramatic outbursts inside the house have viewers completely stunned.",
+                         f"{vis_tag} contestant emotional reaction tears | {vis_tag} dramatic moment"),
+                        (f"Between calculated groupism and sudden betrayal, each task has turned into a psychological battlefield.",
+                         f"{vis_tag} captaincy task competition | {vis_tag} contestants confrontation"),
+                        (f"Social media and meme pages are having an absolute blast roasting the unbelievable antics.",
+                         f"{vis_tag} funny memes social media trolling | viral audience reaction meme"),
+                        (f"Contestants trying to play safe are finding themselves exposed right under the spotlight.",
+                         f"{vis_tag} contestant confused face | {vis_tag} shocking reaction"),
+                        (f"Voting trends are fluctuating wildly as fans battle it out online to protect their favorites.",
+                         f"{vis_tag} elimination voting suspense | {vis_tag} host stage"),
+                        (f"The suspense surrounding the upcoming weekend elimination is keeping audiences glued to their screens.",
+                         f"{vis_tag} weekend episode host stage | {vis_tag} elimination drama"),
+                        (f"Who do you think deserved the heat this week, and who is packing their bags next?",
+                         f"{vis_tag} audience verdict discussion | viewers poll reaction"),
+                        (f"Drop your predictions in the comments below, smash that like button, and subscribe for daily updates!",
+                         f"like share and subscribe animation youtube studio | reality show entertainment channel closing call to action"),
+                    ]
             elif cat == "entertainment":
                 if tel:
                     base = [
