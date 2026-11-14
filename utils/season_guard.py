@@ -400,10 +400,11 @@ def is_bigg_boss_topic(text: str) -> bool:
     if any(k in t_norm for k in (
         "bigg boss", "biggboss", "big boss", "bigboss", "బిగ్ బాస్", "బిగ్‌బాస్",
         "bb10", "bb9", "bb8", "bb7", "bb6", "bb5",
-        "bbt10", "bbtelugu"
+        "bbt10", "bbtelugu", "bb telugu", "bb house", "bb elimination", "bb nomination",
+        "bb voting", "bb update", "bb finale", "bb family"
     )):
         return True
-    if bool(re.search(r"\b(?:bb|bbt)\s*\d{1,2}\b", t_norm)):
+    if bool(re.search(r"\b(?:bb|bbt)\s*(?:telugu|\d{1,2}|finale|week|house|buzz|live|update)\b", t_norm)):
         return True
     try:
         from data.bb10_contestants import is_bigg_boss_context

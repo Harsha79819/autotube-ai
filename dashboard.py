@@ -203,8 +203,8 @@ def clean_previous_generation():
 
     if ASSETS_DIR.exists():
         for item in ASSETS_DIR.iterdir():
-            # Never delete voice sample references, static music, outro, or offline fallback pool
-            if "voice" in item.name.lower() or item.name.lower() in ("fallback", "music", "outro"):
+            # Never delete voice sample references, static music, outro, sfx, entities, memes, contestants, or offline fallback pool
+            if "voice" in item.name.lower() or item.name.lower() in ("fallback", "music", "outro", "sfx", "entities", "memes", "contestants"):
                 continue
             try:
                 if item.is_file():
@@ -1042,10 +1042,16 @@ def generate_multi_media_video(
     for format-aware validation gates and profiling.
     """
     import importlib
-    import config.format_profiles
-    importlib.reload(config.format_profiles)
+    try:
+        from config import format_profiles
+        importlib.reload(format_profiles)
+    except Exception:
+        pass
     import pipeline
-    importlib.reload(pipeline)
+    try:
+        importlib.reload(pipeline)
+    except Exception:
+        pass
     from pipeline import generate_multi_media_video as _real_generate
     return _real_generate(
         topic=topic,
@@ -1550,19 +1556,38 @@ def generate_multi_media_video(
                 print(f"[Targeted Self-Healing] Preserving existing voice audio (failing component: {failing_component})")
 
         # ----------------------------------------------------
-        # Phase 1 Virality Upgrade: Shorts Voice Duration Guard (Hard Max 45s)
+        # Target Duration Guard (Calibrated to Selected target_duration)
         # ----------------------------------------------------
-        is_shorts_run = (aspect_ratio == "9:16") and not ("6-9" in str(target_duration).lower() or "long-form" in str(target_duration).lower())
         voice_file_p = OUTPUT_DIR / "voice.mp3"
-        if is_shorts_run and voice_file_p.exists() and attempt < MAX_REVIEW_ATTEMPTS:
+        if voice_file_p.exists() and attempt < MAX_REVIEW_ATTEMPTS:
             from agents.run_report import probe_duration
             v_dur = probe_duration(str(voice_file_p))
-            if v_dur > 45.0:
-                print(f"⚠️ [Virality Length Cap] Voice duration is {v_dur:.1f}s (> 45.0s hard max for Shorts).")
-                print("🔄 Triggering supervisor re-script loop to shorten narration while preserving hook + payoff...")
+            dur_str = str(target_duration).lower()
+            if "30-50" in dur_str or "35-45" in dur_str:
+                max_allowed_dur = 52.0
+                target_word_desc = "65-90 words"
+            elif "60-90" in dur_str or "60" in dur_str or "90" in dur_str:
+                max_allowed_dur = 95.0
+                target_word_desc = "130-190 words"
+            elif "120-150" in dur_str or "120" in dur_str or "150" in dur_str or "2-2.5" in dur_str:
+                max_allowed_dur = 160.0
+                target_word_desc = "240-340 words"
+            elif "2-4" in dur_str:
+                max_allowed_dur = 250.0
+                target_word_desc = "350-550 words"
+            elif "6-9" in dur_str or "long-form" in dur_str:
+                max_allowed_dur = 560.0
+                target_word_desc = "900-1300 words"
+            else:
+                max_allowed_dur = 95.0 if aspect_ratio == "9:16" else 300.0
+                target_word_desc = "appropriate length"
+
+            if v_dur > max_allowed_dur:
+                print(f"⚠️ [Duration Cap] Voice duration is {v_dur:.1f}s (> {max_allowed_dur:.1f}s max for target '{target_duration}').")
+                print("🔄 Triggering supervisor re-script loop to adjust narration while preserving hook + payoff...")
                 feedback = (
                     f"CRITICAL RETENTION ERROR: Spoken voice duration was {v_dur:.1f} seconds, which strictly exceeds "
-                    "the 45-second hard maximum for YouTube Shorts. Shorten the script to 60-85 words strictly "
+                    f"the {max_allowed_dur:.0f}-second limit for {target_duration}. Shorten the script to {target_word_desc} strictly "
                     "while preserving the opening hook and closing payoff intact."
                 )
                 failing_component = "script_agent"
@@ -3008,8 +3033,8 @@ with st.container():
         if is_telugu_lang:
             voice_options = [
                 "👩 Shruti (Telugu Creator / Anchor) - Conversational",
-                "🔥 👩 Shruti (Telugu Female - Sarcastic & Roasting)",
                 "👨 Mohan (Telugu Creator / Anchor) - Natural Spoken Delivery",
+                "🔥 👩 Shruti (Telugu Female - Sarcastic & Roasting)",
                 "🤖 Clone My Voice with AI (Local XTTS-v2 / OmniVoice)",
                 "🎙️ Use My Own Voice Recording (Upload Audio)",
                 "👨 Adam (Male Creator) - Fast, Crisp & Natural",
@@ -3355,6 +3380,7 @@ with st.container():
         duration_options = [
             "⚡ 30–50 Seconds (YouTube Shorts / Instagram Reels)",
             "⏱️ 60–90 Seconds (Spotlight / Full Story)",
+            "🚀 120–150 Seconds (Extended Short / 2–2.5 Min)",
             "🎬 2–4 Minutes (In-Depth Explainer)",
             "🏛️ 6–9 Minutes (Long-Form History / Interesting Facts)",
         ]
@@ -3367,11 +3393,13 @@ with st.container():
             index=saved_dur_idx,
             key=f"declared_duration_select_{format_counter}",
             label_visibility="collapsed",
-            help="Controls script word count and visual pacing. 30–50s is optimized for viral Shorts retention.",
+            help="Controls script word count and visual pacing. 120-150s is optimized for extended 2-2.5 min YouTube Shorts.",
         )
         st.session_state["selected_duration_label"] = selected_duration_label
         if "6–9" in selected_duration_label:
             target_duration = "6-9m"
+        elif "120–150" in selected_duration_label:
+            target_duration = "120-150s"
         elif "60–90" in selected_duration_label:
             target_duration = "60-90s"
         elif "2–4" in selected_duration_label:
@@ -3392,13 +3420,15 @@ with st.container():
         )
 
         yt_mode_options = [
-            "Do Not Upload (Save Locally)",
+            "Public (Publish immediately to everyone)",
             "Private (Only you can view - Recommended)",
             "Unlisted (Anyone with link can view)",
-            "Public (Publish immediately to everyone)",
+            "Do Not Upload (Save Locally)",
         ]
 
-        saved_yt_mode = st.session_state.get("declared_yt_mode", yt_mode_options[0])
+        # Default to Public if auto upload is enabled or configured
+        default_yt_mode = yt_mode_options[0] if os.getenv("ENABLE_AUTO_UPLOAD", "1") in ("1", "true") else yt_mode_options[1]
+        saved_yt_mode = st.session_state.get("declared_yt_mode", default_yt_mode)
         saved_yt_idx = yt_mode_options.index(saved_yt_mode) if saved_yt_mode in yt_mode_options else 0
 
         selected_yt_mode = st.selectbox(

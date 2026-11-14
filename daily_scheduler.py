@@ -936,8 +936,8 @@ class MultiSlotDailyScheduler:
             log_daily(f"   - [{s['slot_id']}] {s['scheduled_time']} | {s['channel']} | {s['format_type'].upper()} ({s['target_duration']}) | {s['slot_name']}")
         log_daily("=" * 65)
 
-        try:
-            while True:
+        while True:
+            try:
                 # Check deferral
                 if self.deferred_until and time.time() < self.deferred_until:
                     time.sleep(10)
@@ -946,10 +946,57 @@ class MultiSlotDailyScheduler:
                 self.run_pending_slots()
                 time.sleep(poll_interval_seconds)
 
-        except KeyboardInterrupt:
-            log_daily("🛑 24/7 Daemon received KeyboardInterrupt. Stopping gracefully...")
-        except Exception as loop_err:
-            log_daily(f"⚠️ Daemon error: {loop_err}")
+            except KeyboardInterrupt:
+                log_daily("🛑 24/7 Daemon received KeyboardInterrupt. Stopping gracefully...")
+                break
+            except Exception as loop_err:
+                log_daily(f"⚠️ Recovered from daemon error in poll cycle: {loop_err}. Resuming monitoring in 30s...")
+                time.sleep(30)
+
+
+class DailyPublisher:
+    """Legacy helper for topic picking and format resolution across daily channels."""
+
+    def __init__(self):
+        self.target_channel_setting = "Channel 1 (Primary)"
+        self.content_type_setting = None
+
+    def pick_daily_topic(self) -> Dict[str, Any]:
+        env_ch = os.environ.get("DAILY_CHANNEL", "")
+        env_fmt = os.environ.get("DAILY_FORMAT", "").lower()
+
+        if "2" in env_ch:
+            ch_name = "Channel 2 (Secondary)"
+        elif self.target_channel_setting and ("2" in self.target_channel_setting.lower() or "secondary" in self.target_channel_setting.lower()):
+            ch_name = "Channel 2 (Secondary)"
+        else:
+            ch_name = "Channel 1 (Primary)"
+
+        if env_fmt == "short":
+            aspect_ratio = "9:16"
+            target_duration = "30-50s"
+        elif env_fmt == "long":
+            aspect_ratio = "16:9"
+            target_duration = "6-9m"
+        elif self.content_type_setting in ("History", "Interesting Facts"):
+            aspect_ratio = "16:9"
+            target_duration = "6-9m"
+        elif ch_name == "Channel 1 (Primary)":
+            aspect_ratio = "9:16"
+            target_duration = "30-50s"
+        else:
+            aspect_ratio = "9:16"
+            target_duration = "30-50s"
+
+        content_type = self.content_type_setting or ("Bigg Boss Telugu 10" if "2" in ch_name.lower() else "Tech")
+        topic = f"Latest Trending {content_type} Updates"
+        return {
+            "topic": topic,
+            "youtube_channel": ch_name,
+            "aspect_ratio": aspect_ratio,
+            "target_duration": target_duration,
+            "content_type": content_type,
+        }
 
 
 # ============================================================

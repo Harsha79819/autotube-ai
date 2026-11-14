@@ -18,10 +18,12 @@ import time
 from pathlib import Path
 from supervisor import autonomous_recover
 
+OUTPUT_DIR = Path("output")
+
 
 @autonomous_recover("final_video_agent")
 def create_final_video(
-    add_captions=True,
+    add_captions=None,
     aspect_ratio="9:16",
     burn_captions=None,
     captions=None,
@@ -34,7 +36,7 @@ def create_final_video(
         add_captions = burn_captions
     elif captions is not None:
         add_captions = captions
-    elif aspect_ratio == "9:16":
+    elif add_captions is None:
         add_captions = True
 
     if input_video is None:
@@ -69,9 +71,9 @@ def create_final_video(
     # --------------------------------------------------------
     # Phase 1 Virality Upgrade: Frame 0 Viral Hook Text Overlay
     # --------------------------------------------------------
-    hook_overlay_path = "output/hook_overlay.png"
+    hook_overlay_path = str(Path(output_video).parent / "hook_overlay.png")
     has_hook_overlay = False
-    if is_shorts:
+    if is_shorts and add_captions:
         if not os.path.exists(hook_overlay_path):
             hook_txt = ""
             if os.path.exists("output/hook.json"):
@@ -124,13 +126,15 @@ def create_final_video(
     video_has_audio = bool(p_res.stdout.strip())
     audio_source = "output/mixed_audio.wav" if os.path.exists("output/mixed_audio.wav") else "output/voice.mp3"
 
-    poster_overlay_path = "output/thumbnail_916_poster.png"
-    if not os.path.exists(poster_overlay_path):
-        cand_p = Path(input_video).parent / "thumbnail_916_poster.png"
-        if cand_p.exists():
-            poster_overlay_path = str(cand_p)
+    target_dir = Path(output_video).parent
+    cand_poster = target_dir / "thumbnail_916_poster.png"
+    if not cand_poster.exists():
+        cand_poster = Path(input_video).parent / "thumbnail_916_poster.png"
+    if not cand_poster.exists() and (target_dir.resolve() == OUTPUT_DIR.resolve() or target_dir == Path(".")):
+        cand_poster = OUTPUT_DIR / "thumbnail_916_poster.png"
+    poster_overlay_path = str(cand_poster)
     has_poster_overlay = bool(
-        is_shorts and os.path.exists(poster_overlay_path) and os.path.getsize(poster_overlay_path) > 1000
+        is_shorts and cand_poster.exists() and cand_poster.stat().st_size > 1000
     )
 
     # Fast copy optimization ONLY when NO captions, NO hook overlay, and NO poster overlay are needed
@@ -302,11 +306,17 @@ def create_final_video(
     print()
 
     # Adaptive timeout based on input video duration
-    dur_probe = subprocess.run([
-        "ffprobe", "-v", "error", "-show_entries", "format=duration",
-        "-of", "default=nw=1:nk=1", input_video
-    ], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
-    in_dur = float(dur_probe.stdout.strip() or 60.0)
+    in_dur = 60.0
+    try:
+        dur_probe = subprocess.run([
+            "ffprobe", "-v", "error", "-show_entries", "format=duration",
+            "-of", "default=nw=1:nk=1", input_video
+        ], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=8)
+        raw_dur = (dur_probe.stdout or "").strip()
+        if raw_dur:
+            in_dur = float(raw_dur)
+    except Exception:
+        in_dur = 60.0
     final_timeout = int(max(420, in_dur * 2.5))
 
     try:

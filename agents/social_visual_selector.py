@@ -21,9 +21,15 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-import torch
+try:
+    import torch
+    from transformers import CLIPModel, CLIPProcessor
+except ImportError:
+    torch = None
+    CLIPModel = None
+    CLIPProcessor = None
+
 from PIL import Image
-from transformers import CLIPModel, CLIPProcessor
 
 from config.settings import get_setting
 from agents.typography_card import generate_typography_card
@@ -51,6 +57,8 @@ _CLIP_LOCK = threading.Lock()
 def get_clip_model():
     """Load cached CLIP ViT-B-32 model thread-safely."""
     global _CLIP_MODEL, _CLIP_PROCESSOR
+    if torch is None or CLIPModel is None or CLIPProcessor is None:
+        return None, None
     with _CLIP_LOCK:
         if _CLIP_MODEL is None or _CLIP_PROCESSOR is None:
             model_id = "openai/clip-vit-base-patch32"
@@ -113,10 +121,38 @@ def split_script_into_scenes(script_text: str) -> List[str]:
     full_text = re.sub(r"\.{2,}", "__ELLIPSIS__", full_text)
     raw_sentences = re.split(r"(?<=[.!?।\n])\s+", full_text)
     scenes = []
+    buf = ""
     for s in raw_sentences:
         s = s.replace("__ELLIPSIS__", "...").strip()
-        if len(s) > 10:
-            scenes.append(s)
+        if not s:
+            continue
+        buf = f"{buf} {s}".strip() if buf else s
+        # Consolidate sentences into coherent visual beats of at least 8 words
+        if len(buf.split()) >= 8:
+            scenes.append(buf)
+            buf = ""
+    if buf:
+        if scenes and len(buf.split()) < 5:
+            scenes[-1] = f"{scenes[-1]} {buf}"
+        else:
+            scenes.append(buf)
+
+    # For Shorts, limit scene count to max 16 scenes for optimal visual pacing and low CPU heat
+    if len(scenes) > 16:
+        consolidated = []
+        c_buf = ""
+        target_len = max(8, len(full_text.split()) // 14)
+        for sc in scenes:
+            c_buf = f"{c_buf} {sc}".strip() if c_buf else sc
+            if len(c_buf.split()) >= target_len:
+                consolidated.append(c_buf)
+                c_buf = ""
+        if c_buf:
+            if consolidated:
+                consolidated[-1] = f"{consolidated[-1]} {c_buf}"
+            else:
+                consolidated.append(c_buf)
+        scenes = consolidated
 
     if not scenes:
         scenes = clean_lines if clean_lines else [script_text.strip()[:100] if script_text.strip() else "Scene 1"]
@@ -446,8 +482,8 @@ def score_candidate_with_clip(
     caption: str,
     clip_text: str,
     entity: str,
-    model: CLIPModel,
-    processor: CLIPProcessor,
+    model: Any = None,
+    processor: Any = None,
     boost_val: float = 0.15,
 ) -> Tuple[float, float, float, float]:
     """
@@ -455,6 +491,11 @@ def score_candidate_with_clip(
     Final Score = 70% image-text similarity + 30% caption-text similarity + entity boost
     Returns (final_score, img_sim, cap_sim, boost)
     """
+    if model is None or processor is None or torch is None:
+        has_entity = bool(entity and entity.lower() in caption.lower())
+        boost = boost_val if has_entity else 0.0
+        return 0.5 + boost, 0.5, 0.5, boost
+
     try:
         with Image.open(image_path) as pil_img:
             pil_img = pil_img.convert("RGB")

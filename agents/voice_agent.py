@@ -1623,6 +1623,26 @@ async def create_voice(
         except Exception:
             pass
 
+        # Zero-Tolerance Duration Ceiling Guard:
+        # If narration is for Shorts (duration < 240s) and exceeds 88.0s,
+        # dynamically adjust tempo so narration strictly fits within the 60-88s window!
+        is_explicit_longform = final_duration >= 240.0
+        if not is_explicit_longform and final_duration > 88.0:
+            target_dur = 84.0
+            tempo = min(1.30, final_duration / target_dur)
+            print(f"⏱️ [Duration Clamping] Audio duration was {final_duration:.1f}s (> 88.0s max for Shorts). Dynamically scaling with atempo={tempo:.2f}x to target {target_dur}s...")
+            sped_mp3 = "output/voice_tempo.mp3"
+            r_tempo = subprocess.run([
+                "ffmpeg", "-y", "-i", str(output_mp3),
+                "-filter:a", f"atempo={tempo:.3f}",
+                "-codec:a", "libmp3lame", "-q:a", "2",
+                sped_mp3
+            ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if r_tempo.returncode == 0 and os.path.exists(sped_mp3) and os.path.getsize(sped_mp3) > 1000:
+                os.replace(sped_mp3, output_mp3)
+                final_duration = round(final_duration / tempo, 2)
+                print(f"✅ [Duration Clamping] Voice narration duration clamped to {final_duration:.1f}s.")
+
         final_words = []
         if captured_words and len(captured_words) > 0:
             orig_duration = max(w["end"] for w in captured_words) if captured_words else 0.0

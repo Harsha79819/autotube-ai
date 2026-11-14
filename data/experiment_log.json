@@ -451,5 +451,194 @@
       "avd_sec": null,
       "subscribers": null
     }
+  },
+  {
+    "experiment_id": "exp_20261114_104308_ae15ed",
+    "timestamp": "2026-11-14T10:43:08.255290+00:00",
+    "topic": "Test Topic Intelligence Run",
+    "content_pillar": "tollywood_celebrity",
+    "format": "Shorts",
+    "aspect_ratio": "9:16",
+    "target_duration": "30-50s",
+    "actual_duration_sec": 42.5,
+    "hook_variant": "immediate_hook",
+    "title_variant": "Test Title Curiosity",
+    "thumbnail_text": "TEST SHOCK",
+    "heuristic_scores": {
+      "retention_score": 88.0,
+      "packaging_score": 90.0
+    },
+    "youtube_video_id": null,
+    "recommendations_applied": [],
+    "retrieved_metrics": {
+      "retrieved_at": "2026-11-14T10:43:08.256219+00:00",
+      "views": 1500,
+      "impressions": null,
+      "ctr_percent": 3.8,
+      "avd_sec": null,
+      "subscribers": null
+    }
+  },
+  {
+    "experiment_id": "exp_20261114_110419_a2cc12",
+    "timestamp": "2026-11-14T11:04:19.035689+00:00",
+    "topic": "Test Topic Intelligence Run",
+    "content_pillar": "tollywood_celebrity",
+    "format": "Shorts",
+    "aspect_ratio": "9:16",
+    "target_duration": "30-50s",
+    "actual_duration_sec": 42.5,
+    "hook_variant": "immediate_hook",
+    "title_variant": "Test Title Curiosity",
+    "thumbnail_text": "TEST SHOCK",
+    "heuristic_scores": {
+      "retention_score": 88.0,
+      "packaging_score": 90.0
+    },
+    "youtube_video_id": null,
+    "recommendations_applied": [],
+    "retrieved_metrics": {
+      "retrieved_at": "2026-11-14T11:04:19.036520+00:00",
+      "views": 1500,
+      "impressions": null,
+      "ctr_percent": 3.8,
+      "avd_sec": null,
+      "subscribers": null
+    }
+  },
+  {
+    "experiment_id": "exp_20261114_112103_bbd837",
+    "timestamp": "2026-11-14T11:21:03.899355+00:00",
+    "topic": "Test Topic Intelligence Run",
+    "content_pillar": "tollywood_celebrity",
+    "format": "Shorts",
+    "aspect_ratio": "9:16",
+    "target_duration": "30-50s",
+    "actual_duration_sec": 42.5,
+    "hook_variant": "immediate_hook",
+    "title_variant": "Test Title Curiosity",
+    "thumbnail_text": "TEST SHOCK",
+    "heuristic_scores": {
+      "retention_score": 88.0,
+      "packaging_score": 90.0
+    },
+    "youtube_video_id": null,
+    "recommendations_applied": [],
+    "retrieved_metrics": {
+      "retrieved_at": "2026-11-14T11:21:03.899997+00:00",
+      "views": 1500,
+      "impressions": null,
+      "ctr_percent": 3.8,
+      "avd_sec": null,
+      "subscribers": null
+    }
+  },
+  {
+    "experiment_id": "exp_20261114_112917_4b7249",
+    "timestamp": "2026-11-14T11:29:17.266720+00:00",
+    "topic": "Test Topic Intelligence Run",
+    "content_pillar": "tollywood_celebrity",
+    "format": "Shorts",
+    "aspect_ratio": "9:16",
+    "target_duration": "30-50s",
+    "actual_duration_sec": 42.5,
+    "hook_variant": "immediate_hook",
+    "title_variant": "Test Title Curiosity",
+    "thumbnail_text": "TEST SHOCK",
+    "heuristic_scores": {
+      "retention_score": 88.0,
+      "packaging_score": 90.0
+    },
+    "youtube_video_id": null,
+    "recommendations_applied": [],
+    "retrieved_metrics": {
+      "retrieved_at": "2026-11-14T11:29:17.267406+00:00",
+      "views": 1500,
+      "impressions": null,
+      "ctr_percent": 3.8,
+      "avd_sec": null,
+      "subscribers": null
+    }
+  },
+  {
+    "experiment_id": "exp_20261114_113617_3a9670",
+    "timestamp": "2026-11-14T11:36:17.316195+00:00",
+    "topic": "Test Topic Intelligence Run",
+    "content_pillar": "tollywood_celebrity",
+    "format": "Shorts",
+    "aspect_ratio": "9:16",
+    "target_duration": "30-50s",
+    "actual_duration_sec": 42.5,
+    "hook_variant": "immediate_hook",
+    "title_variant": "Test Title Curiosity",
+    "thumbnail_text": "TEST SHOCK",
+    "heuristic_scores": {
+      "retention_score": 88.0,
+      "packaging_score": 90.0
+    },
+    "youtube_video_id": null,
+    "recommendations_applied": [],
+    "retrieved_metrics": {
+      "retrieved_at": "2026-11-14T11:36:17.316677+00:00",
+      "views": 1500,
+      "impressions": null,
+      "ctr_percent": 3.8,
+      "avd_sec": null,
+      "subscribers": null
+    }
+  },
+  {
+    "experiment_id": "exp_20261114_125233_282177",
+    "timestamp": "2026-11-14T12:52:33.608691+00:00",
+    "topic": "Test Topic Intelligence Run",
+    "content_pillar": "tollywood_celebrity",
+    "format": "Shorts",
+    "aspect_ratio": "9:16",
+    "target_duration": "30-50s",
+    "actual_duration_sec": 42.5,
+    "hook_variant": "immediate_hook",
+    "title_variant": "Test Title Curiosity",
+    "thumbnail_text": "TEST SHOCK",
+    "heuristic_scores": {
+      "retention_score": 88.0,
+      "packaging_score": 90.0
+    },
+    "youtube_video_id": null,
+    "recommendations_applied": [],
+    "retrieved_metrics": {
+      "retrieved_at": "2026-11-14T12:52:33.609591+00:00",
+      "views": 1500,
+      "impressions": null,
+      "ctr_percent": 3.8,
+      "avd_sec": null,
+      "subscribers": null
+    }
+  },
+  {
+    "experiment_id": "exp_20261114_125900_d23780",
+    "timestamp": "2026-11-14T12:59:00.670940+00:00",
+    "topic": "Test Topic Intelligence Run",
+    "content_pillar": "tollywood_celebrity",
+    "format": "Shorts",
+    "aspect_ratio": "9:16",
+    "target_duration": "30-50s",
+    "actual_duration_sec": 42.5,
+    "hook_variant": "immediate_hook",
+    "title_variant": "Test Title Curiosity",
+    "thumbnail_text": "TEST SHOCK",
+    "heuristic_scores": {
+      "retention_score": 88.0,
+      "packaging_score": 90.0
+    },
+    "youtube_video_id": null,
+    "recommendations_applied": [],
+    "retrieved_metrics": {
+      "retrieved_at": "2026-11-14T12:59:00.671919+00:00",
+      "views": 1500,
+      "impressions": null,
+      "ctr_percent": 3.8,
+      "avd_sec": null,
+      "subscribers": null
+    }
   }
 ]

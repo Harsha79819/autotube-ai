@@ -151,7 +151,7 @@ def build_ken_burns_clip(
 
     cmd = [
         "ffmpeg", "-y",
-        "-threads", "4",
+        "-threads", "2",
         "-loop", "1",
         "-i", str(image_path),
         "-vf", vf,
@@ -203,6 +203,7 @@ def prepare_scene_clip(
         vf = ",".join(vf_filters)
         cmd = [
             "ffmpeg", "-y",
+            "-threads", "2",
             "-stream_loop", "-1",
             "-i", str(media_path),
             "-vf", vf,
@@ -303,6 +304,7 @@ def assemble_with_transitions(
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
     cmd = [
         "ffmpeg", "-y",
+        "-threads", "2",
         *inputs,
         "-filter_complex", ";".join(filter_parts),
         "-map", f"[{prev}]",
@@ -380,6 +382,7 @@ def assemble_with_transitions(
         # 2. Fast re-encode fallback
         concat_cmd = [
             "ffmpeg", "-y",
+            "-threads", "2",
             "-f", "concat",
             "-safe", "0",
             "-i", str(concat_list_path),

@@ -237,7 +237,8 @@ class TestVisualDedupAndReelsExport(unittest.TestCase):
         self.assertIn("-movflags +faststart", cmd_str)
 
     @patch("agents.final_video_agent.subprocess.run")
-    def test_05_final_video_agent_16_9_horizontal_arguments(self, mock_subproc):
+    @patch("agents.final_video_agent.subprocess.Popen")
+    def test_05_final_video_agent_16_9_horizontal_arguments(self, mock_popen, mock_subproc):
         """
         Verifies horizontal (16:9) long-form videos retain 48000 Hz audio rate.
         """
@@ -263,6 +264,17 @@ class TestVisualDedupAndReelsExport(unittest.TestCase):
 
         mock_subproc.side_effect = fake_subproc
 
+        mock_proc_obj = MagicMock()
+        mock_proc_obj.returncode = 0
+        mock_proc_obj.stdout = ["frame=100\n", "progress=end\n"]
+        mock_proc_obj.wait.return_value = 0
+
+        def fake_popen(cmd, *args, **kwargs):
+            dummy_output.write_bytes(b"rendered_output_bytes_123456")
+            return mock_proc_obj
+
+        mock_popen.side_effect = fake_popen
+
         create_final_video(
             add_captions=True,
             aspect_ratio="16:9",
@@ -270,7 +282,7 @@ class TestVisualDedupAndReelsExport(unittest.TestCase):
             output_video=str(dummy_output),
         )
 
-        ffmpeg_calls = [c for c in mock_subproc.call_args_list if c[0][0][0] == "ffmpeg"]
+        ffmpeg_calls = [c for c in mock_popen.call_args_list if c[0][0][0] == "ffmpeg"]
         self.assertTrue(len(ffmpeg_calls) > 0)
         cmd = ffmpeg_calls[-1][0][0]
         cmd_str = " ".join(cmd)

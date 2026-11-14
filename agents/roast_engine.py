@@ -422,8 +422,8 @@ def calibrate_script_before_execution(
     """
     words = script.split()
     word_count = len(words)
-    min_required = 135 if target_duration_sec > 50 else 65
-    max_allowed = 185 if target_duration_sec > 50 else 92
+    min_required = 120 if target_duration_sec > 50 else 65
+    max_allowed = 160 if target_duration_sec > 50 else 90
 
     print(f"🎯 [Script Calibration] Validating script: {word_count} words (Target: {min_required}-{max_allowed} words)...")
 
@@ -611,17 +611,40 @@ Return valid JSON strictly matching:
 # ------------------------------------------------------------
 def markup_roast_delivery(script: str, topic: str = "") -> List[Dict[str, Any]]:
     """Splits roast script into beats and tags with emotion presets, pauses, SFX, and on_screen_text."""
-    # Split on sentence terminals, em-dashes (—), and ellipsis (...) for punctuation-driven cadence
-    raw_sentences = [s.strip() for s in re.split(r"([.!?]+|—|\.\.\.)", script) if s.strip()]
+    # Split into clean, cohesive beats (aim for 8-14 words per beat, 12-16 beats total)
+    # Avoid micro-slicing every 2-word fragment which floods the project with 35+ redundant image downloads
+    raw_tokens = [s.strip() for s in re.split(r"([.!?।]+|\n+)", script) if s.strip()]
     merged_beats = []
     curr = ""
-    for token in raw_sentences:
-        curr += (" " + token if curr and token not in (".", "!", "?", "—", "...") else token)
-        if token in (".", "!", "?", "—", "...") and len(curr.strip()) > 15:
+    for token in raw_tokens:
+        curr += (" " + token if curr and token not in (".", "!", "?", "।") else token)
+        # Consolidate sentences into semantic beats (min 7 words per beat)
+        if token in (".", "!", "?", "।", "\n") and len(curr.split()) >= 7:
             merged_beats.append(curr.strip())
             curr = ""
     if curr.strip():
-        merged_beats.append(curr.strip())
+        if merged_beats and len(curr.split()) < 5:
+            merged_beats[-1] = f"{merged_beats[-1]} {curr.strip()}"
+        else:
+            merged_beats.append(curr.strip())
+
+    # Clamp total beats between 10 and 16 for optimal 60-90s pacing
+    if len(merged_beats) > 16:
+        # Consolidate smallest adjacent beats
+        consolidated = []
+        c_buf = ""
+        target_per_beat = max(8, len(script.split()) // 14)
+        for b in merged_beats:
+            c_buf = f"{c_buf} {b}".strip() if c_buf else b
+            if len(c_buf.split()) >= target_per_beat:
+                consolidated.append(c_buf)
+                c_buf = ""
+        if c_buf:
+            if consolidated:
+                consolidated[-1] = f"{consolidated[-1]} {c_buf}"
+            else:
+                consolidated.append(c_buf)
+        merged_beats = consolidated
 
     if len(merged_beats) < 4:
         parts = [p.strip() for p in re.split(r"[,;]+", script) if len(p.strip()) > 15]

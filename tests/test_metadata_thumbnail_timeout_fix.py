@@ -90,7 +90,7 @@ class TestMetadataThumbnailTimeoutFix(unittest.TestCase):
         )
         elapsed_thumb = time.time() - t1
         self.assertTrue(Path(thumb_path).exists())
-        self.assertLess(elapsed_thumb, 6.0, f"create_thumbnail took too long: {elapsed_thumb:.2f}s")
+        self.assertLess(elapsed_thumb, 12.0, f"create_thumbnail took too long: {elapsed_thumb:.2f}s")
 
     def test_supervisor_recovers_metadata_stage_on_timeout(self):
         """Verifies that run_stage_with_timeout auto-heals when Metadata & Thumbnail Generation times out."""

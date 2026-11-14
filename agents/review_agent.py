@@ -866,7 +866,8 @@ Use this exact format:
             for f_iss in fact_issues:
                 if "critical_issues" not in result:
                     result["critical_issues"] = []
-                result["critical_issues"].append(f"CRITICAL FACTUAL DEFECT: {f_iss}")
+                f_iss_str = f_iss.get("detail", str(f_iss)) if isinstance(f_iss, dict) else str(f_iss)
+                result["critical_issues"].append(f"CRITICAL FACTUAL DEFECT: {f_iss_str}")
             result["status"] = "IMPROVE"
             result["failing_component"] = "script_agent"
 

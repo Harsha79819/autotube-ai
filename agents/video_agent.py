@@ -1920,8 +1920,8 @@ def create_video(aspect_ratio="9:16"):
 
         if tasks_to_render:
             import concurrent.futures
-            max_workers = min(4, os.cpu_count() or 4, len(tasks_to_render))
-            print(f"⚡ [Video Multiprocessing] Concurrently rendering {len(tasks_to_render)}/{len(render_tasks)} scene clips ({max_workers} processes)...")
+            max_workers = min(2, len(tasks_to_render))
+            print(f"⚡ [Video Multiprocessing] Concurrently rendering {len(tasks_to_render)}/{len(render_tasks)} scene clips ({max_workers} processes, low-heat throttle)...")
             with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as ex:
                 list(ex.map(_render_scene_clip_process, tasks_to_render))
         else:

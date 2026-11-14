@@ -146,13 +146,19 @@ def check_asset_prior_seasons(image_path: Path, is_bb: bool = True) -> Tuple[boo
     if not is_bb:
         return True, text, "OK"
 
-    # 1. Direct prior season keyword checks
+    # 1. Direct prior season keyword checks (English & Telugu)
     prior_season_patterns = [
         r"\bbigg\s*boss\s*[1-9]\b",
         r"\bbb\s*[1-9]\b",
         r"\bseason\s*[1-9]\b",
         r"\bseason-[1-9]\b",
         r"\bbb[1-9]\b",
+        r"బిగ్[\s_-]*బాస్[\s_-]*[1-9]\b",
+        r"బిగ్‌బాస్[\s_-]*[1-9]\b",
+        r"సీజన్[\s_-]*[1-9]\b",
+        r"బిగ్[\s_-]*బాస్[\s_-]*([1-9])",
+        r"బిగ్‌బాస్[\s_-]*([1-9])",
+        r"సీజన్[\s_-]*([1-9])",
     ]
     for pat in prior_season_patterns:
         if re.search(pat, t_low):
@@ -179,7 +185,7 @@ def check_asset_prior_seasons(image_path: Path, is_bb: bool = True) -> Tuple[boo
         "aadi reddy", "geetu royal", "revanth", "fima", "inasulthan",
         "shiva jyothi", "himaja", "punarnavi", "sreemukhi",
         "kaushal", "kaushal manda", "geetha madhuri", "deepthi sunaina",
-        "shiva rajkumar",
+        "shiva rajkumar", "balakrishna", "బాలకృష్ణ", "unstoppable", "అన్‌స్టాపబుల్",
     ]
     for name in past_season_names:
         if name in t_low:

@@ -103,7 +103,9 @@ def parse_duration_to_seconds(raw_duration: Any) -> Tuple[float, float, float]:
         mid = float(m_sec_single.group(1))
         return mid * 0.9, mid, mid * 1.1
 
-    # Defaults: 60-90s if explicitly specified or spotlight/full story, 6-9m if long-form
+    # Defaults: 60-90s if explicitly specified or spotlight/full story, 120-150s, 6-9m if long-form
+    if "120-150" in s or "120–150" in s or "120 to 150" in s or "2-2.5" in s:
+        return 115.0, 135.0, 155.0
     if "spotlight" in s or "full" in s or "60-90" in s or "60" in s or "90" in s or "extended" in s:
         return 60.0, 75.0, 90.0
     if "6-9" in s or "long-form" in s or "history" in s:
@@ -189,28 +191,33 @@ def get_format_profile(
             safe_area_center_pct=0.85,
         )
     else:
-        # SHORT PROFILE (YouTube Studio Retention Window: 30-50s, hard max 45s, 9:16 1080x1920)
+        # SHORT PROFILE (YouTube Studio Retention: 30-50s, 60-90s, or Extended 120-150s)
         w, h = (1080, 1920) if aspect_ratio != "16:9" else (1920, 1080)
-        wps_min = 2.0 if is_indic else 2.4
-        wps_max = 2.4 if is_indic else 2.8
-        nominal_wps = 2.2 if is_indic else 2.6
-        nominal_words = int(min(target_s, 40.0) * nominal_wps)
+        wps_min = 1.8 if is_indic else 2.4
+        wps_max = 2.1 if is_indic else 2.8
+        nominal_wps = 1.95 if is_indic else 2.6
+        nominal_words = int(target_s * nominal_wps)
 
         if target_s <= 52.0:
             # High-retention viral window: 25-50s (Target: 35-42s, Spoken ~30-44s)
             min_words = max(55, int(min_s * wps_min))
             max_words = min(92, int(max_s * wps_max))
             clips = max(8, math.ceil(min(target_s, 42.0) / 2.0))
-        elif target_s <= 90.0:
-            # 60-90s Shorts Profile
-            min_words = max(125, int(min_s * wps_min))
-            max_words = min(190, int(max_s * wps_max))
-            clips = max(14, math.ceil(target_s / 3.0))
+        elif target_s <= 95.0:
+            # 60-90s Shorts Profile (Strictly 60-88s duration envelope)
+            min_words = max(120, int(min_s * wps_min))
+            max_words = min(160 if is_indic else 185, int(max_s * wps_max))
+            clips = max(12, min(16, math.ceil(target_s / 5.0)))
+        elif target_s <= 165.0:
+            # 120-150s Extended Shorts (YouTube Shorts now officially supports up to 3 mins / 180s)
+            min_words = max(230, int(min_s * wps_min))
+            max_words = min(360, int(max_s * wps_max))
+            clips = max(20, math.ceil(target_s / 5.5))
         else:
             # Extended Shorts
             min_words = int(min_s * wps_min * 0.90)
             max_words = int(max_s * wps_max * 1.10)
-            clips = max(16, math.ceil(target_s / 3.0))
+            clips = max(22, math.ceil(target_s / 4.0))
 
         return FormatProfile(
             format_type="short",

@@ -1538,6 +1538,10 @@ def validate_visual_assets(assets_dir=None, fallback_dir=None):
                             if ref_p:
                                 av_p = str(ref_p)
 
+                    if not headline:
+                        headline = f"{b_ent} Key Update" if b_ent else (topic_str[:45] if topic_str else "Bigg Boss 10 Exclusive")
+                    combined_ctx = f"{topic_str} {headline} {b_ent}".lower()
+
                     # PRIORITY: If genuine contestant photo exists, crop & use it DIRECTLY! Never render a dummy card
                     if av_p and Path(av_p).exists() and Path(av_p).stat().st_size > 2000:
                         from providers.image import clean_and_crop_image
@@ -1546,13 +1550,10 @@ def validate_visual_assets(assets_dir=None, fallback_dir=None):
                         replaced_canva = True
                         replaced.append(filename)
                         print(f"🛡️ [Asset Safety] Restored verified contestant portrait for {filename} ({b_ent}) from {av_p}")
-                        reason += f" -> restored contestant portrait ({b_ent})"
+                        cat_tag = " • BIGG BOSS 10" if (is_bigg_boss_context(combined_ctx) or "bigg boss" in combined_ctx) else ""
+                        reason += f" -> restored contestant portrait ({b_ent.upper()}{cat_tag})"
                     else:
                         # Fallback to high-grade editorial card with actual topic/contestant text (never 'Scene X • Key Highlight')
-                        if not headline:
-                            headline = f"{b_ent} Key Update" if b_ent else (topic_str[:45] if topic_str else "Bigg Boss 10 Exclusive")
-
-                        combined_ctx = f"{topic_str} {headline} {b_ent}".lower()
                         if is_bigg_boss_context(combined_ctx) or "bigg boss" in combined_ctx:
                             subtext = "Bigg Boss Telugu 10 • Star Maa"
                             badge_label = f"{b_ent.upper()} • BIGG BOSS 10" if b_ent else "BIGG BOSS 10 • UPDATE"

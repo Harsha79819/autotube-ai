@@ -13,8 +13,16 @@ if pgrep -f "daily_scheduler.py --daemon" > /dev/null; then
     exit 0
 fi
 
+PYTHON_BIN="$DIR/.venv/bin/python3"
+if [ ! -f "$PYTHON_BIN" ]; then
+    PYTHON_BIN="$DIR/venv/bin/python"
+fi
+if [ ! -f "$PYTHON_BIN" ]; then
+    PYTHON_BIN="python3"
+fi
+
 echo "🚀 Starting 24/7 Daily Scheduler Daemon for Channel 1..."
-nohup "$DIR/.venv/bin/python3" "$DIR/daily_scheduler.py" --daemon >> "$LOG_FILE" 2>&1 &
+nohup "$PYTHON_BIN" "$DIR/daily_scheduler.py" --daemon >> "$LOG_FILE" 2>&1 &
 PID=$!
-echo "✅ Scheduler started successfully (PID: $PID)!"
+echo "✅ Scheduler started successfully (PID: $PID) using $PYTHON_BIN!"
 echo "📝 Logs: $LOG_FILE"

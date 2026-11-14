@@ -522,8 +522,11 @@ def build_structured_visual_plan(sections, visual_plan, topic: str = ""):
                     sec_main_ent = p_info["canonical"]
                     break
 
-        # 1. Match entities in narration or visual concept
-        entities = match_entities_in_text(f"{narr} {raw_v}")
+        # 1. Match entities in narration or visual concept first, falling back to topic if beat has none
+        beat_text = f"{narr} {raw_v}".strip()
+        entities = match_entities_in_text(beat_text)
+        if not entities and topic:
+            entities = match_entities_in_text(topic)
 
         # Extract specific contestant names (excluding generic show entity)
         contestant_names = []
@@ -617,35 +620,37 @@ def build_structured_visual_plan(sections, visual_plan, topic: str = ""):
                     break
 
         if not primary_entity:
-            if content_type == "cinema":
-                primary_entity = "Dil Raju" if ("dil raju" in combined_text or "dill raju" in combined_text) else "Tollywood Cinema"
-            elif content_type == "business":
-                if "foxconn" in combined_text:
-                    primary_entity = "Foxconn"
-                elif "haier" in combined_text:
-                    primary_entity = "Haier"
-                elif "tesla" in combined_text:
-                    primary_entity = "Tesla"
-                else:
-                    primary_entity = "Corporate Enterprise"
-            elif content_type == "tech":
-                primary_entity = "Tesla" if "tesla" in combined_text else "Tech Industry"
-            elif content_type == "politics":
-                if "revanth" in combined_text:
-                    primary_entity = "Revanth Reddy"
-                elif "chandrababu" in combined_text:
-                    primary_entity = "Chandrababu Naidu"
-                else:
-                    primary_entity = "Political Assembly"
+            # Extract real subject/entity from topic title and narration
+            # Strip generic prefixes like "Review:", "Update:", "News:", "Breakthrough:", "Top 5 Facts:"
+            clean_top_ent = re.sub(
+                r"^(?:review|update|breaking|news|facts|top\s*\d+|did you know|analysis|interview|watch)[:\s\-]+",
+                "",
+                topic,
+                flags=re.IGNORECASE,
+            ).strip()
+            # If colon or pipe exists in topic, take the most descriptive segment
+            if ":" in clean_top_ent:
+                segments = [s.strip() for s in clean_top_ent.split(":") if len(s.strip()) > 2]
+                clean_top_ent = segments[-1] if len(segments) > 1 and len(segments[0]) < 8 else (segments[0] if segments else clean_top_ent)
+            if "|" in clean_top_ent:
+                segments = [s.strip() for s in clean_top_ent.split("|") if len(s.strip()) > 2]
+                clean_top_ent = segments[0] if segments else clean_top_ent
+
+            # Clean out emojis and extraneous punctuation
+            clean_top_ent = re.sub(r"[^\w\s\-]", "", clean_top_ent).strip()
+
+            if clean_top_ent and len(clean_top_ent) >= 3:
+                # Take first 4 words of topic subject to avoid overly long search engine queries
+                primary_entity = " ".join(clean_top_ent.split()[:4])
             elif content_type == "reality_tv":
                 primary_entity = contestant_names[0] if contestant_names else "Bigg Boss Telugu 10 Housemates"
             else:
-                primary_entity = topic_person or topic.split(":")[0].strip() or "News Headline"
+                primary_entity = topic.strip()[:40] or "Topic Headline"
 
         # Smart B-roll Diversity & Anti-Monotony Guard
         # 1. Outro / CTA beat: Never show a contestant face on subscribe outro
         is_cta_beat = (idx >= len(sections) - 1) and any(k in narr_lower for k in ["లైక్", "సబ్‌స్క్రైబ్", "కామెంట్", "subscribe", "like", "share", "సపోర్ట్", "ఫాలో"])
-        if is_cta_beat:
+        if is_cta_beat and is_bb:
             primary_entity = "YouTube Channel Subscribe Outro"
             contestant_names = []
             incident_context = "Audience Discussion Outro"
@@ -1046,12 +1051,38 @@ Output valid JSON only:
 
     result_lines = []
     used_queries: set = set()
+    meme_count = 0
 
     for idx, b in enumerate(delivery_plan, 1):
         spoken = b.get("spoken_text", "")
         spoken_lower = spoken.lower()
         badge = b.get("on_screen_text") or ""
         angle = CAMERA_ANGLES[(idx - 1) % len(CAMERA_ANGLES)]
+        raw_emo = str(b.get("emotion", "")).lower()
+
+        # Check if this beat is an emotional reaction / roast payoff moment for a Telugu reaction meme
+        is_meme_beat = (
+            meme_count < 2
+            and idx > 1
+            and idx < total_beats
+            and (
+                raw_emo in ("shocked", "fake_shock", "mock", "roast", "overacting", "crying", "headache", "laughing")
+                or any(k in spoken_lower for k in ["మైండ్ బ్లాంక్", "షాక్", "షాకింగ్", "ఓవర్ యాక్షన్", "నవ్వు", "హాస్యం", "డ్రామా", "లాడూ", "లడూ", "shock", "overacting", "roast", "రచ్చ"])
+            )
+        )
+        if is_meme_beat:
+            meme_count += 1
+            main_entity = "Telugu Reaction Meme"
+            emotion = "shocked" if ("షాక్" in spoken_lower or "మైండ్" in spoken_lower) else "comedy"
+            search_query = f"telugu reaction meme: Brahmanandam {emotion} | Sunil comedy reaction"
+            candidate = f"telugu_meme: Brahmanandam {emotion} | Telugu comedy reaction meme cutaway | iconic reaction"
+            b["main_entity"] = main_entity
+            b["emotion"] = emotion
+            b["search_query"] = search_query
+            b["is_meme"] = True
+            used_queries.add(candidate)
+            result_lines.append(candidate)
+            continue
 
         # Determine topic and beat entities
         b_ents = [e for e in match_entities_in_text(spoken) if e.get("id") != "bigg_boss_telugu"]
@@ -1646,10 +1677,10 @@ def auto_calibrate_script_to_profile(
 
     is_extended_shorts = (profile.target_seconds > 50.0 and profile.format_type == "short")
     if is_extended_shorts:
-        # 60-90s Shorts Profile (Target: 75s, Min: 60s)
-        # Indic spoken pacing at 2.15 wps requires at least 60 * 2.15 = 129 spoken words
-        effective_min_words = max(130, int(profile.min_seconds * 2.15))
-        effective_max_words = max(185, int(profile.max_seconds * 2.30))
+        # 60-90s Shorts Profile (Target: 75s, Min: 60s, Hard max: 85-88s)
+        # Indic spoken pacing at 1.9 wps: 68s = 130w, 75s = 145w, 84s = 160w
+        effective_min_words = 130
+        effective_max_words = 160 if is_indic else max(180, int(profile.max_seconds * 2.20))
     elif profile.format_type == "long-form":
         # Long-Form Profile (6-9m or 2-4m): strictly enforce profile bounds (minimum 900 words for 6-9m)
         effective_min_words = profile.min_words
@@ -1660,8 +1691,30 @@ def auto_calibrate_script_to_profile(
 
     print(f"🎯 [Pre-Execution Calibration] Script length: {word_count} words (Required: {effective_min_words}-{effective_max_words} words for {profile.target_seconds:.0f}s)...")
 
+    # Over-length calibration: cleanly condense middle while protecting hook and CTA
+    if word_count > effective_max_words:
+        excess = word_count - effective_max_words
+        print(f"⚠️ Script exceeds maximum duration budget by ~{excess} words ({word_count} > {effective_max_words}). Condensing middle sentences...")
+        sents = [s.strip() for s in re.split(r"(?<=[.!?।\n])\s+", clean_text) if s.strip()]
+        if len(sents) > 3:
+            hook_sents = sents[:2]
+            closing_sent = sents[-1]
+            middle_sents = sents[2:-1]
+            kept = list(hook_sents)
+            curr_w = sum(len(s.split()) for s in kept) + len(closing_sent.split())
+            for s in middle_sents:
+                s_w = len(s.split())
+                if curr_w + s_w <= effective_max_words:
+                    kept.append(s)
+                    curr_w += s_w
+            kept.append(closing_sent)
+            script = " ".join(kept)
+            clean_text = clean_script_narration(script)
+            word_count = len(clean_text.split())
+            print(f"✅ Condensation complete: Now {word_count} words (Limit: <= {effective_max_words} words).")
+
     # Under-length calibration: auto-expand
-    if word_count < effective_min_words:
+    elif word_count < effective_min_words:
         shortfall = effective_min_words - word_count
         print(f"⚠️ Script is short by ~{shortfall} words ({word_count} < {effective_min_words}). Executing Step 1 auto-expansion...")
 
@@ -1942,7 +1995,12 @@ SCRIPT_PERSONAS = [
             "PERSONA: SARCASTIC ROAST (సార్కాస్టిక్ రోస్ట్)\n"
             "- Tone: Savage, high-energy sarcasm, mock praise, brutal comedic reality checks, and sharp punchlines.\n"
             "- Telugu Slang & Expressions: Use authentic, punchy Telugu slang (e.g. రచ్చ రంబోలా, సీన్ లేదు బాస్, ఓవర్ యాక్షన్ పీక్స్, తుస్సుమంది, మైండ్ బ్లాక్, డ్రామా లెవెల్స్ వేరే, తుక్కు రేగింది).\n"
-            "- Catchphrase Variety: STRICTLY DO NOT repeat the same slang word or catchphrase across multiple beats. Vary the burns and punchlines in every beat!"
+            "- Catchphrase Variety: STRICTLY DO NOT repeat the same slang word or catchphrase across multiple beats. Vary the burns and punchlines in every beat!\n"
+            "- STRICT ANTI-HALLUCINATION & FACTUAL INTEGRITY:\n"
+            "  * ZERO FABRICATED NUMBERS: DO NOT invent fake voting numbers, percentages, arbitrary tallies (e.g. NEVER write '5-4', '12 to 38', '30 to 15'), fake margins, or unverified dates.\n"
+            "  * If official voting stats are NOT in the verified news context, DO NOT fabricate numbers! Focus purely on contestant behavior, clashes, nominations, body language, facial reactions, alliance betrayals, and public buzz without fabricating numerical statistics.\n"
+            "  * NO BIZARRE / IMPOSSIBLE CLAIMS: Ground all statements in reality show dynamics. Do NOT invent supernatural claims (e.g. 'Ladoo has power').\n"
+            "  * NO SELF-CONTRADICTIONS: Keep logic consistent throughout."
         )
     },
     {
@@ -1952,7 +2010,12 @@ SCRIPT_PERSONAS = [
             "PERSONA: DRAMATIC NARRATOR (డ్రమాటిక్ నరేటర్)\n"
             "- Tone: High-stakes theatrical tension, intense suspense, dramatic pauses, escalating stakes, cinematic reveals.\n"
             "- Telugu Slang & Expressions: Use intense dramatic Telugu expressions (e.g. ఊహించని మలుపు, అసలు రంజు మొదలైంది, ఊపిరి బిగబట్టే క్షణాలు, షాకింగ్ ట్విస్ట్, తెరవెనుక అసలు కథ, ప్రకంపనలు సృష్టిస్తోంది).\n"
-            "- Catchphrase Variety: STRICTLY DO NOT repeat the same dramatic phrase across multiple beats. Build narrative momentum with fresh vocabulary in each beat!"
+            "- Catchphrase Variety: STRICTLY DO NOT repeat the same dramatic phrase across multiple beats. Build narrative momentum with fresh vocabulary in each beat!\n"
+            "- STRICT ANTI-HALLUCINATION & FACTUAL INTEGRITY:\n"
+            "  * ZERO FABRICATED NUMBERS: DO NOT invent fake voting numbers, percentages, arbitrary tallies (e.g. NEVER write '5-4', '12 to 38', '30 to 15'), fake margins, or unverified dates.\n"
+            "  * If official voting stats are NOT in the verified news context, DO NOT fabricate numbers! Focus purely on contestant behavior, clashes, nominations, body language, facial reactions, alliance betrayals, and public buzz without fabricating numerical statistics.\n"
+            "  * NO BIZARRE / IMPOSSIBLE CLAIMS: Ground all statements in reality show dynamics. Do NOT invent supernatural claims (e.g. 'Ladoo has power').\n"
+            "  * NO SELF-CONTRADICTIONS: Keep logic consistent throughout."
         )
     },
     {
@@ -1962,7 +2025,12 @@ SCRIPT_PERSONAS = [
             "PERSONA: WITTY FRIEND-STYLE (ఫన్నీ ఫ్రెండ్ స్టైల్)\n"
             "- Tone: Conversational chai-time hangout with your best buddy, witty banter, relatable everyday humor, funny reality checks.\n"
             "- Telugu Slang & Expressions: Use casual, conversational Telugu/Tanglish (e.g. ఏంటి గురూ ఇది, అసలు మ్యాటర్ ఏంటంటే, నవ్వులాట కాదు బాస్, ఫుల్ ఫన్, మనోడు వేసిన స్కెచ్, లైట్ తీస్కో, కథ వేరే ఉంది).\n"
-            "- Catchphrase Variety: STRICTLY DO NOT repeat the same phrase across multiple beats. Keep the dialogue fresh and natural throughout!"
+            "- Catchphrase Variety: STRICTLY DO NOT repeat the same phrase across multiple beats. Keep the dialogue fresh and natural throughout!\n"
+            "- STRICT ANTI-HALLUCINATION & FACTUAL INTEGRITY:\n"
+            "  * ZERO FABRICATED NUMBERS: DO NOT invent fake voting numbers, percentages, arbitrary tallies (e.g. NEVER write '5-4', '12 to 38', '30 to 15'), fake margins, or unverified dates.\n"
+            "  * If official voting stats are NOT in the verified news context, DO NOT fabricate numbers! Focus purely on contestant behavior, clashes, nominations, body language, facial reactions, alliance betrayals, and public buzz without fabricating numerical statistics.\n"
+            "  * NO BIZARRE / IMPOSSIBLE CLAIMS: Ground all statements in reality show dynamics. Do NOT invent supernatural claims (e.g. 'Ladoo has power').\n"
+            "  * NO SELF-CONTRADICTIONS: Keep logic consistent throughout."
         )
     }
 ]
@@ -2056,7 +2124,7 @@ RUBRIC (Score each criterion from 1 to 10 points):
 2. sarcasm_tone_quality (1-10): How punchy, engaging, and well-executed is the chosen comedic/dramatic tone?
 3. flow_and_pacing (1-10): Is the narrative cadence smooth, logical, and dynamic (2-3.5 seconds per beat)?
 4. repetition_and_slang_variety (1-10): Does the script use diverse Telugu colloquialisms and slang WITHOUT repeating the same catchphrase or idiom? (Penalize heavily for repeated catchphrases!)
-5. factual_accuracy (1-10): Are facts aligned with the topic without fabricating fake events?
+5. factual_accuracy (1-10): Are facts aligned with the topic without fabricating fake events? CRITICAL PENALTY: Score 1-3 if candidate contains invented voting counts/percentages (e.g. '5-4', '12 to 38', '30 to 15'), contradictory statistics, or bizarre claims ('Ladoo has power'). A candidate with hallucinated numbers MUST NEVER be chosen as the winner!
 
 Return ONLY valid JSON matching this schema:
 {{
@@ -2650,9 +2718,12 @@ TRANSLATE AND ADAPT ALL NEWS/TOPIC FACTS DIRECTLY INTO ENGAGING TELUGU SPOKEN CR
         )
     except TypeError:
         import importlib
-        import config.format_profiles
-        importlib.reload(config.format_profiles)
-        profile = config.format_profiles.get_format_profile(
+        try:
+            from config import format_profiles
+            importlib.reload(format_profiles)
+        except Exception:
+            from config import format_profiles
+        profile = format_profiles.get_format_profile(
             target_duration=target_duration,
             format_type="long-form" if is_longform_intent else "short",
             language=language_style,

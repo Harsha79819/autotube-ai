@@ -241,8 +241,8 @@ def clean_previous_generation():
 
     if ASSETS_DIR.exists():
         for item in ASSETS_DIR.iterdir():
-            # Never delete voice sample references, static music, outro, sfx, entities, or offline fallback pool
-            if "voice" in item.name.lower() or item.name.lower() in ("fallback", "music", "outro", "sfx", "entities"):
+            # Never delete voice sample references, static music, outro, sfx, entities, memes, contestants, or offline fallback pool
+            if "voice" in item.name.lower() or item.name.lower() in ("fallback", "music", "outro", "sfx", "entities", "memes", "contestants"):
                 continue
             try:
                 if item.is_file():
@@ -1319,9 +1319,12 @@ def generate_multi_media_video(
         )
     except TypeError:
         import importlib
-        import config.format_profiles
-        importlib.reload(config.format_profiles)
-        profile = config.format_profiles.get_format_profile(
+        try:
+            from config import format_profiles
+            importlib.reload(format_profiles)
+        except Exception:
+            from config import format_profiles
+        profile = format_profiles.get_format_profile(
             target_duration=target_duration,
             aspect_ratio=aspect_ratio,
             format_type="long-form" if is_longform else "short",
@@ -1955,10 +1958,33 @@ def generate_multi_media_video(
         voice_file_p = OUTPUT_DIR / "voice.mp3"
         gate_b = val_agent.validate_audio(str(voice_file_p), profile)
         gate_results.append(gate_b)
-        if not gate_b.passed and attempt < MAX_REVIEW_ATTEMPTS:
+        if not gate_b.passed:
             from agents.run_report import probe_duration
             v_dur = probe_duration(str(voice_file_p)) if voice_file_p.exists() else 0.0
             print(f"⚠️ [Gate B Audio Mismatch] Voice duration is {v_dur:.1f}s (Allowed: {profile.min_seconds:.1f}s - {profile.max_seconds:.1f}s for {profile.target_seconds:.0f}s target).")
+
+            # Autonomous duration clamping: if audio exceeds max_seconds, auto-accelerate with atempo
+            if v_dur > profile.max_seconds and voice_file_p.exists():
+                tempo = min(1.30, v_dur / max(profile.min_seconds, profile.max_seconds - 5.0))
+                print(f"🔧 [Auto-Healing Audio] Spoken duration {v_dur:.1f}s exceeds {profile.max_seconds:.0f}s. Auto-accelerating audio (atempo={tempo:.2f}x)...")
+                tmp_clamped = OUTPUT_DIR / "voice_clamped.mp3"
+                r_c = subprocess.run([
+                    "ffmpeg", "-y", "-i", str(voice_file_p),
+                    "-filter:a", f"atempo={tempo:.3f}",
+                    "-codec:a", "libmp3lame", "-q:a", "2",
+                    str(tmp_clamped)
+                ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                if r_c.returncode == 0 and tmp_clamped.exists() and tmp_clamped.stat().st_size > 1000:
+                    shutil.move(str(tmp_clamped), str(voice_file_p))
+                    v_dur = probe_duration(str(voice_file_p))
+                    print(f"✅ [Auto-Healing Audio] Duration healed to {v_dur:.1f}s (now <= {profile.max_seconds:.0f}s limit).")
+                    gate_b = val_agent.validate_audio(str(voice_file_p), profile)
+                    if gate_b.passed:
+                        print("✅ [Gate B Passed] Audio validation passed after auto-healing tempo.")
+
+        if not gate_b.passed and attempt < MAX_REVIEW_ATTEMPTS:
+            from agents.run_report import probe_duration
+            v_dur = probe_duration(str(voice_file_p)) if voice_file_p.exists() else 0.0
             if profile.format_type == "short" and profile.max_seconds <= 50.0 and v_dur > 45.0:
                 feedback = (
                     f"CRITICAL RETENTION ERROR: Spoken voice duration was {v_dur:.1f} seconds, which strictly exceeds "

@@ -304,103 +304,125 @@ def generate_prasad_tech_html(
     header_right_yellow: str = "లీక్!",
     header_right_emoji: str = "🔥",
     hero_cutout_path: Optional[Path] = None,
+    hero_img_path: Optional[Path] = None,
+    bg_image_path: Optional[Path] = None,
     evidence_left_img: Optional[Path] = None,
-    evidence_left_text: str = "200MP SONY SENSOR",
-    evidence_left_badge: str = "CAMERA LEAK 📸",
+    evidence_left_text: str = "",
+    evidence_left_badge: str = "PROOF 📸",
     evidence_right_img: Optional[Path] = None,
-    evidence_right_text: str = "₹24,999 / 6500mAh",
-    evidence_right_badge: str = "PRICE & SPECS ⚡",
-    episode_pill_text: str = "TECH 2026",
+    evidence_right_text: str = "",
+    evidence_right_badge: str = "",
+    episode_pill_text: str = "EXCLUSIVE",
     brand_logos: Optional[list] = None,
     aspect_ratio: str = "16:9",
-    bg_theme: str = "tech_purple",
+    bg_theme: str = "danger_red",
+    category_badge: Optional[str] = None,
+    headline_yellow: Optional[str] = None,
+    headline_white: Optional[str] = None,
+    hook_chip: Optional[str] = None,
 ) -> str:
     """
-    Renders the exact 'Prasad Tech in Telugu' signature thumbnail layout:
-      1. Top Split Banner: Glossy black pills with high-contrast Yellow & White bold Telugu text & emojis.
-      2. Expressive Hero Cutout: Centered / right with glowing golden/cyan rim light.
-      3. Lower Split Evidence Panels: Two glass-morphic cyan neon-bordered cards showing real device/scene proof.
-      4. Brand Stack & Episode Pill: Floating brand logos (1+, Oppo, Realme, Apple, Samsung) & bottom-left badge.
+    Renders an authentic, professional, high-CTR YouTube viral thumbnail.
+    Features:
+      1. Full-Bleed Cinematic Background with dark gradient scrim for maximum text pop.
+      2. Dominant Hero Persona (Host / Star / Contestant) positioned on the right with glowing rim light or seamless gradient blend.
+      3. Massive, In-Your-Face Headline Stack on the left (68-80px Yellow & White bold text with thick dark strokes).
+      4. Category & Urgency Badges (🔴 BREAKING, 🔥 LIVE, ⚡ EXCLUSIVE).
+      5. Secondary Evidence / Proof Card when real scene photo is available (no empty wireframe boxes).
     """
     is_916 = aspect_ratio == "9:16"
     w = 1080 if is_916 else 1280
     h = 1920 if is_916 else 720
 
     hero_src = _file_to_base64_src(Path(hero_cutout_path)) if hero_cutout_path and Path(hero_cutout_path).exists() else ""
+    hero_uncut_src = _file_to_base64_src(Path(hero_img_path)) if hero_img_path and Path(hero_img_path).exists() else ""
+    bg_src = _file_to_base64_src(Path(bg_image_path)) if bg_image_path and Path(bg_image_path).exists() else ""
     ev_left_src = _file_to_base64_src(Path(evidence_left_img)) if evidence_left_img and Path(evidence_left_img).exists() else ""
     ev_right_src = _file_to_base64_src(Path(evidence_right_img)) if evidence_right_img and Path(evidence_right_img).exists() else ""
 
-    if not brand_logos:
-        brand_logos = ["1+", "OPPO", "realme"] if "tech" in bg_theme else ["BB10", "HOT"]
-
-    brand_badges_html = ""
-    brand_classes = {"1+": "oneplus", "oppo": "oppo", "realme": "realme", "apple": "apple", "samsung": "samsung"}
-    for b in brand_logos[:3]:
-        cls = brand_classes.get(b.lower(), "default-brand")
-        brand_badges_html += f'<div class="brand-logo {cls}">{b}</div>'
-
-    # Background gradient selection
-    if "red" in bg_theme or "danger" in bg_theme or "bb10" in bg_theme:
-        bg_css = "radial-gradient(circle at 50% 35%, #3b0d15 0%, #170407 65%, #0a0102 100%)"
-        glow_color = "rgba(255, 60, 60, 0.8)"
-    elif "emerald" in bg_theme:
-        bg_css = "radial-gradient(circle at 50% 35%, #063025 0%, #031410 65%, #010806 100%)"
-        glow_color = "rgba(0, 240, 180, 0.8)"
-    else:  # tech_purple (Prasad Tech signature)
-        bg_css = "radial-gradient(circle at 50% 35%, #24134b 0%, #0e071e 65%, #05020c 100%)"
-        glow_color = "rgba(255, 215, 0, 0.8)"
-
-    # Evidence panel content
-    def make_evidence_inner(src, text, badge):
-        if src:
-            return f'<img src="{src}" style="width:100%;height:100%;object-fit:cover;" /><div class="box-label">{badge}</div>'
+    # Synthesize clean, high-impact headline parameters if not explicitly provided
+    if not headline_yellow:
+        if header_left_yellow and header_right_yellow and header_left_yellow != header_right_yellow:
+            headline_yellow = f"{header_left_yellow} {header_right_yellow}".strip()
         else:
-            parts = text.split("/") if "/" in text else [text, ""]
-            p1 = parts[0].strip()
-            p2 = parts[1].strip() if len(parts) > 1 else ""
-            return f"""
-            <div style="color:#00F0FF; font-size:{'36px' if is_916 else '32px'}; font-weight:900; text-align:center; text-shadow:0 0 15px rgba(0,240,255,0.7);">{p1}</div>
-            {f'<div style="color:#FFF; font-size:20px; font-weight:800; margin-top:4px;">{p2}</div>' if p2 else ''}
-            <div class="box-label">{badge}</div>
-            """
+            headline_yellow = header_left_yellow or header_right_yellow or "షాకింగ్ ట్విస్ట్?!"
 
-    left_inner = make_evidence_inner(ev_left_src, evidence_left_text, evidence_left_badge)
-    right_inner = make_evidence_inner(ev_right_src, evidence_right_text, evidence_right_badge)
+    if not headline_white:
+        if header_left_white and header_right_white and header_left_white != header_right_white:
+            headline_white = f"{header_left_white} {header_right_white}".strip()
+        else:
+            headline_white = header_left_white or header_right_white or "హౌస్‌లో రచ్చ రంబోలా! 😱"
 
+    if not category_badge:
+        pill = episode_pill_text or "EXCLUSIVE"
+        category_badge = pill if pill.startswith("🔴") or pill.startswith("🔥") or pill.startswith("⚡") else f"🔴 {pill}"
+
+    if not hook_chip:
+        if evidence_left_text and evidence_left_text not in ("200MP SONY SENSOR", "INSIDE SCOOP", "DRAMA / VOTING"):
+            hook_chip = f"⚡ {evidence_left_text}"
+        elif header_left_emoji or header_right_emoji:
+            em = header_right_emoji or header_left_emoji or "🔥"
+            hook_chip = f"{em} అసలు నిజం లీక్?!"
+        else:
+            hook_chip = "⚡ లైవ్ అప్‌డేట్"
+
+    # Theme colors & glow
+    if "red" in bg_theme or "danger" in bg_theme or "bb10" in bg_theme:
+        bg_css = "radial-gradient(circle at 70% 35%, #420a14 0%, #170407 65%, #080102 100%)"
+        glow_color = "rgba(255, 45, 65, 0.85)"
+        accent_color = "#FF2D41"
+    elif "emerald" in bg_theme:
+        bg_css = "radial-gradient(circle at 70% 35%, #063025 0%, #031410 65%, #010806 100%)"
+        glow_color = "rgba(0, 240, 180, 0.85)"
+        accent_color = "#00F0B4"
+    else:  # tech_purple
+        bg_css = "radial-gradient(circle at 70% 35%, #2a1458 0%, #0e071e 65%, #05020c 100%)"
+        glow_color = "rgba(255, 215, 0, 0.85)"
+        accent_color = "#00F0FF"
+
+    # Background photo layer
+    bg_tag = f'<img src="{bg_src}" class="bg-photo" />' if bg_src else ""
+
+    # Evidence photo preview card (Only rendered if an actual photo exists; NO empty wireframes)
+    evidence_card_src = ev_left_src or ev_right_src
+    evidence_badge_txt = evidence_left_badge or evidence_right_badge or "LIVE PROOF 📹"
+    evidence_preview_html = ""
+    evidence_preview_html_916 = ""
+    if evidence_card_src:
+        evidence_preview_html = f"""
+        <div class="evidence-preview-card">
+          <img src="{evidence_card_src}" />
+          <div class="evidence-preview-label">{evidence_badge_txt}</div>
+        </div>
+        """
+        evidence_preview_html_916 = f"""
+        <div class="evidence-preview-card-916">
+          <img src="{evidence_card_src}" />
+          <div class="evidence-preview-label-916">{evidence_badge_txt}</div>
+        </div>
+        """
+
+    # Hero visual element (Cutout > Blended Portrait > Nothing)
     if hero_src:
-        hero_html = f'<img src="{hero_src}" class="hero-persona" />'
-    elif "red" in bg_theme or "danger" in bg_theme or "bb10" in bg_theme:
-        hero_html = """
-        <div class="bb-emblem-wrap">
-          <div class="bb-eye-ring">
-            <div class="bb-iris">👁️</div>
-          </div>
-          <div class="bb-status-badge">BIGG BOSS 10 LIVE</div>
+        hero_html_16_9 = f'<img src="{hero_src}" class="hero-persona-169" />'
+        hero_html_916 = f'<img src="{hero_src}" class="hero-persona-916" />'
+    elif hero_uncut_src:
+        hero_html_16_9 = f"""
+        <div class="hero-portrait-blend-169">
+          <img src="{hero_uncut_src}" />
+        </div>
+        """
+        hero_html_916 = f"""
+        <div class="hero-portrait-blend-916">
+          <img src="{hero_uncut_src}" />
         </div>
         """
     else:
-        phone_brand = brand_logos[0] if brand_logos else "1+"
-        hero_html = f"""
-        <div class="hero-phone">
-          <div class="phone-frame">
-            <div class="phone-island">
-              <div class="notch-cam"></div>
-              <div class="notch-pill">🔥 2026 FLAGSHIP</div>
-            </div>
-            <div class="phone-screen-content">
-              <div class="screen-brand">{phone_brand}</div>
-              <div class="screen-chip-tag">⚡ SNAPDRAGON 8 ELITE</div>
-              <div class="screen-visual">
-                <div class="spec-highlight">6500mAh<br>100W FLASH</div>
-              </div>
-              <div class="screen-camera-spec">📸 200MP SONY SENSOR</div>
-            </div>
-          </div>
-        </div>
-        """
+        hero_html_16_9 = ""
+        hero_html_916 = ""
 
     if is_916:
-        # Vertical Shorts Layout (Optimized for safe margins above mobile UI)
+        # Vertical Shorts 9:16 Layout (1080x1920)
         return f"""<!DOCTYPE html>
 <html>
 <head>
@@ -413,133 +435,116 @@ def generate_prasad_tech_html(
     font-family: 'Noto Sans Telugu', 'Montserrat', sans-serif;
     position: relative; overflow: hidden;
   }}
-  .top-strip {{
-    position: absolute; top: 120px; left: 0; width: 100%;
-    display: flex; flex-direction: column; align-items: center; gap: 20px;
-    padding: 0 40px; z-index: 20;
+  .bg-photo {{
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    object-fit: cover; object-position: center;
+    filter: brightness(0.82) contrast(1.18) saturate(1.2);
+    z-index: 1;
   }}
-  .banner-pill {{
-    background: #000000; border: 4.5px solid #1c1c24; border-radius: 22px;
-    padding: 18px 45px; display: flex; align-items: center; justify-content: center; gap: 16px;
-    box-shadow: 0 15px 40px rgba(0,0,0,0.95);
+  .bg-scrim-916 {{
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    background: linear-gradient(180deg, rgba(6,3,10,0.94) 0%, rgba(6,3,10,0.72) 38%, rgba(6,3,10,0.2) 65%, rgba(6,3,10,0.85) 100%);
+    z-index: 2;
   }}
-  .yellow-txt {{ color: #FFE500; font-size: 58px; font-weight: 900; text-shadow: 3px 3px 0 #000, -2px -2px 0 #000; }}
-  .white-txt {{ color: #FFFFFF; font-size: 58px; font-weight: 900; text-shadow: 3px 3px 0 #000, -2px -2px 0 #000; }}
-  .emoji {{ font-size: 52px; }}
+  .bg-vignette {{
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    box-shadow: inset 0 0 150px rgba(0,0,0,0.92);
+    z-index: 3; pointer-events: none;
+  }}
 
-  .hero-persona {{
-    position: absolute; top: 380px; left: 50%; transform: translateX(-50%);
-    max-height: 850px; z-index: 8;
-    filter: drop-shadow(0 0 35px {glow_color}) drop-shadow(0 0 80px rgba(255, 170, 0, 0.45));
+  /* Top Category Pill */
+  .top-badge-wrap-916 {{
+    position: absolute; top: 120px; left: 0; width: 100%;
+    display: flex; justify-content: center; z-index: 10;
   }}
-  .hero-phone {{
-    position: absolute; top: 430px; left: 50%; transform: translateX(-50%);
-    width: 440px; height: 750px; z-index: 8;
-    filter: drop-shadow(0 0 40px rgba(0, 240, 255, 0.7)) drop-shadow(0 25px 60px rgba(0,0,0,0.95));
+  .category-badge-pill-916 {{
+    background: linear-gradient(135deg, #FF0033 0%, #B30022 100%);
+    color: #FFFFFF; font-size: 32px; font-weight: 900;
+    padding: 12px 38px; border-radius: 18px; border: 3px solid #FF6677;
+    box-shadow: 0 8px 30px rgba(255, 0, 51, 0.7), inset 0 0 15px rgba(255,255,255,0.3);
+    display: inline-flex; align-items: center; gap: 12px;
   }}
-  .phone-frame {{
-    width: 100%; height: 100%; border-radius: 54px; border: 6px solid #2e2f42;
-    background: linear-gradient(165deg, #1b1d2e 0%, #0d0e17 60%, #06070a 100%);
-    box-shadow: inset 0 0 25px rgba(0, 240, 255, 0.3), 0 0 0 3px #00F0FF;
-    position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: center;
-    padding: 24px;
+
+  /* Headline Stack */
+  .headline-container-916 {{
+    position: absolute; top: 220px; left: 45px; right: 45px;
+    display: flex; flex-direction: column; align-items: center; gap: 18px;
+    z-index: 10; text-align: center;
   }}
-  .phone-island {{
-    display: flex; align-items: center; gap: 10px; background: #000;
-    border-radius: 24px; padding: 6px 20px; border: 2px solid #333; z-index: 5;
+  .headline-yellow-916 {{
+    color: #FFE600; font-size: 78px; font-weight: 900; line-height: 1.15;
+    text-shadow: 4px 4px 0 #000, -3px -3px 0 #000, 3px -3px 0 #000, -3px 3px 0 #000, 0 10px 30px rgba(0,0,0,0.95);
+    -webkit-text-stroke: 2.5px #000;
   }}
-  .notch-cam {{ width: 14px; height: 14px; border-radius: 50%; background: #111; border: 2px solid #00F0FF; }}
-  .notch-pill {{ color: #FFE500; font-size: 18px; font-weight: 900; }}
-  .phone-screen-content {{
-    width: 100%; flex: 1; margin-top: 30px; display: flex; flex-direction: column;
-    align-items: center; justify-content: space-around; position: relative; z-index: 3;
+  .headline-white-916 {{
+    color: #FFFFFF; font-size: 70px; font-weight: 900; line-height: 1.18;
+    text-shadow: 4px 4px 0 #000, -3px -3px 0 #000, 3px -3px 0 #000, -3px 3px 0 #000, 0 10px 30px rgba(0,0,0,0.95);
+    -webkit-text-stroke: 2.5px #000;
   }}
-  .screen-brand {{
-    font-size: 54px; font-weight: 900; color: #FFFFFF;
-    text-shadow: 0 0 25px rgba(0, 240, 255, 0.8), 3px 3px 0 #000;
+  .hook-chip-916 {{
+    background: rgba(0, 0, 0, 0.90); border: 3px solid #00F0FF;
+    border-radius: 16px; padding: 12px 32px;
+    color: #00F0FF; font-size: 36px; font-weight: 900;
+    box-shadow: 0 10px 30px rgba(0, 240, 255, 0.5);
+    display: inline-flex; align-items: center; gap: 12px;
+    text-shadow: 0 0 15px rgba(0,240,255,0.6);
   }}
-  .screen-chip-tag {{
-    background: rgba(0, 240, 255, 0.15); border: 2px solid #00F0FF;
-    color: #00F0FF; font-size: 20px; font-weight: 900; padding: 8px 18px;
-    border-radius: 12px; text-shadow: 0 0 10px rgba(0, 240, 255, 0.6);
+
+  /* Hero Persona */
+  .hero-persona-916 {{
+    position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%);
+    max-height: 980px; max-width: 960px; z-index: 6; object-fit: contain;
+    filter: drop-shadow(0 0 35px {glow_color}) drop-shadow(0 0 75px rgba(255, 120, 0, 0.45)) drop-shadow(0 25px 50px rgba(0,0,0,0.95));
   }}
-  .screen-visual {{
-    width: 200px; height: 200px; border-radius: 50%;
-    background: radial-gradient(circle, rgba(0, 240, 255, 0.35) 0%, rgba(255, 229, 0, 0.15) 50%, transparent 70%);
-    display: flex; align-items: center; justify-content: center;
-    border: 3px dashed rgba(0, 240, 255, 0.5);
+  .hero-portrait-blend-916 {{
+    position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%);
+    width: 620px; height: 820px; border-radius: 36px;
+    border: 5px solid #FFE600; overflow: hidden; z-index: 6;
+    box-shadow: 0 0 50px {glow_color}, 0 25px 60px rgba(0,0,0,0.95);
   }}
-  .spec-highlight {{
-    font-size: 24px; font-weight: 900; color: #FFE500; text-align: center;
-    text-shadow: 2px 2px 0 #000; line-height: 1.3;
+  .hero-portrait-blend-916 img {{
+    width: 100%; height: 100%; object-fit: cover; object-position: top center;
   }}
-  .screen-camera-spec {{
-    font-size: 22px; font-weight: 900; color: #FFF; background: #000;
-    padding: 10px 22px; border-radius: 12px; border: 2px solid #FFE500;
-    box-shadow: 0 6px 20px rgba(0,0,0,0.8);
+
+  /* Evidence preview */
+  .evidence-preview-card-916 {{
+    position: absolute; bottom: 50px; left: 50%; transform: translateX(-50%);
+    width: 440px; height: 180px; border-radius: 20px;
+    border: 3.5px solid #00F0FF; overflow: hidden;
+    box-shadow: 0 15px 40px rgba(0, 240, 255, 0.35); z-index: 8;
   }}
-  .bb-emblem-wrap {{
-    position: absolute; top: 480px; left: 50%; transform: translateX(-50%);
-    display: flex; flex-direction: column; align-items: center; gap: 20px; z-index: 8;
+  .evidence-preview-card-916 img {{
+    width: 100%; height: 100%; object-fit: cover;
   }}
-  .bb-eye-ring {{
-    width: 300px; height: 300px; border-radius: 50%;
-    background: radial-gradient(circle, #5a0815 0%, #1a0206 70%, #000 100%);
-    border: 5px solid #FF3344; display: flex; align-items: center; justify-content: center;
-    box-shadow: 0 0 60px rgba(255, 51, 68, 0.8), inset 0 0 40px rgba(255, 215, 0, 0.4);
-  }}
-  .bb-iris {{ font-size: 140px; filter: drop-shadow(0 0 25px #FFD700); }}
-  .bb-status-badge {{
-    background: #000; color: #FFE500; font-size: 28px; font-weight: 900;
-    padding: 10px 30px; border-radius: 14px; border: 3px solid #FF3344;
-    box-shadow: 0 8px 25px rgba(0,0,0,0.9);
-  }}
-  .split-panels {{
-    position: absolute; bottom: 320px; left: 50px; right: 50px;
-    display: flex; justify-content: space-between; z-index: 10;
-  }}
-  .evidence-box {{
-    width: 460px; height: 260px; border-radius: 24px; border: 3.5px solid #00F0FF;
-    background: linear-gradient(145deg, rgba(20, 30, 50, 0.92), rgba(10, 15, 28, 0.98));
-    box-shadow: 0 15px 45px rgba(0, 240, 255, 0.3); overflow: hidden; position: relative;
-    display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 15px;
-  }}
-  .box-label {{
-    position: absolute; bottom: 12px; left: 14px;
-    background: rgba(0,0,0,0.9); color: #FFF; font-size: 22px; font-weight: 800;
-    padding: 6px 14px; border-radius: 10px; border-left: 5px solid #FFE500;
-  }}
-  .ep-pill {{
-    position: absolute; top: 40px; left: 40px;
-    background: #000; border: 3px solid #FFE500; color: #FFE500;
-    font-size: 28px; font-weight: 900; padding: 8px 24px; border-radius: 12px; z-index: 25;
+  .evidence-preview-label-916 {{
+    position: absolute; bottom: 10px; left: 12px;
+    background: rgba(0,0,0,0.92); color: #FFF; font-size: 20px; font-weight: 900;
+    padding: 6px 16px; border-radius: 8px; border-left: 5px solid #00F0FF;
   }}
 </style>
 </head>
 <body>
-  <div class="ep-pill">{episode_pill_text}</div>
-  <div class="top-strip">
-    <div class="banner-pill">
-      <span class="yellow-txt">{header_left_yellow}</span>
-      <span class="white-txt">{header_left_white}</span>
-      <span class="emoji">{header_left_emoji}</span>
-    </div>
-    <div class="banner-pill">
-      <span class="white-txt">{header_right_white}</span>
-      <span class="yellow-txt">{header_right_yellow}</span>
-      <span class="emoji">{header_right_emoji}</span>
-    </div>
+  {bg_tag}
+  <div class="bg-scrim-916"></div>
+  <div class="bg-vignette"></div>
+
+  <div class="top-badge-wrap-916">
+    <div class="category-badge-pill-916">{category_badge}</div>
   </div>
-  {hero_html}
-  <div class="split-panels">
-    <div class="evidence-box">{left_inner}</div>
-    <div class="evidence-box">{right_inner}</div>
+
+  <div class="headline-container-916">
+    <div class="headline-yellow-916">{headline_yellow}</div>
+    <div class="headline-white-916">{headline_white}</div>
+    <div class="hook-chip-916">{hook_chip}</div>
   </div>
+
+  {hero_html_916}
+  {evidence_preview_html_916}
 </body>
 </html>"""
-    else:
-        # Standard 16:9 Landscape Widescreen (1280x720) — Exact Prasad Tech Layout
-        return f"""<!DOCTYPE html>
+
+    # Standard 16:9 Landscape Layout (1280x720) — Authentic High-CTR YouTube Thumbnail
+    return f"""<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
@@ -551,156 +556,121 @@ def generate_prasad_tech_html(
     font-family: 'Noto Sans Telugu', 'Montserrat', sans-serif;
     position: relative; overflow: hidden;
   }}
-  .top-strip {{
-    position: absolute; top: 16px; left: 0; width: 100%;
-    display: flex; justify-content: space-between; align-items: center;
-    padding: 0 32px; z-index: 20;
+  .bg-photo {{
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    object-fit: cover; object-position: center;
+    filter: brightness(0.85) contrast(1.18) saturate(1.2);
+    z-index: 1;
   }}
-  .banner-pill {{
-    background: #000000; border: 3.5px solid #1c1c24; border-radius: 18px;
-    padding: 9px 24px; display: flex; align-items: center; gap: 12px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.9), inset 0 0 15px rgba(255,255,255,0.06);
+  .bg-scrim {{
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    background: linear-gradient(90deg, rgba(6, 3, 10, 0.94) 0%, rgba(6, 3, 10, 0.82) 48%, rgba(10, 5, 18, 0.30) 76%, rgba(6, 3, 10, 0.65) 100%);
+    z-index: 2;
   }}
-  .yellow-txt {{
-    color: #FFE500; font-size: 44px; font-weight: 900;
-    text-shadow: 3px 3px 0 #000, -2px -2px 0 #000, 0 4px 10px rgba(0,0,0,0.8);
+  .bg-vignette {{
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    box-shadow: inset 0 0 120px rgba(0,0,0,0.92);
+    z-index: 3; pointer-events: none;
   }}
-  .white-txt {{
-    color: #FFFFFF; font-size: 44px; font-weight: 900;
-    text-shadow: 3px 3px 0 #000, -2px -2px 0 #000, 0 4px 10px rgba(0,0,0,0.8);
-  }}
-  .emoji {{ font-size: 40px; }}
 
-  .brand-stack {{
-    position: absolute; top: 110px; right: 32px;
-    display: flex; flex-direction: column; gap: 10px; z-index: 15;
+  /* Top Right 4K Ultra Stamp */
+  .channel-stamp {{
+    position: absolute; top: 22px; right: 32px;
+    background: rgba(0,0,0,0.85); border: 2px solid rgba(255,255,255,0.3);
+    border-radius: 10px; padding: 6px 16px; color: #FFF;
+    font-size: 16px; font-weight: 900; z-index: 15;
+    letter-spacing: 1px;
   }}
-  .brand-logo {{
-    width: 64px; height: 64px; border-radius: 15px;
-    background: #FFFFFF; display: flex; align-items: center; justify-content: center;
-    font-weight: 900; font-size: 15px; color: #000;
-    box-shadow: 0 6px 18px rgba(0,0,0,0.6); border: 2px solid #EEE;
-  }}
-  .brand-logo.oneplus {{ background: #F50514; color: #FFF; font-size: 24px; }}
-  .brand-logo.oppo {{ background: #00875A; color: #FFF; font-size: 16px; }}
-  .brand-logo.realme {{ background: #FFC915; color: #000; font-size: 15px; }}
-  .brand-logo.apple {{ background: #000; color: #FFF; font-size: 22px; }}
-  .brand-logo.samsung {{ background: #1428A0; color: #FFF; font-size: 12px; }}
 
-  .hero-persona {{
-    position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
-    height: 560px; z-index: 8;
-    filter: drop-shadow(0 0 25px {glow_color}) drop-shadow(0 0 55px rgba(255, 170, 0, 0.45));
-  }}
-  .hero-phone {{
-    position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
-    width: 290px; height: 530px; z-index: 8;
-    filter: drop-shadow(0 0 35px rgba(0, 240, 255, 0.7)) drop-shadow(0 20px 45px rgba(0,0,0,0.9));
-  }}
-  .phone-frame {{
-    width: 100%; height: 100%; border-radius: 46px 46px 0 0; border: 5px solid #2e2f42; border-bottom: none;
-    background: linear-gradient(165deg, #1b1d2e 0%, #0d0e17 60%, #06070a 100%);
-    box-shadow: inset 0 0 20px rgba(0, 240, 255, 0.25), 0 0 0 2.5px #00F0FF;
-    position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: center;
-    padding: 18px 18px 0 18px;
-  }}
-  .phone-island {{
-    display: flex; align-items: center; gap: 8px; background: #000;
-    border-radius: 20px; padding: 4px 14px; border: 1.5px solid #333; z-index: 5;
-  }}
-  .notch-cam {{ width: 10px; height: 10px; border-radius: 50%; background: #111; border: 2px solid #00F0FF; }}
-  .notch-pill {{ color: #FFE500; font-size: 13px; font-weight: 900; }}
-  .phone-screen-content {{
-    width: 100%; flex: 1; margin-top: 20px; display: flex; flex-direction: column;
-    align-items: center; justify-content: space-around; position: relative; z-index: 3;
-  }}
-  .screen-brand {{
-    font-size: 38px; font-weight: 900; color: #FFFFFF;
-    text-shadow: 0 0 20px rgba(0, 240, 255, 0.8), 2px 2px 0 #000;
-  }}
-  .screen-chip-tag {{
-    background: rgba(0, 240, 255, 0.15); border: 1.5px solid #00F0FF;
-    color: #00F0FF; font-size: 14px; font-weight: 900; padding: 5px 12px;
-    border-radius: 8px; text-shadow: 0 0 8px rgba(0, 240, 255, 0.6);
-  }}
-  .screen-visual {{
-    width: 135px; height: 135px; border-radius: 50%;
-    background: radial-gradient(circle, rgba(0, 240, 255, 0.35) 0%, rgba(255, 229, 0, 0.15) 50%, transparent 70%);
-    display: flex; align-items: center; justify-content: center;
-    border: 2px dashed rgba(0, 240, 255, 0.5);
-  }}
-  .spec-highlight {{
-    font-size: 16px; font-weight: 900; color: #FFE500; text-align: center;
-    text-shadow: 2px 2px 0 #000; line-height: 1.3;
-  }}
-  .screen-camera-spec {{
-    font-size: 15px; font-weight: 900; color: #FFF; background: #000;
-    padding: 6px 14px; border-radius: 8px; border: 1.5px solid #FFE500;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.8);
-  }}
-  .bb-emblem-wrap {{
-    position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%);
-    display: flex; flex-direction: column; align-items: center; gap: 15px; z-index: 8;
-  }}
-  .bb-eye-ring {{
-    width: 220px; height: 220px; border-radius: 50%;
-    background: radial-gradient(circle, #5a0815 0%, #1a0206 70%, #000 100%);
-    border: 4px solid #FF3344; display: flex; align-items: center; justify-content: center;
-    box-shadow: 0 0 50px rgba(255, 51, 68, 0.8), inset 0 0 30px rgba(255, 215, 0, 0.4);
-  }}
-  .bb-iris {{ font-size: 100px; filter: drop-shadow(0 0 20px #FFD700); }}
-  .bb-status-badge {{
-    background: #000; color: #FFE500; font-size: 22px; font-weight: 900;
-    padding: 8px 24px; border-radius: 12px; border: 2.5px solid #FF3344;
-    box-shadow: 0 6px 20px rgba(0,0,0,0.9);
-  }}
-  .split-panels {{
-    position: absolute; bottom: 20px; left: 32px; right: 32px;
-    display: flex; justify-content: space-between; align-items: flex-end;
+  /* Headline Stack on Left */
+  .headline-container {{
+    position: absolute; top: 38%; transform: translateY(-50%) rotate(-1.5deg);
+    left: 48px; width: 750px;
+    display: flex; flex-direction: column; gap: 12px;
     z-index: 10;
   }}
-  .evidence-box {{
-    width: 350px; height: 195px; border-radius: 18px; border: 3px solid #00F0FF;
-    background: linear-gradient(145deg, rgba(20, 30, 50, 0.92), rgba(10, 15, 28, 0.98));
-    box-shadow: 0 12px 35px rgba(0, 240, 255, 0.25), inset 0 0 20px rgba(0, 240, 255, 0.15);
-    overflow: hidden; position: relative;
-    display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 10px;
+  .category-badge-pill {{
+    align-self: flex-start;
+    background: linear-gradient(135deg, #FF0033 0%, #B30022 100%);
+    color: #FFFFFF; font-size: 24px; font-weight: 900;
+    padding: 7px 22px; border-radius: 12px; border: 2px solid #FF6677;
+    box-shadow: 0 6px 22px rgba(255, 0, 51, 0.65), inset 0 0 10px rgba(255,255,255,0.25);
+    letter-spacing: 0.5px; display: inline-flex; align-items: center; gap: 8px;
   }}
-  .box-label {{
-    position: absolute; bottom: 8px; left: 10px;
-    background: rgba(0,0,0,0.85); color: #FFF; font-size: 16px; font-weight: 800;
-    padding: 3px 10px; border-radius: 6px; border-left: 4px solid #FFE500;
+  .headline-yellow {{
+    color: #FFE600; font-size: 68px; font-weight: 900; line-height: 1.15;
+    text-shadow: 4px 4px 0 #000, -3px -3px 0 #000, 3px -3px 0 #000, -3px 3px 0 #000, 0 8px 25px rgba(0,0,0,0.95);
+    -webkit-text-stroke: 2.5px #000;
+    letter-spacing: -0.5px;
   }}
-  .ep-pill {{
-    position: absolute; bottom: 235px; left: 32px;
-    background: #000000; border: 2px solid #FFE500; color: #FFE500;
-    font-size: 20px; font-weight: 900; padding: 5px 16px; border-radius: 9px; z-index: 15;
-    box-shadow: 0 6px 18px rgba(0,0,0,0.8);
+  .headline-white {{
+    color: #FFFFFF; font-size: 62px; font-weight: 900; line-height: 1.18;
+    text-shadow: 4px 4px 0 #000, -3px -3px 0 #000, 3px -3px 0 #000, -3px 3px 0 #000, 0 8px 25px rgba(0,0,0,0.95);
+    -webkit-text-stroke: 2.5px #000;
+    letter-spacing: -0.5px;
+  }}
+  .hook-chip {{
+    align-self: flex-start;
+    background: rgba(0, 0, 0, 0.90); border: 2.5px solid #00F0FF;
+    border-radius: 14px; padding: 8px 22px;
+    color: #00F0FF; font-size: 30px; font-weight: 900;
+    box-shadow: 0 8px 25px rgba(0, 240, 255, 0.45);
+    display: inline-flex; align-items: center; gap: 10px;
+    text-shadow: 0 0 15px rgba(0,240,255,0.6);
+  }}
+
+  /* Hero Persona on Right */
+  .hero-persona-169 {{
+    position: absolute; bottom: 0; right: 20px;
+    height: 670px; max-width: 580px; object-fit: contain; object-position: bottom right;
+    z-index: 6;
+    filter: drop-shadow(0 0 25px {glow_color}) drop-shadow(0 0 65px rgba(255, 120, 0, 0.45)) drop-shadow(0 20px 40px rgba(0,0,0,0.95));
+  }}
+  .hero-portrait-blend-169 {{
+    position: absolute; top: 0; right: 0; bottom: 0; width: 52%;
+    z-index: 5; overflow: hidden;
+    -webkit-mask-image: linear-gradient(to left, black 65%, transparent 100%);
+    mask-image: linear-gradient(to left, black 65%, transparent 100%);
+  }}
+  .hero-portrait-blend-169 img {{
+    width: 100%; height: 100%; object-fit: cover; object-position: top center;
+    filter: brightness(0.95) contrast(1.15) saturate(1.1);
+  }}
+
+  /* Evidence Preview (if photo available) */
+  .evidence-preview-card {{
+    position: absolute; bottom: 22px; left: 48px;
+    width: 250px; height: 140px; border-radius: 16px;
+    border: 3.5px solid #FFE600; overflow: hidden;
+    box-shadow: 0 12px 35px rgba(0,0,0,0.9);
+    z-index: 12; transform: rotate(1.5deg);
+  }}
+  .evidence-preview-card img {{
+    width: 100%; height: 100%; object-fit: cover;
+  }}
+  .evidence-preview-label {{
+    position: absolute; bottom: 8px; left: 8px;
+    background: rgba(0,0,0,0.92); color: #FFF; font-size: 15px; font-weight: 900;
+    padding: 4px 12px; border-radius: 6px; border-left: 4px solid #FFE600;
   }}
 </style>
 </head>
 <body>
-  <div class="top-strip">
-    <div class="banner-pill">
-      <span class="yellow-txt">{header_left_yellow}</span>
-      <span class="white-txt">{header_left_white}</span>
-      <span class="emoji">{header_left_emoji}</span>
-    </div>
-    <div class="banner-pill">
-      <span class="white-txt">{header_right_white}</span>
-      <span class="yellow-txt">{header_right_yellow}</span>
-      <span class="emoji">{header_right_emoji}</span>
-    </div>
+  {bg_tag}
+  <div class="bg-scrim"></div>
+  <div class="bg-vignette"></div>
+
+  <div class="channel-stamp">4K ULTRA HD</div>
+
+  <div class="headline-container">
+    <div class="category-badge-pill">{category_badge}</div>
+    <div class="headline-yellow">{headline_yellow}</div>
+    <div class="headline-white">{headline_white}</div>
+    <div class="hook-chip">{hook_chip}</div>
   </div>
 
-  <div class="ep-pill">{episode_pill_text}</div>
-  <div class="brand-stack">{brand_badges_html}</div>
-  {hero_html}
-
-  <div class="split-panels">
-    <div class="evidence-box">{left_inner}</div>
-    <div class="evidence-box">{right_inner}</div>
-  </div>
+  {hero_html_16_9}
+  {evidence_preview_html}
 </body>
 </html>"""
 
@@ -713,20 +683,26 @@ def render_prasad_tech_thumbnail(
     header_right_yellow: str = "లీక్!",
     header_right_emoji: str = "🔥",
     hero_cutout_path: Optional[Path] = None,
+    hero_img_path: Optional[Path] = None,
+    bg_image_path: Optional[Path] = None,
     evidence_left_img: Optional[Path] = None,
-    evidence_left_text: str = "200MP SONY SENSOR",
-    evidence_left_badge: str = "CAMERA LEAK 📸",
+    evidence_left_text: str = "",
+    evidence_left_badge: str = "PROOF 📸",
     evidence_right_img: Optional[Path] = None,
-    evidence_right_text: str = "₹24,999 / 6500mAh",
-    evidence_right_badge: str = "PRICE & SPECS ⚡",
-    episode_pill_text: str = "TECH 2026",
+    evidence_right_text: str = "",
+    evidence_right_badge: str = "",
+    episode_pill_text: str = "EXCLUSIVE",
     brand_logos: Optional[list] = None,
     aspect_ratio: str = "16:9",
-    bg_theme: str = "tech_purple",
+    bg_theme: str = "danger_red",
     output_path: Optional[str] = None,
+    category_badge: Optional[str] = None,
+    headline_yellow: Optional[str] = None,
+    headline_white: Optional[str] = None,
+    hook_chip: Optional[str] = None,
 ) -> Optional[str]:
     """
-    Renders high-CTR Prasad Tech in Telugu thumbnail using Playwright Chromium.
+    Renders high-CTR viral YouTube thumbnail using Playwright Chromium.
     Returns path to rendered PNG.
     """
     if not output_path:
@@ -744,6 +720,8 @@ def render_prasad_tech_thumbnail(
         header_right_yellow=header_right_yellow,
         header_right_emoji=header_right_emoji,
         hero_cutout_path=hero_cutout_path,
+        hero_img_path=hero_img_path,
+        bg_image_path=bg_image_path,
         evidence_left_img=evidence_left_img,
         evidence_left_text=evidence_left_text,
         evidence_left_badge=evidence_left_badge,
@@ -754,6 +732,10 @@ def render_prasad_tech_thumbnail(
         brand_logos=brand_logos,
         aspect_ratio=aspect_ratio,
         bg_theme=bg_theme,
+        category_badge=category_badge,
+        headline_yellow=headline_yellow,
+        headline_white=headline_white,
+        hook_chip=hook_chip,
     )
 
     res = render_html_to_image(
@@ -802,12 +784,29 @@ def build_prasad_tech_thumbnail_params(title: str, channel: str = "Channel 1", t
         for c in ["nagarjuna", "vamsi", "aman", "thrigun", "sudheer", "mukesh", "jhansi", "apoorva"]:
             if c in full_text:
                 c_names.append(c.capitalize())
-        name_str = c_names[0] if c_names else "బిగ్‌బాస్ 10"
+        name_str = c_names[0] if c_names else "నాగార్జున"
 
         left_y = "బిగ్‌బాస్ 10" if name_str == "బిగ్‌బాస్ 10" else name_str
         left_w = "షాక్!" if "shock" in full_text or "twist" in full_text else "రచ్చ!"
         right_w = "ఎలిమినేషన్" if "elimination" in full_text else "ఓటింగ్ లీక్!"
         right_y = "క్యాన్సిల్?!" if "cancel" in full_text or "no elimination" in full_text else "ట్విస్ట్!"
+
+        if "elimination" in full_text or "evict" in full_text:
+            hy = f"{name_str} ఎలిమినేషన్ షాక్?!"
+            hw = "ఈ వారం ఎవరు అవుట్? 😱"
+            hchip = "⚡ ఓటింగ్ రిజల్ట్స్ లీక్"
+        elif "family" in full_text or "week" in full_text:
+            hy = f"{name_str} ఫ్యామిలీ వీక్ ట్విస్ట్! 🔥"
+            hw = "హౌస్‌లో రచ్చ రంబోలా! 😱"
+            hchip = "🔴 ఫినాలేకి చేరేది ఎవరు?!"
+        elif "warning" in full_text or "serious" in full_text or "fire" in full_text:
+            hy = "నాగార్జున సీరియస్ వార్నింగ్!"
+            hw = "హౌస్‌లో రచ్చ రచ్చ! 🔥"
+            hchip = "🚨 అసలు నిజం బయటపడింది"
+        else:
+            hy = f"{name_str} షాకింగ్ ట్విస్ట్! 🔥"
+            hw = "హౌస్‌లో రచ్చ రంబోలా! 😱"
+            hchip = "⚡ సీక్రెట్ రూమ్ లీక్?!"
 
         return {
             "header_left_yellow": left_y,
@@ -823,6 +822,10 @@ def build_prasad_tech_thumbnail_params(title: str, channel: str = "Channel 1", t
             "episode_pill_text": "BB10 TODAY",
             "brand_logos": ["BB10", "HOT", "STAR"],
             "bg_theme": "danger_red",
+            "category_badge": "🔴 BIGG BOSS 10 LIVE",
+            "headline_yellow": hy,
+            "headline_white": hw,
+            "hook_chip": hchip,
         }
 
     # 2. CHANNEL 2: CINEMA / CELEBRITY / TOLLYWOOD / ROASTS / LIFESTYLE
@@ -855,6 +858,10 @@ def build_prasad_tech_thumbnail_params(title: str, channel: str = "Channel 1", t
             pill = "VIRAL ROAST"
             logos = ["HOT", "VIRAL", "TREND"]
             theme = "danger_red"
+            cbadge = "👑 ROYAL LIFESTYLE"
+            hy = f"{celeb or 'రెబల్ స్టార్'} రాజభోగం! 👑"
+            hw = "లంచ్ ఖర్చు ఎంత? 😱"
+            hchip = "👨‍🍳 10 మంది స్పెషల్ చెఫ్స్!"
         elif any(k in full_text for k in ["roast", "drama", "troll", "mind", "lost"]):
             h_left_y = celeb or "టాప్ స్టార్"
             h_left_w = "ఫుల్ రోస్ట్! 🔥"
@@ -867,6 +874,10 @@ def build_prasad_tech_thumbnail_params(title: str, channel: str = "Channel 1", t
             pill = "VIRAL ROAST"
             logos = ["VIRAL", "TREND", "HOT"]
             theme = "danger_red"
+            cbadge = "⚡ VIRAL ROAST"
+            hy = f"{celeb or 'టాప్ స్టార్'} ఫుల్ రోస్ట్! 🔥"
+            hw = "సోషల్ మీడియా రచ్చ రచ్చ! 💥"
+            hchip = "😱 పబ్లిక్ రియాక్షన్ ఇదే!"
         else:
             h_left_y = celeb or "టాప్ మూవీ"
             h_left_w = "వైరల్ టాక్! 🎬"
@@ -879,6 +890,10 @@ def build_prasad_tech_thumbnail_params(title: str, channel: str = "Channel 1", t
             pill = "CINEMA BUZZ"
             logos = ["FILM", "HOT", "VIRAL"]
             theme = "danger_red"
+            cbadge = "🔥 VIRAL TOLLYWOOD"
+            hy = f"{celeb or 'టాప్ మూవీ'} షాకింగ్ నిజాలు! 🎬"
+            hw = "బాక్సాఫీస్ రికార్డ్ బ్రేక్! 💥"
+            hchip = "⚡ అసలు నిజం బయటపడింది!"
 
         return {
             "header_left_yellow": h_left_y,
@@ -894,6 +909,10 @@ def build_prasad_tech_thumbnail_params(title: str, channel: str = "Channel 1", t
             "episode_pill_text": pill,
             "brand_logos": logos,
             "bg_theme": theme,
+            "category_badge": cbadge,
+            "headline_yellow": hy,
+            "headline_white": hw,
+            "hook_chip": hchip,
         }
 
     # 3. CHANNEL 1: FACTS / SCIENCE / SPACE / MYSTERIES
@@ -912,6 +931,10 @@ def build_prasad_tech_thumbnail_params(title: str, channel: str = "Channel 1", t
             "episode_pill_text": "IMAGINARY FACTS",
             "brand_logos": ["FACT", "ISRO", "SCIENCE"],
             "bg_theme": "tech_purple",
+            "category_badge": "🌌 IMAGINARY FACTS",
+            "headline_yellow": "ఈ రహస్యం తెలిస్తే?! 🤯",
+            "headline_white": "మైండ్ బ్లాంక్ అవ్వడం ఖాయం!",
+            "hook_chip": "🔬 సైన్స్ చెప్పిన షాకింగ్ నిజం",
         }
 
     # 4. TECH / SMARTPHONES / GADGETS
@@ -966,6 +989,10 @@ def build_prasad_tech_thumbnail_params(title: str, channel: str = "Channel 1", t
         "episode_pill_text": "TECH 2026",
         "brand_logos": detected_brands[:3],
         "bg_theme": "tech_purple",
+        "category_badge": "⚡ TECH 2026 LEAK",
+        "headline_yellow": f"{phone_model[:12]} లీక్ అయింది! 🔥",
+        "headline_white": "ధర & ఫీచర్లు చూస్తే షాక్! 📱",
+        "hook_chip": f"⚡ {price_str} | {spec_left}",
     }
 
 

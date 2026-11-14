@@ -317,13 +317,6 @@ def find_local_contestant_image(
         if any(ct in t_low for ct in clash_terms):
             continue
 
-        # Check eviction/elimination status: If evicted, do NOT match unless the query explicitly discusses eviction/elimination
-        is_evicted = any(k in str(cdata.get("status", "")).upper() for k in ("EVICTED", "ELIMINATED")) or not cdata.get("is_active", True)
-        if is_evicted:
-            eviction_keywords = ("evict", "elimina", "ఎలిమినే", "విడుదల", "బయటకు")
-            if not any(ek in t_low for ek in eviction_keywords):
-                continue
-
         aliases = [slug.lower().replace("_", " ")]
         if cdata.get("nickname"):
             aliases.append(cdata["nickname"].lower())
@@ -335,6 +328,17 @@ def find_local_contestant_image(
             aliases.append(a.lower())
 
         aliases = list(dict.fromkeys(aliases))
+
+        # Check eviction/elimination status: If evicted, do NOT match in current in-house scenes
+        # (like nominations, captaincy, voting) unless the query explicitly discusses eviction/elimination
+        is_evicted = any(k in str(cdata.get("status", "")).upper() for k in ("EVICTED", "ELIMINATED")) or not cdata.get("is_active", True)
+        if is_evicted:
+            eviction_keywords = ("evict", "elimina", "ఎలిమినే", "విడుదల", "బయటకు")
+            inhouse_active_keywords = ("nomination", "నామినేషన్", "captain", "కెప్టెన్", "voting", "ఓటింగ్")
+            is_inhouse_active = any(ik in t_low for ik in inhouse_active_keywords)
+            has_eviction_kw = any(ek in t_low for ek in eviction_keywords)
+            if is_inhouse_active and not has_eviction_kw:
+                continue
 
         for alias in aliases:
             if not alias or len(alias) < 3:
@@ -3445,16 +3449,18 @@ def download_images_from_visual_plan(
         # ------------------------------------------------------------
         # TIER 1.2: ICONIC TELUGU REACTION MEME (FOR COMEDY / ROAST / OVERACTING)
         # ------------------------------------------------------------
-        if is_bb_scene or topic_category in ("entertainment", "reality"):
+        if is_bb_scene or topic_category in ("entertainment", "reality") or "telugu_meme" in visual_query.lower() or "meme" in visual_query.lower():
             try:
                 from tools.meme_manager import get_reaction_meme, match_emotion_from_text
                 is_meme_worthy = (
-                    s_emotion in ("shocked", "comedy", "roast", "overacting", "laughing", "angry", "confused", "funny", "headache", "crying")
+                    "telugu_meme" in visual_query.lower()
+                    or "meme" in visual_query.lower()
+                    or s_emotion in ("shocked", "comedy", "roast", "overacting", "laughing", "angry", "confused", "funny", "headache", "crying", "fake_shock", "mock", "smug")
                     or s_intent in ("reaction", "meme", "roast", "comedy")
                     or any(k in visual_query.lower() for k in ("meme", "reaction", "roast", "comedy", "funny", "shocked", "brahmanandam"))
                     or bool(match_emotion_from_text(assigned_narration))
                 )
-                max_memes = 1 if aspect_ratio == "9:16" else 2
+                max_memes = 2
                 with hash_lock:
                     can_use_meme = is_meme_worthy and len(used_memes) < max_memes
                     meme_path = get_reaction_meme(f"{s_emotion} {visual_query} {assigned_narration}", used_memes=used_memes) if can_use_meme else None
@@ -3905,8 +3911,23 @@ def download_images_from_visual_plan(
             print(f"Web media search notice for Visual {visual_number}: {p_err}")
 
         # ------------------------------------------------------------
+        # ------------------------------------------------------------
         # TIER 2.5: RESCUE LAYER - SEARCH DDG & PEXELS FOR REAL PHOTOGRAPHY
         # ------------------------------------------------------------
+        from utils.season_guard import is_bigg_boss_topic, is_conflicting_season_candidate
+        loc_c_pre = find_local_contestant_image(f"{entity_name or ''} {visual_query} {assigned_narration}")
+        if not loc_c_pre and topic_person_slug and (not entity_name or entity_name.lower() in topic_person_slug.lower() or topic_person_slug.lower() in entity_name.lower()):
+            loc_c_pre = find_local_contestant_image(topic_person_slug)
+        is_bb_scene = (
+            bool(loc_c_pre)
+            or is_bigg_boss_topic(topic or "")
+            or is_bigg_boss_topic(visual_query or "")
+            or is_bigg_boss_topic(assigned_narration or "")
+            or "bigg boss" in str(topic_category).lower()
+            or "bb10" in (visual_query or "").lower()
+            or "bigg boss" in (visual_query or "").lower()
+        )
+
         if not destination.exists() or destination.stat().st_size < 3000:
             rescue_queries = [
                 s_search_query,
@@ -3924,12 +3945,72 @@ def download_images_from_visual_plan(
                     r_cands = search_duckduckgo_images(r_q, max_results=8)
                     for rc in r_cands:
                         rc_url = rc.get("image_url")
+                        rc_title = rc.get("title", "")
                         if not rc_url or rc_url in claimed_urls:
                             continue
+
+                        # Strict Season Guard & Blacklist in Rescue Layer
+                        if is_conflicting_season_candidate(
+                            f"{rc_title} {rc_url}",
+                            is_bb_context=is_bb_scene,
+                            target_season=10,
+                            target_person=entity_name or s_primary_ent,
+                        ):
+                            continue
+                        if is_blacklisted_candidate(rc, target_entity=entity_name, topic_context=topic_ctx):
+                            continue
+
                         with hash_lock:
                             claimed_urls.add(rc_url)
+
                         if download_image(rc, destination):
                             clean_and_crop_image(destination, aspect_ratio=aspect_ratio)
+
+                            # Validate dimensions
+                            try:
+                                with Image.open(destination) as img:
+                                    w, h = img.size
+                                    if w < 300 or h < 220:
+                                        destination.unlink(missing_ok=True)
+                                        with hash_lock:
+                                            claimed_urls.discard(rc_url)
+                                        continue
+                            except Exception:
+                                destination.unlink(missing_ok=True)
+                                with hash_lock:
+                                    claimed_urls.discard(rc_url)
+                                continue
+
+                            # Perceptual hash deduplication
+                            f_hash = image_hash(destination)
+                            f_dhash = image_dhash(destination)
+                            with hash_lock:
+                                if (f_hash and f_hash in used_hashes) or (f_dhash and is_perceptual_duplicate(f_dhash, used_dhashes, max_dist=5)):
+                                    print(f"🔄 [Rescue Layer] Duplicate rejected for Visual {visual_number}: '{rc_url[:55]}'")
+                                    destination.unlink(missing_ok=True)
+                                    claimed_urls.discard(rc_url)
+                                    continue
+
+                            # OCR check for prior season text / logos
+                            if is_bb_scene:
+                                try:
+                                    from tools.ocr_guard import check_asset_prior_seasons
+                                    is_clean, detected_text, reason = check_asset_prior_seasons(destination, is_bb=True)
+                                    if not is_clean:
+                                        print(f"🚫 [Rescue OCR Guard] Disqualified prior season image for Visual {visual_number}: {reason}")
+                                        destination.unlink(missing_ok=True)
+                                        with hash_lock:
+                                            claimed_urls.discard(rc_url)
+                                        continue
+                                except Exception:
+                                    pass
+
+                            with hash_lock:
+                                if f_hash:
+                                    used_hashes.add(f_hash)
+                                if f_dhash:
+                                    used_dhashes.append(f_dhash)
+
                             print(f"🎯 [Rescue Layer] Visual {visual_number} saved authentic photo via DDG for '{r_q}': {destination.name}")
                             return visual_number, destination
                 except Exception as r_err:
@@ -3950,33 +4031,71 @@ def download_images_from_visual_plan(
                             sel_photo = e_photos[(visual_number - 1) % len(e_photos)]
                             shutil.copy2(sel_photo, destination)
                             clean_and_crop_image(destination, aspect_ratio=aspect_ratio)
+                            f_hash = image_hash(destination)
+                            f_dhash = image_dhash(destination)
+                            with hash_lock:
+                                if f_hash:
+                                    used_hashes.add(f_hash)
+                                if f_dhash:
+                                    used_dhashes.append(f_dhash)
                             print(f"🌟 [Entity Rescue] Visual {visual_number} used verified library asset for '{ent_search}': {sel_photo.name}")
                             return visual_number, destination
 
         # ============================================================
-        # TIER 3: EDITORIAL GRAPHIC CARD OR DYNAMIC AI FALLBACK
+        # TIER 3: PHASE 5 VISUAL LADDER (Pexels -> Pixabay -> Pollinations FLUX -> Wikimedia)
+        # MUST run BEFORE Typography Card to prioritize real photography / video B-roll!
         # ============================================================
-        from utils.season_guard import is_bigg_boss_topic
-        loc_c = find_local_contestant_image(f"{entity_name or ''} {visual_query} {assigned_narration}")
-        # Only fallback to topic_person_slug if entity_name was NOT explicitly given or is related to topic person
-        if not loc_c and topic_person_slug and (not entity_name or entity_name.lower() in topic_person_slug.lower() or topic_person_slug.lower() in entity_name.lower()):
-            loc_c = find_local_contestant_image(topic_person_slug)
-        is_bb_scene = (
-            bool(loc_c)
-            or is_bigg_boss_topic(topic or "")
-            or is_bigg_boss_topic(visual_query or "")
-            or is_bigg_boss_topic(assigned_narration or "")
-            or "bigg boss" in str(topic_category).lower()
-            or "bb10" in (visual_query or "").lower()
-            or "bigg boss" in (visual_query or "").lower()
-        )
-        
+        try:
+            from agents.visual_ladder import source_beat_visual
+            ladder_res = source_beat_visual(
+                beat_number=visual_number,
+                raw_query=visual_query,
+                narration=assigned_narration,
+                destination_jpg=destination,
+                destination_mp4=video_dest,
+                aspect_ratio=aspect_ratio,
+                topic_category=topic_category,
+                claimed_urls=claimed_urls,
+                used_hashes=used_hashes,
+                used_entity_library_ids=used_entity_library_ids,
+                hash_lock=hash_lock,
+            )
+            if ladder_res.get("success"):
+                asset_p = Path(ladder_res["asset_path"])
+                if asset_p.suffix.lower() == ".mp4" and asset_p.exists():
+                    print(f"🎬 [Visual {visual_number}] ✅ Attached via Phase 5 Ladder: {ladder_res['source']} -> {asset_p.name}")
+                    return visual_number, asset_p
+                elif destination.exists() and destination.stat().st_size > 3000:
+                    try:
+                        from providers.image import clean_and_crop_image
+                        clean_and_crop_image(destination, aspect_ratio=aspect_ratio)
+                    except Exception:
+                        pass
+                    f_hash = image_hash(destination)
+                    f_dhash = image_dhash(destination)
+                    with hash_lock:
+                        is_dup = (f_hash and f_hash in used_hashes) or (f_dhash and is_perceptual_duplicate(f_dhash, used_dhashes, max_dist=5))
+                    if is_dup:
+                        print(f"🔄 Phase 5 ladder returned duplicate for Visual {visual_number}, rejecting...")
+                        destination.unlink(missing_ok=True)
+                    else:
+                        with hash_lock:
+                            if f_hash:
+                                used_hashes.add(f_hash)
+                            if f_dhash:
+                                used_dhashes.append(f_dhash)
+                        print(f"🎬 [Visual {visual_number}] ✅ Attached via Phase 5 Ladder: {ladder_res['source']} -> {destination.name}")
+                        return visual_number, destination
+        except Exception as l_err:
+            print(f"⚠️ Phase 5 visual ladder notice for Visual {visual_number}: {l_err}")
+
+        if video_dest.exists() and video_dest.stat().st_size > 5000:
+            return visual_number, video_dest
+
         # ============================================================
-        # TIER 3: EDITORIAL GRAPHIC CARD (NO FAKE AI CARTOONS FOR REAL TOPICS)
+        # TIER 4: EDITORIAL GRAPHIC CARD (LAST RESORT FALLBACK)
         # ============================================================
-        # Real-world topics (news, traffic, crime, tech, reality, politics, sports, cinema)
-        # MUST NOT be generated via text-to-image AI (Pollinations produces anime/cartoons/fake scenes).
-        # Use Canva-Style Editorial Broadcast Card with verified headline, badge, and theme gradient:
+        loc_c = loc_c_pre
         try:
             from agents.typography_card import generate_typography_card
             av_p = str(loc_c[1]) if loc_c else None
@@ -4006,7 +4125,7 @@ def download_images_from_visual_plan(
                         av_p = None
                 elif av_p:
                     used_editorial_avatars.add(av_p)
-            
+
             headline = assigned_narration or visual_query or f"Scene {visual_number}"
             print(f"🎨 [Visual {visual_number}] Generating Canva-style editorial card (avatar={av_p is not None})...")
             if generate_typography_card(
@@ -4045,106 +4164,7 @@ def download_images_from_visual_plan(
         except Exception as card_err:
             print(f"⚠️ Canva-style card fallback notice for Visual {visual_number}: {card_err}")
 
-        # Phase 5 Visual Fallback Ladder: Pexels -> Pixabay -> Pollinations FLUX -> Wikimedia Commons -> Typography Card
-        try:
-            from agents.visual_ladder import source_beat_visual
-            ladder_res = source_beat_visual(
-                beat_number=visual_number,
-                raw_query=visual_query,
-                narration=assigned_narration,
-                destination_jpg=destination,
-                destination_mp4=video_dest,
-                aspect_ratio=aspect_ratio,
-                topic_category=topic_category,
-                claimed_urls=claimed_urls,
-                used_hashes=used_hashes,
-                used_entity_library_ids=used_entity_library_ids,
-                hash_lock=hash_lock,
-            )
-            if ladder_res.get("success"):
-                asset_p = Path(ladder_res["asset_path"])
-                if asset_p.suffix.lower() == ".mp4" and asset_p.exists():
-                    print(f"🎬 [Visual {visual_number}] ✅ Attached via Phase 5 Ladder: {ladder_res['source']} -> {asset_p.name}")
-                    return visual_number, asset_p
-                elif destination.exists():
-                    try:
-                        from providers.image import clean_and_crop_image
-                        clean_and_crop_image(destination, aspect_ratio=aspect_ratio)
-                    except Exception:
-                        pass
-                    f_hash = image_hash(destination)
-                    f_dhash = image_dhash(destination)
-                    with hash_lock:
-                        is_dup = (f_hash and f_hash in used_hashes) or (f_dhash and is_perceptual_duplicate(f_dhash, used_dhashes, max_dist=5))
-                    if is_dup:
-                        print(f"🔄 Phase 5 ladder returned duplicate for Visual {visual_number}, rejecting...")
-                        destination.unlink(missing_ok=True)
-                    else:
-                        with hash_lock:
-                            if f_hash:
-                                used_hashes.add(f_hash)
-                            if f_dhash:
-                                used_dhashes.append(f_dhash)
-                        print(f"🎬 [Visual {visual_number}] ✅ Attached via Phase 5 Ladder: {ladder_res['source']} -> {destination.name}")
-                        return visual_number, destination
-        except Exception as l_err:
-            print(f"⚠️ Phase 5 visual ladder notice for Visual {visual_number}: {l_err}")
 
-        if video_dest.exists() and video_dest.stat().st_size > 5000:
-            return visual_number, video_dest
-
-        # Guaranteed Robust Fallback: Never return None or leave assets/{visual_number}.jpg missing
-        print(f"🛠️ [Visual {visual_number}] Synthesizing guaranteed Canva-style editorial fallback...")
-        try:
-            from agents.typography_card import generate_typography_card
-            from utils.season_guard import is_bigg_boss_topic
-            is_bb_scene = is_bigg_boss_topic(topic or "") or "bigg boss" in str(topic_category).lower() or "bigg boss" in (visual_query or "").lower()
-            target_name = search_target_name or (entity_name if 'entity_name' in locals() else "") or s_primary_ent or ""
-            loc_c = find_local_contestant_image(f"{target_name} {visual_query} {assigned_narration}")
-            if not loc_c and topic_person_slug:
-                loc_c = find_local_contestant_image(topic_person_slug)
-            av_p = str(loc_c[1]) if loc_c else None
-            b_lbl = f"{loc_c[0].upper().replace('_', ' ')} • BIGG BOSS 10" if loc_c else (f"{target_name.upper()} • HIGHLIGHT" if target_name else "TOPIC HIGHLIGHT")
-            if not av_p and is_bb_scene:
-                bb_host = ROOT / "reference_assets" / "contestants" / "akkineni_nagarjuna.jpg"
-                if bb_host.exists():
-                    av_p = str(bb_host)
-                    b_lbl = "BIGG BOSS TELUGU 10"
-
-            with hash_lock:
-                if av_p and av_p in used_editorial_avatars:
-                    bb_host = ROOT / "reference_assets" / "contestants" / "akkineni_nagarjuna.jpg"
-                    if bb_host.exists() and str(bb_host) not in used_editorial_avatars:
-                        av_p = str(bb_host)
-                        b_lbl = "BIGG BOSS TELUGU 10"
-                        used_editorial_avatars.add(av_p)
-                    else:
-                        av_p = None
-                elif av_p:
-                    used_editorial_avatars.add(av_p)
-
-            headline = assigned_narration or (visuals[visual_number - 1] if (visual_number - 1 < len(visuals)) else f"Scene {visual_number} Highlights")
-            if generate_typography_card(
-                headline_text=headline,
-                output_path=str(destination),
-                topic_category=topic_category or "entertainment",
-                aspect_ratio=aspect_ratio,
-                badge_label=b_lbl,
-                avatar_image_path=av_p,
-                subtext="Bigg Boss Telugu 10 • Star Maa" if is_bb_scene else None,
-            ):
-                if destination.exists() and destination.stat().st_size > 3000:
-                    file_hash = image_hash(destination)
-                    file_dhash = image_dhash(destination)
-                    with hash_lock:
-                        if file_hash:
-                            used_hashes.add(file_hash)
-                        if file_dhash:
-                            used_dhashes.append(file_dhash)
-                    print(f"✅ Visual {visual_number} saved via Canva-style editorial card fallback -> {destination.name}")
-                    return visual_number, destination
-        except Exception as card_fb_err:
-            print(f"⚠️ Canva-style card fallback notice for Visual {visual_number}: {card_fb_err}")
 
         # If typography card fails, try non-AI photo fallback or graceful canvas
         try:

@@ -287,6 +287,23 @@ class ValidationAgent:
                     fix=f"Ensure the script provides recommendations covering {', '.join(missing_brackets)}.",
                 )
 
+        # 6. Factual Integrity & Anti-Hallucination Check
+        # Detect hallucinated voting counts, contradictory numbers, or wild claims
+        try:
+            from agents.review_agent import verify_script_facts
+            fact_audit = verify_script_facts(clean_text, topic=topic)
+            if not fact_audit.get("passed", True):
+                for iss in fact_audit.get("issues", []):
+                    iss_str = iss.get("detail", str(iss)) if isinstance(iss, dict) else str(iss)
+                    res.add_critical(
+                        rule="Factual Consistency",
+                        expected="Grounded facts without invented numbers or contradictions",
+                        actual=iss_str,
+                        fix="Remove hallucinated numbers and bizarre claims. Ground script in verified contestant interactions.",
+                    )
+        except Exception as f_err:
+            pass
+
         return res
 
     # ============================================================

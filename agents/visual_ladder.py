@@ -544,7 +544,7 @@ def search_all_sources_parallel(
             from utils.season_guard import is_entertainment_or_roast_topic, is_bigg_boss_topic, is_conflicting_season_candidate
             if (
                 is_entity
-                or target_ent is not None
+                or bool(entity_name)
                 or is_entertainment_or_roast_topic(topic_category)
                 or is_entertainment_or_roast_topic(raw_query)
                 or is_bigg_boss_topic(topic_category)
@@ -559,7 +559,7 @@ def search_all_sources_parallel(
                         for item in res:
                             u = item.get("image_url")
                             t = item.get("title", q)
-                            target_p = target_ent.get("canonical_name", "") if target_ent else raw_query
+                            target_p = entity_name if (is_entity and entity_name) else raw_query
                             if is_conflicting_season_candidate(f"{t} {u}", target_person=target_p):
                                 continue
                             if u and u not in seen_urls and not is_tier_c_asset(u, t):
@@ -749,7 +749,7 @@ def search_all_sources_parallel(
     from utils.season_guard import is_entertainment_or_roast_topic, is_bigg_boss_topic
     is_ent = (
         is_entity
-        or target_ent is not None
+        or bool(entity_name)
         or is_entertainment_or_roast_topic(topic_category)
         or is_entertainment_or_roast_topic(raw_query)
         or is_bigg_boss_topic(topic_category)

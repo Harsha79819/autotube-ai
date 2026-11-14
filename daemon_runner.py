@@ -121,6 +121,7 @@ class ProcessSupervisor:
         self.mode = mode
         self.streamlit_proc = None
         self.tunnel_proc = None
+        self.scheduler_proc = None
         self.running = True
         self.started_at = datetime.now(timezone.utc).isoformat()
 
@@ -200,11 +201,32 @@ class ProcessSupervisor:
         tunnel_out.close()
         return proc
 
+    def start_scheduler(self) -> subprocess.Popen:
+        sched_log = LOGS_DIR / "scheduler_daemon.log"
+        rotate_log_if_large(sched_log)
+        sched_out = open(sched_log, "a", encoding="utf-8")
+        cmd = [
+            sys.executable,
+            str(ROOT / "daily_scheduler.py"),
+            "--daemon",
+        ]
+        self.log_daemon("Spawning 24/7 Channel 1 Daily Scheduler worker...")
+        proc = subprocess.Popen(
+            cmd,
+            cwd=str(ROOT),
+            stdin=subprocess.DEVNULL,
+            stdout=sched_out,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+        sched_out.close()
+        return proc
+
     def stop_all(self):
         self.running = False
         self.log_daemon("Shutting down supervisor and all child processes...")
 
-        for name, proc in [("Tunnel", self.tunnel_proc), ("Streamlit", self.streamlit_proc)]:
+        for name, proc in [("Tunnel", self.tunnel_proc), ("Streamlit", self.streamlit_proc), ("Scheduler", self.scheduler_proc)]:
             if proc and proc.poll() is None:
                 self.log_daemon(f"Terminating {name} (PID: {proc.pid})...")
                 try:
@@ -220,6 +242,7 @@ class ProcessSupervisor:
         try:
             subprocess.run(["pkill", "-f", "ngrok http"], capture_output=True)
             subprocess.run(["pkill", "-f", "cloudflared tunnel"], capture_output=True)
+            subprocess.run(["pkill", "-f", "daily_scheduler.py --daemon"], capture_output=True)
         except Exception:
             pass
 
@@ -249,11 +272,14 @@ class ProcessSupervisor:
         self.streamlit_proc = self.start_streamlit()
         time.sleep(2.0)
         self.tunnel_proc = self.start_tunnel()
+        time.sleep(1.0)
+        self.scheduler_proc = self.start_scheduler()
 
         state = {
             "daemon_pid": os.getpid(),
             "streamlit_pid": self.streamlit_proc.pid if self.streamlit_proc else None,
             "tunnel_pid": self.tunnel_proc.pid if self.tunnel_proc else None,
+            "scheduler_pid": self.scheduler_proc.pid if self.scheduler_proc else None,
             "port": self.port,
             "started_at": self.started_at,
         }
@@ -261,8 +287,10 @@ class ProcessSupervisor:
 
         st_crashes = 0
         tunnel_crashes = 0
+        sched_crashes = 0
         last_st_restart = time.time()
         last_tunnel_restart = time.time()
+        last_sched_restart = time.time()
         MAX_CONSECUTIVE_CRASHES = 5
 
         try:
@@ -274,6 +302,8 @@ class ProcessSupervisor:
                     st_crashes = 0
                 if time.time() - last_tunnel_restart > 45:
                     tunnel_crashes = 0
+                if time.time() - last_sched_restart > 45:
+                    sched_crashes = 0
 
                 # 1. Check Streamlit Health
                 if self.streamlit_proc and self.streamlit_proc.poll() is not None:
@@ -305,6 +335,22 @@ class ProcessSupervisor:
                         self.tunnel_proc = self.start_tunnel()
                         last_tunnel_restart = time.time()
                         state["tunnel_pid"] = self.tunnel_proc.pid
+                        write_daemon_state(state)
+
+                # 3. Check Channel 1 24/7 Scheduler Health
+                if self.scheduler_proc and self.scheduler_proc.poll() is not None:
+                    code = self.scheduler_proc.poll()
+                    sched_crashes += 1
+                    if sched_crashes > MAX_CONSECUTIVE_CRASHES:
+                        self.log_daemon(f"🛑 Scheduler crashed {sched_crashes} consecutive times. Halting restart loop. Check logs/scheduler_daemon.log!")
+                        self.scheduler_proc = None
+                    else:
+                        backoff = min(15, 2 ** min(sched_crashes, 4))
+                        self.log_daemon(f"⚠️ Scheduler exited unexpectedly (code {code})! Crash #{sched_crashes}. Auto-restarting in {backoff}s...")
+                        time.sleep(backoff)
+                        self.scheduler_proc = self.start_scheduler()
+                        last_sched_restart = time.time()
+                        state["scheduler_pid"] = self.scheduler_proc.pid
                         write_daemon_state(state)
 
 
