@@ -1568,16 +1568,22 @@ def generate_multi_media_video(
                 # Persist live status to disk so any browser session or mobile refresh sees it immediately!
                 try:
                     status_data = {
+                        "is_running": True,
                         "status": "RUNNING",
                         "topic": topic,
                         "stage": text,
                         "progress": val,
+                        "percent": val,
+                        "current_task": text,
+                        "next_task": "Finalizing next video asset...",
                         "started_at": self.start_time,
                         "updated_at": time.time(),
                     }
-                    (OUTPUT_DIR / "pipeline_status.json").write_text(
-                        json.dumps(status_data, indent=2), encoding="utf-8"
-                    )
+                    status_json = json.dumps(status_data, indent=2, ensure_ascii=False)
+                    (OUTPUT_DIR / "pipeline_status.json").write_text(status_json, encoding="utf-8")
+                    static_status = ROOT / "static" / "pipeline_status.json"
+                    static_status.parent.mkdir(parents=True, exist_ok=True)
+                    static_status.write_text(status_json, encoding="utf-8")
                 except Exception:
                     pass
 
@@ -2876,7 +2882,11 @@ def generate_multi_media_video(
 
     try:
         from agents.companion_agent import reset_companion_status
-        reset_companion_status("Video generation completed successfully")
+        reset_companion_status(
+            last_result=f"Video generated successfully: {topic[:40]}",
+            last_topic=topic,
+            video_file=str(OUTPUT_DIR / "final_video.mp4")
+        )
     except Exception:
         pass
 

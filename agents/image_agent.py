@@ -3322,7 +3322,7 @@ def download_images_from_visual_plan(
         if feedback:
             failing_visuals = [int(n) for n in re.findall(r"Visual\s+(\d+)", str(feedback))]
             # Only apply healing if this beat was explicitly flagged
-            if not failing_visuals or idx in failing_visuals:
+            if not failing_visuals or visual_number in failing_visuals:
                 STOP_WORDS = {
                     "visual", "mismatch", "image", "resolution", "section", "agent", "quality", "failing",
                     "critical", "defect", "relevance", "below", "threshold", "score", "attempt", "attempts",
@@ -3332,7 +3332,7 @@ def download_images_from_visual_plan(
                     w for w in re.findall(r"\b[A-Za-z]{4,}\b", str(feedback))
                     if w.lower() not in STOP_WORDS
                 ]
-                if extra_words and idx in failing_visuals:
+                if extra_words and visual_number in failing_visuals:
                     queries.insert(0, f"{visual_query} {' '.join(extra_words[:2])}")
 
         # Check if this visual is discussing a specific named commercial product, show, movie, or celebrity
@@ -4137,50 +4137,54 @@ def download_images_from_visual_plan(
             return visual_number, video_dest
 
         # ============================================================
-        # TIER 4: EDITORIAL GRAPHIC CARD (LAST RESORT FALLBACK)
+        # TIER 4: AUTHENTIC CONTESTANT / MEME / EDITORIAL PHOTO (LAST RESORT FALLBACK)
         # ============================================================
         loc_c = loc_c_pre
         try:
-            from agents.typography_card import generate_typography_card
-            av_p = str(loc_c[1]) if loc_c else None
-            if loc_c:
-                b_lbl = f"{loc_c[0].upper().replace('_', ' ')} • BIGG BOSS 10"
-            elif entity_name:
-                b_lbl = f"{entity_name.upper()} • BIGG BOSS 10" if is_bb_scene else f"{entity_name.upper()} • UPDATE"
-            elif topic_ctx:
-                b_lbl = f"{topic_ctx[:22].upper()} • NEWS BRIEF"
-            else:
-                b_lbl = "KEY HIGHLIGHT"
+            from providers.image import clean_and_crop_image
+            import shutil
 
+            av_p = str(loc_c[1]) if loc_c else None
             if not av_p and is_bb_scene:
                 bb_host = ROOT / "reference_assets" / "contestants" / "akkineni_nagarjuna.jpg"
                 if bb_host.exists():
                     av_p = str(bb_host)
 
-            # Zero Repeated Avatar in Editorial Cards:
-            with hash_lock:
-                if av_p and av_p in used_editorial_avatars:
-                    bb_host = ROOT / "reference_assets" / "contestants" / "akkineni_nagarjuna.jpg"
-                    if bb_host.exists() and str(bb_host) not in used_editorial_avatars:
-                        av_p = str(bb_host)
-                        b_lbl = "BIGG BOSS TELUGU 10"
-                        used_editorial_avatars.add(av_p)
-                    else:
-                        av_p = None
-                elif av_p:
-                    used_editorial_avatars.add(av_p)
+            # Check if this beat is comedy / roast / reaction
+            is_comedy_beat = (
+                visual_number % 3 == 0
+                or any(w in str(assigned_narration or visual_query).lower() for w in ["comedy", "roast", "funny", "laugh", "shock", "meme", "fan", "reaction", "clip"])
+            )
+            meme_file = None
+            if is_comedy_beat:
+                try:
+                    from tools.meme_manager import get_relevant_reaction_meme, record_used_meme
+                    meme_match = get_relevant_reaction_meme(
+                        assigned_narration or visual_query, tone="roast", scene_idx=visual_number
+                    )
+                    if meme_match and Path(meme_match).exists():
+                        meme_file = Path(meme_match)
+                except Exception:
+                    pass
 
-            headline = assigned_narration or visual_query or f"Scene {visual_number}"
-            print(f"🎨 [Visual {visual_number}] Generating Canva-style editorial card (avatar={av_p is not None})...")
-            if generate_typography_card(
-                headline_text=headline,
-                output_path=str(destination),
-                topic_category=topic_category or "general",
-                aspect_ratio=aspect_ratio,
-                badge_label=b_lbl,
-                avatar_image_path=av_p,
-                subtext="Bigg Boss Telugu 10 • Star Maa" if is_bb_scene else None,
-            ):
+            chosen_photo = None
+            if meme_file and meme_file.exists():
+                chosen_photo = meme_file
+                try:
+                    from tools.meme_manager import record_used_meme
+                    record_used_meme(meme_file.name)
+                except Exception:
+                    pass
+            elif av_p and Path(av_p).exists():
+                chosen_photo = Path(av_p)
+            elif is_bb_scene:
+                bb_stage = ROOT / "assets" / "entities" / "bigg_boss_telugu" / "image.jpg"
+                if bb_stage.exists():
+                    chosen_photo = bb_stage
+
+            if chosen_photo and chosen_photo.exists():
+                shutil.copy2(chosen_photo, destination)
+                clean_and_crop_image(destination, aspect_ratio=aspect_ratio)
                 if destination.exists() and destination.stat().st_size > 3000:
                     f_hash = image_hash(destination)
                     f_dhash = image_dhash(destination)
@@ -4195,7 +4199,7 @@ def download_images_from_visual_plan(
                             video_id="current",
                             beat_id=visual_number,
                             asset_path=str(destination),
-                            source_url="editorial_typography_card",
+                            source_url=f"authentic_asset_{chosen_photo.stem}",
                             tier="TIER_A",
                             license_name="Royalty-Free / Generated",
                             credit_text="AutoTube Broadcast Engine",
@@ -4203,10 +4207,26 @@ def download_images_from_visual_plan(
                         )
                     except Exception:
                         pass
-                    print(f"✅ Visual {visual_number} saved via Canva-style editorial composite -> {destination.name}")
+                    print(f"✅ Visual {visual_number} saved via clean authentic photo ({chosen_photo.name}) -> {destination.name}")
+                    return visual_number, destination
+
+            # Only as absolute emergency if no photo/meme exists at all:
+            from agents.typography_card import generate_typography_card
+            headline = assigned_narration or visual_query or f"Scene {visual_number}"
+            b_lbl = f"{loc_c[0].upper().replace('_', ' ')} • BIGG BOSS 10" if loc_c else ("BIGG BOSS TELUGU 10" if is_bb_scene else "TOPIC HIGHLIGHT")
+            if generate_typography_card(
+                headline_text=headline,
+                output_path=str(destination),
+                topic_category=topic_category or "general",
+                aspect_ratio=aspect_ratio,
+                badge_label=b_lbl,
+                avatar_image_path=av_p,
+                subtext="Bigg Boss Telugu 10 • Reality Update" if is_bb_scene else None,
+            ):
+                if destination.exists() and destination.stat().st_size > 3000:
                     return visual_number, destination
         except Exception as card_err:
-            print(f"⚠️ Canva-style card fallback notice for Visual {visual_number}: {card_err}")
+            print(f"⚠️ Photo fallback notice for Visual {visual_number}: {card_err}")
 
 
 
@@ -4272,10 +4292,11 @@ def download_images_from_visual_plan(
             from utils.season_guard import is_bigg_boss_topic
             is_bb_mode = is_bigg_boss_topic(topic or "") or "bigg boss" in str(topic_category).lower()
             
-            # 1. Reality Show / Bigg Boss: Zero Anime/Cartoon Faces -> Canva Editorial Card with real photo
+            # 1. Reality Show / Bigg Boss: Zero Giant Text Cards -> Clean authentic photo or Telugu reaction meme
             if is_bb_mode:
                 try:
-                    from agents.typography_card import generate_typography_card
+                    from providers.image import clean_and_crop_image
+                    import shutil
                     b_main_ent = ""
                     vp_file = OUTPUT_DIR / "visual_plan.json"
                     if vp_file.exists():
@@ -4291,50 +4312,72 @@ def download_images_from_visual_plan(
                     loc_c = find_local_contestant_image(f"{b_main_ent} {section_narrations.get(num, '')}")
                     if not loc_c and topic_person_slug:
                         loc_c = find_local_contestant_image(topic_person_slug)
-                    av_p = str(loc_c[1]) if loc_c else None
-                    b_lbl = f"{loc_c[0].upper().replace('_', ' ')} • BIGG BOSS 10" if loc_c else "BIGG BOSS TELUGU 10"
-                    if not av_p:
-                        bb_host = ROOT / "reference_assets" / "contestants" / "akkineni_nagarjuna.jpg"
-                        if bb_host.exists():
-                            av_p = str(bb_host)
                     
-                    headline = section_narrations.get(num, "") or (visuals[num - 1] if num - 1 < len(visuals) else f"Scene {num}")
-                    print(f"🎨 [Scene {num}] Generating Canva-style editorial card with real photo (avatar={av_p is not None})...")
-                    if generate_typography_card(
-                        headline_text=headline,
-                        output_path=str(dest),
-                        topic_category="entertainment",
-                        aspect_ratio=aspect_ratio,
-                        badge_label=b_lbl,
-                        avatar_image_path=av_p,
-                        subtext="Bigg Boss Telugu 10 • Star Maa",
-                    ):
-                        file_hash = image_hash(dest)
-                        file_dhash = image_dhash(dest)
-                        with hash_lock:
-                            if file_hash:
-                                used_hashes.add(file_hash)
-                            if file_dhash:
-                                used_dhashes.append(file_dhash)
-                        results_map[num] = dest
-                        applied = True
+                    # Alternate comedic/roast beats with iconic Telugu comedy memes
+                    is_comedy_beat = (
+                        num % 3 == 0
+                        or any(w in section_narrations.get(num, '').lower() for w in ["comedy", "roast", "funny", "laugh", "shock", "meme", "fan", "reaction", "clip"])
+                    )
+                    meme_chosen = None
+                    if is_comedy_beat:
                         try:
-                            from data.asset_ledger import record_asset
-                            record_asset(
-                                video_id="current",
-                                beat_id=num,
-                                asset_path=str(dest),
-                                source_url="canva_editorial_contestant_card",
-                                tier="TIER_A",
-                                license_name="AutoTube Editorial Card",
-                                credit_text="AutoTube Visual Engine",
-                                duration_sec=3.0,
+                            from tools.meme_manager import get_relevant_reaction_meme, record_used_meme
+                            meme_chosen = get_relevant_reaction_meme(
+                                section_narrations.get(num, "") or topic or "", tone="roast", scene_idx=num
                             )
                         except Exception:
                             pass
-                        print(f"  ✓ Generated Canva-style Editorial Card with real photo for Visual {num}")
+
+                    src_photo = None
+                    if meme_chosen and Path(meme_chosen).exists():
+                        src_photo = Path(meme_chosen)
+                        try:
+                            from tools.meme_manager import record_used_meme
+                            record_used_meme(src_photo.name)
+                        except Exception:
+                            pass
+                    elif loc_c and Path(loc_c[1]).exists():
+                        src_photo = Path(loc_c[1])
+                    else:
+                        swetha_ref = ROOT / "reference_assets" / "contestants" / "swetha.jpg"
+                        bb_host = ROOT / "reference_assets" / "contestants" / "akkineni_nagarjuna.jpg"
+                        bb_stage = ROOT / "assets" / "entities" / "bigg_boss_telugu" / "image.jpg"
+                        for cand_p in [swetha_ref, bb_host, bb_stage]:
+                            if cand_p.exists():
+                                src_photo = cand_p
+                                break
+
+                    if src_photo and src_photo.exists():
+                        shutil.copy2(src_photo, dest)
+                        clean_and_crop_image(dest, aspect_ratio=aspect_ratio)
+                        if dest.exists() and dest.stat().st_size > 3000:
+                            file_hash = image_hash(dest)
+                            file_dhash = image_dhash(dest)
+                            with hash_lock:
+                                if file_hash:
+                                    used_hashes.add(file_hash)
+                                if file_dhash:
+                                    used_dhashes.append(file_dhash)
+                            results_map[num] = dest
+                            applied = True
+                            print(f"  ✓ Sourced authentic clean visual for Scene {num} -> {src_photo.name}")
+                    else:
+                        # Absolute emergency fallback only
+                        from agents.typography_card import generate_typography_card
+                        headline = section_narrations.get(num, "") or (visuals[num - 1] if num - 1 < len(visuals) else f"Scene {num}")
+                        if generate_typography_card(
+                            headline_text=headline,
+                            output_path=str(dest),
+                            topic_category="entertainment",
+                            aspect_ratio=aspect_ratio,
+                            badge_label=f"{loc_c[0].upper().replace('_', ' ')} • BIGG BOSS 10" if loc_c else "BIGG BOSS TELUGU 10",
+                            avatar_image_path=str(loc_c[1]) if loc_c else None,
+                            subtext="Bigg Boss Telugu 10 • Reality Update",
+                        ):
+                            results_map[num] = dest
+                            applied = True
                 except Exception as card_err:
-                    print(f"  Editorial card fallback note: {card_err}")
+                    print(f"  Visual fallback note: {card_err}")
             else:
                 # 1b. Attempt dynamic FLUX generation for the specific scene concept
                 try:

@@ -99,7 +99,7 @@ def get_companion_status() -> Dict[str, Any]:
         return dict(DEFAULT_STATUS)
 
 
-def reset_companion_status(last_result: str = "Completed successfully") -> None:
+def reset_companion_status(last_result: str = "Completed successfully", last_topic: str = "", video_file: str = "") -> None:
     """Resets companion status to idle state after pipeline run completes."""
     global _PIPELINE_START_TIME
     with _STATUS_LOCK:
@@ -108,6 +108,11 @@ def reset_companion_status(last_result: str = "Completed successfully") -> None:
         payload["is_running"] = False
         payload["percent"] = 100
         payload["last_run_result"] = last_result
+        if last_topic:
+            payload["last_topic"] = last_topic
+            payload["topic"] = last_topic
+        if video_file:
+            payload["video_file"] = video_file
         payload["updated_at"] = time.time()
         try:
             raw = json.dumps(payload, indent=2, ensure_ascii=False)

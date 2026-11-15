@@ -148,8 +148,8 @@ CONTESTANTS_BB10: Dict[str, Dict] = {
         "is_active": True,
     },
     "swetha": {
-        "full_name": "Swetha",
-        "aliases": ["swetha", "sweatha", "శ్వేత"],
+        "full_name": "Swetha Naidu",
+        "aliases": ["swetha", "sweatha", "swetha naidu", "swethanaidu", "శ్వేత", "శ్వేత నాయుడు"],
         "negative_tokens": [],
         "is_active": True,
     },

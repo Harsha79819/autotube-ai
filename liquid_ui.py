@@ -1045,6 +1045,12 @@ def render_ai_butterfly_companion():
         if (data && data.is_running) {
             mainMsg.innerHTML = `<span style="color:#fbbf24;">🌸 రాధ:</span> "ఇప్పుడు <b>${data.stage || 'స్టేజ్'}</b> జరుగుతోంది! [<b>${data.percent}%</b>] పూర్తయింది. టాస్క్: ${data.current_task || 'పని జరుగుతోంది'}. నేను చూసుకుంటున్నా, భయపడకండి! ✨"`;
             nextText.innerHTML = `⏩ <b>తదుపరి:</b> ${data.next_task || 'వీడియో అసెంబ్లీ & అప్‌లోడ్'}`;
+            progWrap.style.display = "block";
+            progBar.style.width = Math.max(5, data.percent) + "%";
+        } else if (data && (data.last_topic || data.last_run_result || data.topic)) {
+            const topicName = data.last_topic || data.topic || "లేటెస్ట్ వీడియో";
+            mainMsg.innerHTML = `<span style="color:#fbbf24;">🌸 రాధ:</span> "గత రన్ స్టేటస్: <b>${topicName}</b> పూర్తయింది! 🎬 రియల్ ఫోటోలు & తెలుగు మీమ్స్‌తో వీడియో సిద్ధంగా ఉంది. నెక్స్ట్ ఏం చేద్దాం? ✨"`;
+            nextText.innerHTML = `⏩ <b>ఫలితం:</b> ${data.last_run_result || 'సక్సెస్‌ఫుల్‌గా జనరేట్ అయింది'}`;
         } else {
             const idleMessages = [
                 `<span style="color:#fbbf24;">🌸 రాధ:</span> "నమస్తే! నేను మీ రాధని (శ్రీకృష్ణుడి సఖి). స్టూడియో సిద్ధంగా ఉంది! ఏదైనా టాపిక్ ఇవ్వండి లేదా జనరేట్ నొక్కండి!"`,
@@ -1208,6 +1214,13 @@ def render_ai_butterfly_companion():
             })
             .catch(() => {});
     }
+
+    // Autonomous Radha Wandering: flutters gently every 14 seconds across page elements
+    setInterval(() => {
+        if (!isEvading && !isMinimized && !lastStatusRunning) {
+            evadeAndPerch(false);
+        }
+    }, 14000);
 
     setInterval(fetchLiveTelemetry, 1000);
     setInterval(registerInteractiveInspectors, 2500);
