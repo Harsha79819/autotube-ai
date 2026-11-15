@@ -732,53 +732,55 @@ def render_provider_audit_card():
 
 def render_ai_butterfly_companion():
     """
-    Renders the modern, playful floating AI Butterfly Companion on the Streamlit dashboard.
+    Renders 'రాధ (Radha) - శ్రీకృష్ణుడి సఖి' - Modern Interactive AI Companion Widget on Streamlit.
     Features:
-      1. Ethereal 3D animated cyber butterfly with fluttering wings and bioluminescent glow.
-      2. Playful Evasion & Perching: when user tries to hover/catch it, it flutters gracefully to perch on headlines/controls!
-      3. Real-time Live Status Ticker: every second streams live pipeline steps (percentage, current task, next step).
-      4. Context-aware Interactive Guide: explains page controls (Topic, Voice, Aspect, YouTube Mode, Generate) on hover/click.
+      1. Sacred Mayur Pankh (Peacock Feather & Lotus) 3D animated butterfly with glowing wings.
+      2. Click-to-Update & Flutter Away: On click, fetches instant live pipeline telemetry in Telugu
+         and gracefully flutters to perch on another screen control/headline.
+      3. Real-time Live Status Ticker: Streams every second via static/pipeline_status.json.
+      4. Context-aware Interactive Guide: explains page controls (Topic, Voice, Aspect, YouTube Mode, Generate) on hover.
     """
     companion_html = """
-<div id="ai-companion-root" style="position: fixed; top: 85px; right: 28px; z-index: 9999999; pointer-events: auto; transition: left 0.85s cubic-bezier(0.22, 1, 0.36, 1), top 0.85s cubic-bezier(0.22, 1, 0.36, 1); font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;">
+<div id="ai-companion-root" style="position: fixed; top: 85px; right: 28px; z-index: 9999999; pointer-events: auto; transition: left 0.95s cubic-bezier(0.22, 1, 0.36, 1), top 0.95s cubic-bezier(0.22, 1, 0.36, 1); font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;">
     <div id="companion-bubble" style="
-        background: rgba(6, 20, 32, 0.92);
-        backdrop-filter: blur(24px);
-        -webkit-backdrop-filter: blur(24px);
-        border: 1px solid rgba(56, 189, 248, 0.45);
-        border-radius: 18px;
-        padding: 12px 16px;
-        width: 290px;
-        max-width: 85vw;
-        box-shadow: 0 16px 36px rgba(0, 0, 0, 0.65), 0 0 25px rgba(6, 182, 212, 0.25);
-        margin-bottom: 8px;
-        transition: all 0.3s ease;
+        background: linear-gradient(135deg, rgba(6, 20, 32, 0.95) 0%, rgba(13, 30, 48, 0.92) 100%);
+        backdrop-filter: blur(26px);
+        -webkit-backdrop-filter: blur(26px);
+        border: 1.5px solid rgba(245, 158, 11, 0.55);
+        border-radius: 20px;
+        padding: 14px 18px;
+        width: 310px;
+        max-width: 88vw;
+        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.75), 0 0 30px rgba(245, 158, 11, 0.25);
+        margin-bottom: 10px;
+        transition: all 0.35s ease;
         position: relative;
     ">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
             <div id="companion-badge" style="
-                background: rgba(45, 212, 191, 0.15);
-                border: 1px solid rgba(45, 212, 191, 0.4);
-                color: #2dd4bf;
-                font-size: 0.72rem;
-                font-weight: 700;
+                background: linear-gradient(90deg, rgba(245, 158, 11, 0.2), rgba(244, 63, 94, 0.2));
+                border: 1px solid rgba(245, 158, 11, 0.6);
+                color: #fbbf24;
+                font-size: 0.74rem;
+                font-weight: 800;
                 letter-spacing: 0.05em;
-                padding: 2px 8px;
+                padding: 3px 10px;
                 border-radius: 20px;
                 display: flex;
                 align-items: center;
-                gap: 5px;
+                gap: 6px;
+                box-shadow: 0 0 10px rgba(245, 158, 11, 0.25);
             ">
-                <span id="companion-dot" style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #2dd4bf; box-shadow: 0 0 8px #2dd4bf; animation: pulse-dot 1.5s infinite;"></span>
-                <span id="companion-badge-text">AI ASSISTANT</span>
+                <span id="companion-dot" style="display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #fbbf24; box-shadow: 0 0 10px #fbbf24; animation: pulse-radha 1.4s infinite;"></span>
+                <span id="companion-badge-text">🌸 రాధ (RADHA) • శ్రీకృష్ణుడి సఖి</span>
             </div>
             <div style="display: flex; gap: 4px; align-items: center;">
                 <button id="companion-min-btn" title="Toggle Bubble" style="
                     background: transparent;
                     border: none;
-                    color: #94a3b8;
+                    color: #cbd5e1;
                     cursor: pointer;
-                    font-size: 0.85rem;
+                    font-size: 0.9rem;
                     padding: 0 4px;
                     line-height: 1;
                 ">━</button>
@@ -787,74 +789,86 @@ def render_ai_butterfly_companion():
 
         <div id="companion-body">
             <div id="companion-main-msg" style="
-                color: #f1f5f9;
-                font-size: 0.85rem;
-                font-weight: 600;
-                line-height: 1.35;
-                margin-bottom: 4px;
+                color: #f8fafc;
+                font-size: 0.88rem;
+                font-weight: 650;
+                line-height: 1.4;
+                margin-bottom: 6px;
+                text-shadow: 0 1px 2px rgba(0,0,0,0.5);
             ">
-                ✨ నమస్తే! మీ AI వీడియో అసిస్టెంట్‌ని. టాపిక్ ఇవ్వగానే వీడియో రెడీ చేస్తా!
+                ✨ నమస్తే! నేను మీ రాధని (శ్రీకృష్ణుడి సఖి). స్టూడియో సిద్ధంగా ఉంది! ఏదైనా టాపిక్ ఇవ్వండి లేదా జనరేట్ నొక్కండి.
             </div>
             
             <div id="companion-next-step" style="
                 color: #38bdf8;
-                font-size: 0.75rem;
-                font-weight: 500;
+                font-size: 0.78rem;
+                font-weight: 600;
                 line-height: 1.3;
                 display: flex;
                 align-items: center;
-                gap: 4px;
+                gap: 5px;
             ">
-                <span>⏩</span> <span id="companion-next-text">Next: Pick a topic or hit Generate!</span>
+                <span>⏩</span> <span id="companion-next-text">Next: Pick a topic or click Radha for live status!</span>
             </div>
 
             <div id="companion-prog-wrap" style="
                 display: none;
                 width: 100%;
-                height: 5px;
-                background: rgba(255, 255, 255, 0.1);
+                height: 6px;
+                background: rgba(255, 255, 255, 0.12);
                 border-radius: 6px;
-                margin-top: 8px;
+                margin-top: 10px;
                 overflow: hidden;
             ">
                 <div id="companion-prog-bar" style="
                     width: 0%;
                     height: 100%;
-                    background: linear-gradient(90deg, #06b6d4, #38bdf8, #a855f7);
+                    background: linear-gradient(90deg, #10b981, #06b6d4, #f59e0b, #f43f5e);
                     transition: width 0.4s ease;
                     border-radius: 6px;
+                    box-shadow: 0 0 10px rgba(245, 158, 11, 0.6);
                 "></div>
             </div>
         </div>
     </div>
 
-    <!-- 3D BUTTERFLY SPRITE -->
-    <div id="companion-butterfly" style="
-        width: 58px;
-        height: 48px;
-        cursor: grab;
+    <!-- 3D RADHA BUTTERFLY SPRITE (Mayur Pankh & Lotus Motif) -->
+    <div id="companion-butterfly" title="🌸 రాధ: నన్ను క్లిక్ చేయండి, లైవ్ అప్‌డేట్ ఇస్తాను!" style="
+        width: 64px;
+        height: 52px;
+        cursor: pointer;
         display: flex;
         justify-content: center;
         align-items: center;
-        filter: drop-shadow(0 0 14px rgba(56, 189, 248, 0.85));
+        filter: drop-shadow(0 0 16px rgba(245, 158, 11, 0.95)) drop-shadow(0 0 8px rgba(0, 229, 255, 0.7));
         animation: bobbing 3.2s infinite ease-in-out;
         transform-origin: center center;
         user-select: none;
+        transition: transform 0.2s ease;
     ">
-        <svg viewBox="0 0 100 80" width="58" height="48" style="overflow: visible;">
+        <svg viewBox="0 0 100 80" width="64" height="52" style="overflow: visible;">
             <defs>
-                <linearGradient id="bf-grad-left" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stop-color="#38bdf8" />
-                    <stop offset="50%" stop-color="#06b6d4" />
-                    <stop offset="100%" stop-color="#9333ea" />
+                <linearGradient id="radha-wing-left" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#00E5FF" />
+                    <stop offset="30%" stop-color="#0284C7" />
+                    <stop offset="70%" stop-color="#0D9488" />
+                    <stop offset="100%" stop-color="#F59E0B" />
                 </linearGradient>
-                <linearGradient id="bf-grad-right" x1="100%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" stop-color="#38bdf8" />
-                    <stop offset="50%" stop-color="#06b6d4" />
-                    <stop offset="100%" stop-color="#9333ea" />
+                <linearGradient id="radha-wing-right" x1="100%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stop-color="#00E5FF" />
+                    <stop offset="30%" stop-color="#0284C7" />
+                    <stop offset="70%" stop-color="#0D9488" />
+                    <stop offset="100%" stop-color="#F59E0B" />
                 </linearGradient>
-                <filter id="neon-glow" x="-20%" y="-20%" width="140%" height="140%">
-                    <feGaussianBlur stdDeviation="3" result="blur" />
+                <radialGradient id="mayur-eye" cx="50%" cy="50%" r="50%">
+                    <stop offset="0%" stop-color="#38BDF8" />
+                    <stop offset="35%" stop-color="#0F172A" />
+                    <stop offset="65%" stop-color="#10B981" />
+                    <stop offset="85%" stop-color="#F59E0B" />
+                    <stop offset="100%" stop-color="#F43F5E" />
+                </radialGradient>
+                <filter id="divine-glow" x="-30%" y="-30%" width="160%" height="160%">
+                    <feGaussianBlur stdDeviation="3.2" result="blur" />
                     <feComposite in="SourceGraphic" in2="blur" operator="over" />
                 </filter>
             </defs>
@@ -862,29 +876,40 @@ def render_ai_butterfly_companion():
             <!-- LEFT WINGS -->
             <g id="bf-wing-l" style="transform-origin: 50px 40px; animation: flap-left 0.24s infinite alternate ease-in-out;">
                 <!-- Forewing -->
-                <path d="M 50 38 C 42 12, 10 5, 2 24 C -4 38, 20 54, 50 42 Z" fill="url(#bf-grad-left)" opacity="0.92" stroke="#e0f2fe" stroke-width="1.2" />
-                <path d="M 46 36 C 36 20, 16 16, 10 26 C 6 34, 24 44, 46 38 Z" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="0.8" />
+                <path d="M 50 38 C 42 10, 8 2, 2 22 C -4 38, 20 54, 50 42 Z" fill="url(#radha-wing-left)" opacity="0.95" stroke="#FDE68A" stroke-width="1.3" />
+                <!-- Mayur Pankh Eye -->
+                <ellipse cx="26" cy="28" rx="8" ry="6" fill="url(#mayur-eye)" stroke="#F59E0B" stroke-width="0.9" transform="rotate(-15 26 28)" />
+                <path d="M 50 40 Q 32 30 18 24" fill="none" stroke="rgba(253, 230, 138, 0.75)" stroke-width="1.0" />
                 <!-- Hindwing -->
-                <path d="M 50 42 C 40 50, 18 56, 16 68 C 14 78, 38 78, 50 48 Z" fill="url(#bf-grad-left)" opacity="0.85" stroke="#bae6fd" stroke-width="1" />
+                <path d="M 50 42 C 40 50, 16 56, 14 70 C 12 80, 38 80, 50 48 Z" fill="url(#radha-wing-left)" opacity="0.90" stroke="#38BDF8" stroke-width="1" />
+                <circle cx="28" cy="65" r="3.2" fill="#F43F5E" stroke="#FDE68A" stroke-width="0.8" />
             </g>
 
             <!-- RIGHT WINGS -->
             <g id="bf-wing-r" style="transform-origin: 50px 40px; animation: flap-right 0.24s infinite alternate ease-in-out;">
                 <!-- Forewing -->
-                <path d="M 50 38 C 58 12, 90 5, 98 24 C 104 38, 80 54, 50 42 Z" fill="url(#bf-grad-right)" opacity="0.92" stroke="#e0f2fe" stroke-width="1.2" />
-                <path d="M 54 36 C 64 20, 84 16, 90 26 C 94 34, 76 44, 54 38 Z" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="0.8" />
+                <path d="M 50 38 C 58 10, 92 2, 98 22 C 104 38, 80 54, 50 42 Z" fill="url(#radha-wing-right)" opacity="0.95" stroke="#FDE68A" stroke-width="1.3" />
+                <!-- Mayur Pankh Eye -->
+                <ellipse cx="74" cy="28" rx="8" ry="6" fill="url(#mayur-eye)" stroke="#F59E0B" stroke-width="0.9" transform="rotate(15 74 28)" />
+                <path d="M 50 40 Q 68 30 82 24" fill="none" stroke="rgba(253, 230, 138, 0.75)" stroke-width="1.0" />
                 <!-- Hindwing -->
-                <path d="M 50 42 C 60 50, 82 56, 84 68 C 86 78, 62 78, 50 48 Z" fill="url(#bf-grad-right)" opacity="0.85" stroke="#bae6fd" stroke-width="1" />
+                <path d="M 50 42 C 60 50, 84 56, 86 70 C 88 80, 62 80, 50 48 Z" fill="url(#radha-wing-right)" opacity="0.90" stroke="#38BDF8" stroke-width="1" />
+                <circle cx="72" cy="65" r="3.2" fill="#F43F5E" stroke="#FDE68A" stroke-width="0.8" />
             </g>
 
-            <!-- BODY & HEAD -->
-            <ellipse cx="50" cy="40" rx="3.5" ry="14" fill="#0f172a" stroke="#38bdf8" stroke-width="1.2" filter="url(#neon-glow)" />
-            <circle cx="50" cy="24" r="3" fill="#2dd4bf" />
-            <!-- Antennae -->
-            <path d="M 48 22 Q 40 10 34 14" fill="none" stroke="#38bdf8" stroke-width="1.2" stroke-linecap="round" />
-            <path d="M 52 22 Q 60 10 66 14" fill="none" stroke="#38bdf8" stroke-width="1.2" stroke-linecap="round" />
-            <circle cx="34" cy="14" r="1.5" fill="#f43f5e" />
-            <circle cx="66" cy="14" r="1.5" fill="#f43f5e" />
+            <!-- BODY, HEAD & PEACOCK CROWN -->
+            <ellipse cx="50" cy="40" rx="3.5" ry="14" fill="#0A2540" stroke="#F59E0B" stroke-width="1.2" filter="url(#divine-glow)" />
+            <line x1="47.5" y1="36" x2="52.5" y2="36" stroke="#FDE68A" stroke-width="1" />
+            <line x1="47" y1="42" x2="53" y2="42" stroke="#FDE68A" stroke-width="1" />
+            <circle cx="50" cy="24" r="3.2" fill="#0D9488" stroke="#FDE68A" stroke-width="0.8" />
+            <!-- Peacock Feather / Tilak Jewel -->
+            <polygon points="50,17 48,22 52,22" fill="#F59E0B" />
+            <circle cx="50" cy="18" r="1.5" fill="#F43F5E" />
+            <!-- Antennae with Lotus Pearls -->
+            <path d="M 48 22 Q 38 8 32 12" fill="none" stroke="#F59E0B" stroke-width="1.2" stroke-linecap="round" />
+            <path d="M 52 22 Q 62 8 68 12" fill="none" stroke="#F59E0B" stroke-width="1.2" stroke-linecap="round" />
+            <circle cx="32" cy="12" r="1.8" fill="#F43F5E" stroke="#FDE68A" stroke-width="0.6" />
+            <circle cx="68" cy="12" r="1.8" fill="#F43F5E" stroke="#FDE68A" stroke-width="0.6" />
         </svg>
     </div>
 </div>
@@ -900,32 +925,30 @@ def render_ai_butterfly_companion():
 }
 @keyframes bobbing {
     0%, 100% { transform: translateY(0px) rotate(0deg); }
-    50% { transform: translateY(-7px) rotate(2deg); }
+    50% { transform: translateY(-8px) rotate(2deg); }
 }
-@keyframes pulse-dot {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.4; transform: scale(0.8); }
+@keyframes pulse-radha {
+    0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 10px #fbbf24; }
+    50% { opacity: 0.4; transform: scale(0.75); box-shadow: 0 0 4px #f43f5e; }
 }
 .butterfly-flying #bf-wing-l {
-    animation-duration: 0.08s !important;
+    animation-duration: 0.07s !important;
 }
 .butterfly-flying #bf-wing-r {
-    animation-duration: 0.08s !important;
+    animation-duration: 0.07s !important;
 }
-.sparkle-particle {
+.divine-sparkle {
     position: fixed;
     pointer-events: none;
-    width: 6px;
-    height: 6px;
+    width: 7px;
+    height: 7px;
     border-radius: 50%;
-    background: radial-gradient(circle, #38bdf8 0%, #a855f7 100%);
-    box-shadow: 0 0 8px #38bdf8;
-    animation: fade-sparkle 0.8s forwards ease-out;
+    animation: fade-divine 0.9s forwards ease-out;
     z-index: 9999998;
 }
-@keyframes fade-sparkle {
+@keyframes fade-divine {
     0% { opacity: 1; transform: scale(1) translateY(0); }
-    100% { opacity: 0; transform: scale(0.2) translateY(18px); }
+    100% { opacity: 0; transform: scale(0.2) translateY(24px); }
 }
 </style>
 
@@ -950,6 +973,7 @@ def render_ai_butterfly_companion():
     let isMinimized = false;
     let isEvading = false;
     let lastStatusRunning = false;
+    let cachedStatusData = null;
 
     // Toggle bubble minimize
     if (minBtn) {
@@ -961,78 +985,128 @@ def render_ai_butterfly_companion():
         });
     }
 
-    // Spawn fairy dust sparkles
-    function spawnSparkles(x, y, count=5) {
+    // Spawn Vrindavan divine sparkles (gold, peacock teal, lotus pink, emerald)
+    function spawnDivineSparkles(x, y, count=7) {
+        const colors = [
+            "radial-gradient(circle, #f59e0b 0%, #fbbf24 100%)",
+            "radial-gradient(circle, #00e5ff 0%, #0284c7 100%)",
+            "radial-gradient(circle, #f43f5e 0%, #ec4899 100%)",
+            "radial-gradient(circle, #10b981 0%, #059669 100%)"
+        ];
+        const glows = ["#fbbf24", "#00e5ff", "#f43f5e", "#10b981"];
+
         for (let i = 0; i < count; i++) {
             const sp = document.createElement("div");
-            sp.className = "sparkle-particle";
-            sp.style.left = (x + (Math.random() * 30 - 15)) + "px";
-            sp.style.top = (y + (Math.random() * 30 - 15)) + "px";
+            sp.className = "divine-sparkle";
+            const cIdx = Math.floor(Math.random() * colors.length);
+            sp.style.background = colors[cIdx];
+            sp.style.boxShadow = "0 0 10px " + glows[cIdx];
+            sp.style.left = (x + (Math.random() * 36 - 18)) + "px";
+            sp.style.top = (y + (Math.random() * 36 - 18)) + "px";
             document.body.appendChild(sp);
-            setTimeout(() => sp.remove(), 800);
+            setTimeout(() => sp.remove(), 900);
         }
     }
 
-    // Playful Evasion & Perching: flies away when user hovers/tries to catch it!
-    const playfulTeluguMessages = [
-        "పట్టుకోలేరు! 🦋😜 Catch me if you can!",
-        "ఇక్కడ వాలాను! 🌸 ఏం కావాలో చెప్పు...",
-        "హాహా! నేను వేగంగా ఎగురుతా! 💨✨",
-        "లెట్స్ మేక్ ఏ వైరల్ హిట్ వీడియో! 🎬🔥",
-        "బిగ్ బాస్ రోస్టింగ్ చేద్దామా? లేక టెక్ ఫ్యాక్టా? 📱"
-    ];
+    // User Click Handler: Provides instant live update & flutters to another place
+    function onRadhaClick(e) {
+        if (e) e.stopPropagation();
+        if (isEvading) return;
 
-    function evadeAndPerch() {
+        // 1. Fetch freshest telemetry immediately
+        fetch("/app/static/pipeline_status.json?t=" + Date.now())
+            .then(res => res.json())
+            .then(data => {
+                cachedStatusData = data;
+                applyStatusUpdate(data);
+                displayLiveClickBrief(data);
+            })
+            .catch(() => {
+                displayLiveClickBrief(cachedStatusData);
+            })
+            .finally(() => {
+                // 2. Play divine flight animation to a new spot
+                evadeAndPerch(true);
+            });
+    }
+
+    function displayLiveClickBrief(data) {
+        // Expand bubble if minimized
+        if (isMinimized) {
+            isMinimized = false;
+            bodyEl.style.display = "block";
+            minBtn.textContent = "━";
+        }
+
+        // Highlight bubble with divine glow
+        bubble.style.borderColor = "#fbbf24";
+        bubble.style.boxShadow = "0 16px 45px rgba(0, 0, 0, 0.8), 0 0 35px rgba(245, 158, 11, 0.55)";
+
+        if (data && data.is_running) {
+            mainMsg.innerHTML = `<span style="color:#fbbf24;">🌸 రాధ:</span> "ఇప్పుడు <b>${data.stage || 'స్టేజ్'}</b> జరుగుతోంది! [<b>${data.percent}%</b>] పూర్తయింది. టాస్క్: ${data.current_task || 'పని జరుగుతోంది'}. నేను చూసుకుంటున్నా, భయపడకండి! ✨"`;
+            nextText.innerHTML = `⏩ <b>తదుపరి:</b> ${data.next_task || 'వీడియో అసెంబ్లీ & అప్‌లోడ్'}`;
+        } else {
+            const idleMessages = [
+                `<span style="color:#fbbf24;">🌸 రాధ:</span> "నమస్తే! నేను మీ రాధని (శ్రీకృష్ణుడి సఖి). స్టూడియో సిద్ధంగా ఉంది! ఏదైనా టాపిక్ ఇవ్వండి లేదా జనరేట్ నొక్కండి!"`,
+                `<span style="color:#fbbf24;">🌸 రాధ:</span> "బిగ్ బాస్ రోస్టింగ్ చేద్దామా? లేదా ఆసక్తికరమైన టెక్ ఫ్యాక్ట్స్ వీడియోనా? మీరు ఆర్డర్ ఇవ్వండి, నిమిషాల్లో రెడీ చేస్తా! 🪶"`,
+                `<span style="color:#fbbf24;">🌸 రాధ:</span> "అన్ని ఫిల్టర్లు, సెలబ్రిటీ గార్డులు & శృతి నాచురల్ వాయిస్ యాక్టివ్‌గా ఉన్నాయి! 🎬🔥"`
+            ];
+            mainMsg.innerHTML = idleMessages[Math.floor(Math.random() * idleMessages.length)];
+            nextText.textContent = "⏩ టాపిక్ బాక్స్‌లో టైప్ చేసి Generate నొక్కండి!";
+        }
+    }
+
+    // Playful Evasion & Perching: flies gracefully to headers/buttons/controls
+    function evadeAndPerch(isTargetFlight = false) {
         if (isEvading) return;
         isEvading = true;
 
         const curRect = root.getBoundingClientRect();
-        spawnSparkles(curRect.left + 30, curRect.top + 30, 8);
+        spawnDivineSparkles(curRect.left + 35, curRect.top + 35, 10);
         butterfly.classList.add("butterfly-flying");
 
-        // Perch candidates: headers, cards, or safe viewport margins
-        const candidates = document.querySelectorAll(".brand, .hero-title, .glass-card, [data-testid='stSelectbox'], .stButton");
+        // Perch candidates: headers, cards, or buttons across the screen
+        const candidates = document.querySelectorAll(".brand, .hero-title, .glass-card, [data-testid='stSelectbox'], .stButton, div[data-testid='stWidgetLabel']");
         let targetX = 0;
         let targetY = 0;
 
-        if (candidates.length > 0 && Math.random() > 0.35) {
+        if (candidates.length > 0 && Math.random() > 0.25) {
             const randElem = candidates[Math.floor(Math.random() * candidates.length)];
             const rRect = randElem.getBoundingClientRect();
-            targetX = Math.max(20, Math.min(window.innerWidth - 320, rRect.left + (Math.random() * 40 - 20)));
-            targetY = Math.max(70, Math.min(window.innerHeight - 180, rRect.top - 50));
+            targetX = Math.max(20, Math.min(window.innerWidth - 340, rRect.left + (Math.random() * 50 - 25)));
+            targetY = Math.max(75, Math.min(window.innerHeight - 200, rRect.top - 55));
         } else {
-            // Free random coordinates in viewport
-            targetX = Math.floor(Math.random() * (window.innerWidth - 340)) + 30;
-            targetY = Math.floor(Math.random() * (window.innerHeight - 240)) + 75;
+            targetX = Math.floor(Math.random() * (window.innerWidth - 350)) + 30;
+            targetY = Math.floor(Math.random() * (window.innerHeight - 250)) + 80;
         }
 
         root.style.left = targetX + "px";
         root.style.top = targetY + "px";
         root.style.right = "auto";
 
-        // Show playful evasion dialogue if not actively rendering video
-        if (!lastStatusRunning) {
-            const randMsg = playfulTeluguMessages[Math.floor(Math.random() * playfulTeluguMessages.length)];
-            mainMsg.textContent = randMsg;
-            nextText.textContent = "Hover over controls for instant tips!";
-        }
-
         // Particle trail during flight
         let trailInterval = setInterval(() => {
             const r = root.getBoundingClientRect();
-            spawnSparkles(r.left + 35, r.top + 35, 3);
-        }, 120);
+            spawnDivineSparkles(r.left + 35, r.top + 35, 4);
+        }, 110);
 
         setTimeout(() => {
             clearInterval(trailInterval);
             butterfly.classList.remove("butterfly-flying");
             isEvading = false;
-        }, 850);
+        }, 950);
     }
 
     if (butterfly) {
-        butterfly.addEventListener("mouseenter", evadeAndPerch);
-        butterfly.addEventListener("click", evadeAndPerch);
+        butterfly.addEventListener("click", onRadhaClick);
+        butterfly.addEventListener("mouseenter", function() {
+            if (!lastStatusRunning && !isEvading) {
+                butterfly.style.transform = "scale(1.15)";
+            }
+        });
+        butterfly.addEventListener("mouseleave", function() {
+            butterfly.style.transform = "scale(1)";
+        });
     }
 
     // Context-Aware Inspector: explains interactive inputs on hover
@@ -1043,8 +1117,8 @@ def render_ai_butterfly_companion():
                 input._hasAiHover = true;
                 input.addEventListener("focus", () => {
                     if (!lastStatusRunning) {
-                        mainMsg.textContent = "💡 Topic Box: తెలుగు బిగ్ బాస్ లేదా టెక్ ఫ్యాక్ట్స్ టాపిక్ ఇవ్వండి!";
-                        nextText.textContent = "Ground-truth filters will block old seasons & wrong actors.";
+                        mainMsg.innerHTML = "💡 <b>Topic Box:</b> తెలుగు బిగ్ బాస్ లేదా టెక్ ఫ్యాక్ట్స్ టాపిక్ ఇవ్వండి!";
+                        nextText.textContent = "సెలబ్రిటీ ఫైర్‌వాల్ పాత సీజన్లు & తప్పుడు వ్యక్తులను 100% ఆపుతుంది.";
                     }
                 });
             }
@@ -1058,14 +1132,14 @@ def render_ai_butterfly_companion():
                     if (!lastStatusRunning) {
                         const txt = box.textContent || "";
                         if (txt.includes("Voice") || txt.includes("Shruti") || txt.includes("Mohan")) {
-                            mainMsg.textContent = "🎙️ Voice Tuning: శృతి వాయిస్ - వ్యంగ్యమైన, సహజమైన తెలుగు రోస్ట్!";
-                            nextText.textContent = "Intrusive SFX & 'బాస్' fillers are permanently disabled.";
+                            mainMsg.innerHTML = "🎙️ <b>Voice Tuning:</b> శృతి వాయిస్ - సహజమైన, వ్యంగ్యమైన హ్యూమన్ స్టైల్!";
+                            nextText.textContent = "అనవసరమైన సౌండ్ ఎఫెక్ట్స్ & 'బాస్' పిలుపులు పూర్తిగా తొలగించబడ్డాయి.";
                         } else if (txt.includes("Privacy") || txt.includes("YouTube")) {
-                            mainMsg.textContent = "🔒 YouTube Destination: డూప్లికేట్స్ ఆటోమేటిక్‌గా ప్రైవేట్‌గా అప్‌లోడ్ అవుతాయి!";
-                            nextText.textContent = "Preserves channel authority while saving revision.";
+                            mainMsg.innerHTML = "🔒 <b>YouTube Mode:</b> డూప్లికేట్ రన్స్ ఆటోమేటిక్‌గా ప్రైవేట్‌గా అప్‌లోడ్ అవుతాయి!";
+                            nextText.textContent = "మీ ఛానెల్ సేఫ్ గా ఉంటుంది & YouTube Studio లో వీడియో లభిస్తుంది.";
                         } else if (txt.includes("Aspect") || txt.includes("9:16") || txt.includes("16:9")) {
-                            mainMsg.textContent = "📱 9:16 Shorts Mode: 100% రీల్స్ & షార్ట్స్ ఆప్టిమైజ్డ్!";
-                            nextText.textContent = "Includes dynamic HarfBuzz Telugu pop-up subtitles.";
+                            mainMsg.innerHTML = "📱 <b>9:16 Shorts Mode:</b> 100% యూట్యూబ్ షార్ట్స్ & రీల్స్ ఆప్టిమైజ్డ్!";
+                            nextText.textContent = "డైనమిక్ తెలుగు పాప్-అప్ క్యాప్షన్లతో స్క్రీన్ నిండుగా వస్తుంది.";
                         }
                     }
                 });
@@ -1078,12 +1152,47 @@ def render_ai_butterfly_companion():
                 btn._hasAiHover = true;
                 btn.addEventListener("mouseenter", () => {
                     if (!lastStatusRunning && (btn.textContent.includes("Generate") || btn.textContent.includes("Create"))) {
-                        mainMsg.textContent = "🚀 Launch Video: Groq ఫాస్ట్ ఫెయిల్‌ఓవర్‌తో 2-3 నిమిషాల్లో రెడీ!";
-                        nextText.textContent = "Click to run end-to-end 4K video pipeline.";
+                        mainMsg.innerHTML = "🚀 <b>Launch Production:</b> Groq ఫాస్ట్ ఫెయిల్‌ఓవర్ & Ken Burns ఎడిటింగ్‌తో వీడియో రెడీ!";
+                        nextText.textContent = "క్లిక్ చేయగానే పూర్తి లైవ్ ప్రోగ్రెస్ బార్ కనిపిస్తుంది.";
                     }
                 });
             }
         });
+    }
+
+    function applyStatusUpdate(data) {
+        if (!data) return;
+        const isRunning = !!data.is_running;
+        lastStatusRunning = isRunning;
+
+        if (isRunning) {
+            badgeEl.style.background = "linear-gradient(90deg, rgba(6, 182, 212, 0.3), rgba(245, 158, 11, 0.3))";
+            badgeEl.style.borderColor = "#38bdf8";
+            badgeEl.style.color = "#38bdf8";
+            dotEl.style.background = "#38bdf8";
+            dotEl.style.boxShadow = "0 0 12px #38bdf8";
+            badgeText.textContent = `🌸 రాధ • RUNNING [${data.percent}%] (STEP ${data.step_number || 1}/${data.total_steps || 7})`;
+
+            mainMsg.innerHTML = `⚙️ <b>${data.stage || 'Processing'}:</b> ${data.current_task || 'Working...'}`;
+            nextText.innerHTML = data.next_task ? `⏩ <b>Next:</b> ${data.next_task}` : "Finalizing video assets...";
+
+            progWrap.style.display = "block";
+            progBar.style.width = Math.max(5, data.percent) + "%";
+
+            if (isMinimized) {
+                isMinimized = false;
+                bodyEl.style.display = "block";
+                minBtn.textContent = "━";
+            }
+        } else {
+            progWrap.style.display = "none";
+            badgeEl.style.background = "linear-gradient(90deg, rgba(245, 158, 11, 0.2), rgba(244, 63, 94, 0.2))";
+            badgeEl.style.borderColor = "rgba(245, 158, 11, 0.6)";
+            badgeEl.style.color = "#fbbf24";
+            dotEl.style.background = "#fbbf24";
+            dotEl.style.boxShadow = "0 0 10px #fbbf24";
+            badgeText.textContent = "🌸 రాధ (RADHA) • శ్రీకృష్ణుడి సఖి";
+        }
     }
 
     // Real-Time Poller: fetches static/pipeline_status.json every 1000ms
@@ -1094,48 +1203,12 @@ def render_ai_butterfly_companion():
                 return res.json();
             })
             .then(data => {
-                if (!data) return;
-                const isRunning = !!data.is_running;
-                lastStatusRunning = isRunning;
-
-                if (isRunning) {
-                    // Pipeline is actively executing!
-                    badgeEl.style.background = "rgba(6, 182, 212, 0.25)";
-                    badgeEl.style.borderColor = "#38bdf8";
-                    badgeEl.style.color = "#38bdf8";
-                    dotEl.style.background = "#38bdf8";
-                    dotEl.style.boxShadow = "0 0 10px #38bdf8";
-                    badgeText.textContent = `RUNNING [${data.percent}%] • STEP ${data.step_number || 1}/${data.total_steps || 7}`;
-
-                    mainMsg.textContent = `⚙️ ${data.stage || 'Processing'}: ${data.current_task || 'Working...'}`;
-                    nextText.textContent = data.next_task ? `⏩ Next: ${data.next_task}` : "Finalizing video assets...";
-
-                    progWrap.style.display = "block";
-                    progBar.style.width = Math.max(5, data.percent) + "%";
-
-                    // Keep un-minimized during active run
-                    if (isMinimized) {
-                        isMinimized = false;
-                        bodyEl.style.display = "block";
-                        minBtn.textContent = "━";
-                    }
-                } else {
-                    // Idle state
-                    progWrap.style.display = "none";
-                    badgeEl.style.background = "rgba(45, 212, 191, 0.15)";
-                    badgeEl.style.borderColor = "rgba(45, 212, 191, 0.4)";
-                    badgeEl.style.color = "#2dd4bf";
-                    dotEl.style.background = "#2dd4bf";
-                    dotEl.style.boxShadow = "0 0 8px #2dd4bf";
-                    badgeText.textContent = "STUDIO READY";
-                }
+                cachedStatusData = data;
+                applyStatusUpdate(data);
             })
-            .catch(() => {
-                // Fallback polling silence
-            });
+            .catch(() => {});
     }
 
-    // Run polling and inspector setup
     setInterval(fetchLiveTelemetry, 1000);
     setInterval(registerInteractiveInspectors, 2500);
     fetchLiveTelemetry();
@@ -1144,4 +1217,5 @@ def render_ai_butterfly_companion():
 </script>
 """
     st.markdown(companion_html, unsafe_allow_html=True)
+
 

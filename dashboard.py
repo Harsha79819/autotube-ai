@@ -3747,8 +3747,49 @@ with st.container():
                                     st.error(f"GitHub Runner Dispatch error: {r.status_code} - {r.text}")
                                     result = None
                         else:
-                            with st.spinner("AutoTube AI is creating your video..."):
-                                result = generate_multi_media_video(
+                            # Dedicated Real-time Progress Bar & Radha Live Pipeline Status Monitor
+                            st_progress_bar = st.progress(0, text="🌸 [రాధ - AI Companion] Initializing AutoTube Production Engine...")
+                            st_status_box = st.empty()
+                            st_status_box.markdown(
+                                """<div style="background: rgba(6, 20, 32, 0.90); border: 1.5px solid rgba(245, 158, 11, 0.55); border-radius: 16px; padding: 14px 18px; margin: 12px 0; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; box-shadow: 0 4px 25px rgba(245, 158, 11, 0.25);">
+                                    <div style="display: flex; align-items: center; gap: 12px;">
+                                        <span style="font-size: 1.6rem;">🪶</span>
+                                        <div>
+                                            <div style="color: #fbbf24; font-weight: 800; font-size: 0.84rem; letter-spacing: 0.05em;">🌸 రాధ (RADHA) • లైవ్ పైప్‌లైన్ మానిటర్</div>
+                                            <div style="color: #f8fafc; font-size: 0.96rem; font-weight: 600;">వీడియో ప్రొడక్షన్ మొదలవుతోంది... దయచేసి వేచి ఉండండి.</div>
+                                        </div>
+                                    </div>
+                                    <div style="background: rgba(45, 212, 191, 0.15); border: 1px solid #2dd4bf; border-radius: 20px; padding: 4px 14px; color: #2dd4bf; font-weight: 700; font-size: 0.8rem;">
+                                        ప్రారంభమైంది 🎬
+                                    </div>
+                                </div>""",
+                                unsafe_allow_html=True
+                            )
+
+                            def ui_progress_callback(pct, text=""):
+                                try:
+                                    pct_val = max(0.0, min(1.0, float(pct) / 100.0))
+                                    clean_text = str(text or "").strip()
+                                    st_progress_bar.progress(pct_val, text=f"⚡ [{int(pct)}%] {clean_text}")
+                                    st_status_box.markdown(
+                                        f"""<div style="background: rgba(6, 20, 32, 0.92); border: 1.5px solid rgba(45, 212, 191, 0.6); border-radius: 16px; padding: 14px 18px; margin: 12px 0; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; box-shadow: 0 4px 25px rgba(6, 182, 212, 0.25);">
+                                            <div style="display: flex; align-items: center; gap: 12px;">
+                                                <span style="font-size: 1.6rem;">🪶</span>
+                                                <div>
+                                                    <div style="color: #2dd4bf; font-weight: 800; font-size: 0.82rem; letter-spacing: 0.05em;">🌸 రాధ (RADHA) • STAGE [{int(pct)}%]</div>
+                                                    <div style="color: #ffffff; font-size: 0.98rem; font-weight: 600;">{clean_text}</div>
+                                                </div>
+                                            </div>
+                                            <div style="background: rgba(56, 189, 248, 0.18); border: 1px solid #38bdf8; border-radius: 20px; padding: 4px 14px; color: #38bdf8; font-weight: 700; font-size: 0.82rem;">
+                                                రన్ అవుతోంది... ⚡
+                                            </div>
+                                        </div>""",
+                                        unsafe_allow_html=True
+                                    )
+                                except Exception:
+                                    pass
+
+                            result = generate_multi_media_video(
                                 topic=topic.strip(),
                                 media_files=media_paths,
                                 content_type=content_type,
@@ -3765,6 +3806,7 @@ with st.container():
                                 target_duration=target_duration,
                                 include_outro=include_outro,
                                 instagram_upload=instagram_upload,
+                                progress_callback=ui_progress_callback,
                                 generation_mode=generation_mode,
                                 tone=selected_tone,
                             )
