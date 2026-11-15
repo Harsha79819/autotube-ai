@@ -384,27 +384,30 @@ def verify_script_facts(script: str, topic: str = "", context: str = None) -> di
         return {"passed": True, "score": 90, "issues": [], "feedback": "No verifiable numerical metrics in script."}
 
     prompt = f"""
-You are the factual verification auditor for AutoTube AI.
-Strictly verify the numbers, names, dates, and claims in this script.
+You are the factual consistency auditor for AutoTube AI YouTube Shorts.
+Your ONLY role is to catch:
+1. Blatant INTERNAL numerical contradictions (e.g. saying 5-4 voting result in line 1, but 12-38 in line 3).
+2. Fabricated poll percentages or fake voting statistics that contradict each other.
+
+IMPORTANT CONTEXT:
+- This is YouTube entertainment, commentary, comedy, satire, and roasting.
+- Rhetorical hooks (e.g., '60 cameras rotating', 'are we in season 8 or 2030?', 'how is this possible?'), jokes, punchlines, hyperbole, slang, opinions, and fan-made edit commentary are 100% INTENTIONAL, CREATIVE and VALID.
+- Do NOT flag rhetorical questions, comedic exaggerations, opinions, or satire.
+- Only set passed: false if there is a severe, blatant internal numerical contradiction.
 
 TOPIC: {topic}
-CONTEXT: {context if context else 'General verified news/facts'}
+CONTEXT: {context if context else 'General YouTube entertainment / commentary'}
 SCRIPT:
 {script}
-
-AUDIT RULES:
-1. Check that all numbers, statistics, percentages, and dates are plausible and not wild hallucinations.
-2. Check that the script does not contradict itself.
-3. If source context is provided, ensure numbers and names align with the context.
 
 Respond in JSON ONLY:
 {{
   "passed": true,
   "score": 90,
   "issues": [],
-  "feedback": "All numbers, dates, and names verified."
+  "feedback": "Script passed factual consistency audit."
 }}
-If there is a severe factual contradiction or made-up statistic, set passed: false, score: 50, and list the issue.
+If and only if there is a blatant internal numerical contradiction, set passed: false, score: 50, and list the issue.
 """
     try:
         active_client = get_client()

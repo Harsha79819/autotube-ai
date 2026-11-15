@@ -2834,13 +2834,12 @@ with st.container():
                 if picked and picked != "— Select a story —":
                     st.session_state["topic_input"] = picked
 
-            current_picked = st.session_state.get("selected_trending_story", "— Select a story —")
-            default_index = select_options.index(current_picked) if current_picked in select_options else 0
+            if "selected_trending_story" in st.session_state and st.session_state["selected_trending_story"] not in select_options:
+                st.session_state["selected_trending_story"] = select_options[0]
 
             selected_trending = st.selectbox(
                 "Choose a trending story",
                 select_options,
-                index=default_index,
                 format_func=_format_story_option,
                 key="selected_trending_story",
                 on_change=_on_story_change,
@@ -2919,9 +2918,10 @@ with st.container():
 
             current_suggestions = st.session_state.get(topics_cache_key, [])
             ai_select_options = ["— Select an AI topic idea —"] + current_suggestions
+            picker_key = f"ai_topic_picker_{content_type}"
 
             def _on_ai_topic_pick():
-                picked = st.session_state.get(f"ai_topic_picker_{content_type}")
+                picked = st.session_state.get(picker_key)
                 if picked and picked != "— Select an AI topic idea —":
                     st.session_state["topic_input"] = picked
                     try:
@@ -2930,19 +2930,14 @@ with st.container():
                     except Exception:
                         pass
 
-            current_picked_ai = st.session_state.get(f"ai_topic_picker_{content_type}", "— Select an AI topic idea —")
-            ai_default_idx = (
-                ai_select_options.index(current_picked_ai)
-                if current_picked_ai in ai_select_options
-                else 0
-            )
+            if picker_key in st.session_state and st.session_state[picker_key] not in ai_select_options:
+                st.session_state[picker_key] = ai_select_options[0]
 
             with ai_col1:
                 chosen_ai_topic = st.selectbox(
                     "Choose an AI-suggested topic (or write your own below)",
                     ai_select_options,
-                    index=ai_default_idx,
-                    key=f"ai_topic_picker_{content_type}",
+                    key=picker_key,
                     on_change=_on_ai_topic_pick,
                 )
 
