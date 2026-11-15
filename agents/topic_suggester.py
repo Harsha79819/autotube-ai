@@ -154,18 +154,46 @@ NOISE_PATTERNS = [
     "earnings call", "share price", "q1 results", "q2 results", "q3 results", "q4 results"
 ]
 
-HINDI_BB_MARKERS = [
-    "bigg boss 20", "bb20", "bigg boss 18", "bb18", "bigg boss 17",
-    "salman khan", "ashnoor", "kashvi", "aasif khan", "munawar", "shilpa shirodkar",
-    "vivian dsena", "avinash mishra", "chahat pandey"
+NON_TELUGU_MARKERS = [
+    # Malayalam Bigg Boss & Kerala Entertainment
+    "malayalam", "kerala", "asianet", "mohanlal", "lalettan", "bbm", "bbm8", "bbm7", "bbm6",
+    "shijin", "noby", "nadira", "komban", "marar", "akhil marar", "rinosh", "jinto",
+    "jasmin jaffar", "gabri", "sibin", "reshmin", "ansiba", "ratheesh", "arjun syam",
+    "manorama", "shanavas shanu", "shanavas", "kaumudy", "matrubhumi", "asianet news",
+    # Tamil Bigg Boss & Kollywood Television
+    "bbtamil", "vijay tv", "vijay television", "kamal haasan", "vijay sethupathi",
+    "kollywood", "anitha sampath", "muthukumaran", "soundariya", "arnav", "tharshika",
+    "jacqueline", "sun tv", "polimer", "thanthi", "tamil",
+    # Kannada Bigg Boss & Sandalwood
+    "bbk", "bbk11", "bbk10", "kiccha sudeep", "kiccha", "sudeep", "colors kannada",
+    "chaithra", "jagadish", "hamsa", "mokshitha", "kannada", "karnataka", "bengaluru",
+    # Hindi Bigg Boss & Bollywood Gossip
+    "bb18", "bb17", "bb19", "bb20", "bigg boss 18", "bigg boss 17", "bigg boss 19", "bigg boss 20",
+    "salman khan", "jio cinema", "colorstv", "colors tv", "munawar", "vivian dsena",
+    "rajat dalal", "karan veer", "chahat pandey", "digvijay", "kashish", "eisha singh",
+    "alice kaushik", "avinash mishra", "shilpa shirodkar", "shehzada", "gunratna",
+    "muskan bamne", "nyraa", "ashnoor", "kashvi", "aasif khan", "samay raina", "huma qureshi",
+    "jalsa", "jaya bachchan", "amitabh bachchan", "bollywood", "hindi",
+    # Marathi Bigg Boss
+    "bigg boss marathi", "riteish deshmukh", "suraj chavan", "colors marathi", "marathi"
 ]
 
 TELUGU_CONTESTANTS = [
+    # Season 10 / Current Season
     "varshini", "debjani", "ram prasad", "potti naresh", "mukesh",
     "thrigun", "trigun", "temper vamsi", "vamsi", "sudheer",
-    "rohit", "shalini", "aman", "nagarjuna",
-    "neethu", "dakkshi",
-    "star maa", "hotstar", "housemates", "ntv", "tv9", "sakshi"
+    "rohit", "shalini", "aman", "swetha", "rama krishna",
+    "neethu", "dakkshi", "nagarjuna", "akkineni",
+    # Recent Seasons (BB8, BB7, OTT)
+    "nikhil", "gautam", "yashmi", "prerana", "nabeel", "vishnu priya",
+    "avinash", "rohini", "manikanta", "nainika", "seetha", "hariteja",
+    "hari teja", "gangavva", "tasty teja", "nayani pavani", "mehboob",
+    "soniya", "bebakka", "shekhar basha", "shivaji", "amar deep",
+    "amardeep", "pallavi prashanth", "shobha shetty", "rathika", "prince yawar",
+    "bindu madhavi", "akhil sarthak",
+    # Channel & Network markers
+    "star maa", "hotstar", "starmaa", "housemates", "telugu house",
+    "ntv", "tv9", "sakshi", "telugu"
 ]
 
 
@@ -266,14 +294,24 @@ def fetch_live_feed_items(category_key: str, limit: int = 15, max_age_hours: flo
                         pass
 
                 # 4. Regional Telugu / Bigg Boss precision check
-                if category_key == "Bigg Boss Telugu":
-                    if any(h in clean_lower for h in HINDI_BB_MARKERS):
+                telugu_entertainment_categories = (
+                    "Bigg Boss Telugu", "Roasting", "Sarcastic", "Funny",
+                    "Tollywood Trolls & Viral Drama", "Cinema & Entertainment", "Movie Reviews"
+                )
+                if category_key in telugu_entertainment_categories:
+                    # STRICTLY reject any candidate with non-Telugu markers (Malayalam, Tamil, Kannada, Hindi)
+                    if any(marker in clean_lower for marker in NON_TELUGU_MARKERS):
                         continue
+                    
+                    # If story mentions "bigg boss" or "bb", enforce verified Telugu Bigg Boss connection
+                    if "bigg boss" in clean_lower or re.search(r"\bbb\d*\b", clean_lower):
+                        has_telugu = "telugu" in clean_lower or any(c in clean_lower for c in TELUGU_CONTESTANTS)
+                        if not has_telugu:
+                            continue
+
+                if category_key == "Bigg Boss Telugu":
                     has_telugu = "telugu" in clean_lower or any(c in clean_lower for c in TELUGU_CONTESTANTS)
                     if not has_telugu:
-                        continue
-                elif category_key in ("Cinema & Entertainment", "Movie Reviews", "Roasting"):
-                    if any(h in clean_lower for h in HINDI_BB_MARKERS):
                         continue
 
                 candidates.append(clean_title)
@@ -613,7 +651,7 @@ Focus on: {tone_rule}.
 CRITICAL RULES:
 1. Every title must be 10 to 16 words, punchy, dramatic, and compelling.
 2. Ground them strictly in today's real stories (e.g. latest episode tasks, voting leaks, teaser reactions).
-3. Do NOT invent fake celebrity names or confuse Telugu with Hindi shows.
+3. Do NOT invent fake celebrity names or confuse Telugu with Hindi, Malayalam, Tamil, or Kannada shows. All topics MUST be strictly focused on Telugu entertainment, Tollywood Telugu cinema, or Bigg Boss Telugu (Star Maa / Hotstar).
 4. Return ONLY a valid JSON array of strings: ["Title 1", "Title 2", ...]
 5. Do NOT output markdown code blocks or explanations."""
 

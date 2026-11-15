@@ -608,6 +608,53 @@ def find_contestant_profile(entity_name: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+def find_curated_asset_path(fallback_name: str) -> Optional[Path]:
+    """Finds curated authentic photo for an entity or fallback name from assets/entities, assets/fallback, or assets/memes."""
+    if not fallback_name:
+        return None
+    clean_fn = re.sub(r"[^a-zA-Z0-9_]", "", fallback_name.lower().replace(" ", "_"))
+
+    # 1. Check assets/entities/<slug>/
+    for ent_slug in [clean_fn, f"{clean_fn}_contestant", f"{clean_fn}_actor"]:
+        ent_dir = ASSETS_DIR / "entities" / ent_slug
+        if ent_dir.is_dir():
+            for img_name in ["image.jpg", "image.png", "1.jpg", "portrait.jpg"]:
+                p = ent_dir / img_name
+                if p.exists() and p.stat().st_size > 1000:
+                    return p
+            for p in ent_dir.glob("*.jpg"):
+                if p.stat().st_size > 1000:
+                    return p
+
+    # Partial match in assets/entities/
+    entities_dir = ASSETS_DIR / "entities"
+    if entities_dir.is_dir():
+        for d in entities_dir.iterdir():
+            if d.is_dir() and (clean_fn in d.name or d.name.replace("_", "") in clean_fn):
+                for p in d.glob("*.jpg"):
+                    if p.stat().st_size > 1000:
+                        return p
+
+    # 2. Check assets/ direct and assets/fallback/
+    for ext in [".jpg", ".jpeg", ".png"]:
+        p = ASSETS_DIR / f"{clean_fn}{ext}"
+        if p.exists() and p.stat().st_size > 1000:
+            return p
+        p = ASSETS_DIR / "fallback" / f"{clean_fn}{ext}"
+        if p.exists() and p.stat().st_size > 1000:
+            return p
+
+    # 3. Check assets/fallback/fallback_*.jpg
+    fallback_dir = ASSETS_DIR / "fallback"
+    if fallback_dir.is_dir():
+        for fb_img in fallback_dir.glob("fallback_*.jpg"):
+            if fb_img.stat().st_size > 1000:
+                return fb_img
+
+    return None
+
+
+
 def get_entity_match_tokens(entity: str) -> Set[str]:
     """
     Extracts all canonical names, aliases, and name tokens for an entity.
@@ -1289,32 +1336,28 @@ def select_image_for_scene(
         if is_bb:
             print(f"🚫 [Reality Show Lock] Skipping loose web/stock fallback search for Scene {scene_idx} to prevent unrelated image leakage.")
             # Check curated entity/contestant photo from assets/fallback or assets/entities
-            for fallback_name in [person_name, entity_name, "bigg_boss", "starmaa"]:
+            for fallback_name in [person_name, entity_name, "bigg_boss", "starmaa", "nagarjuna"]:
                 if not fallback_name:
                     continue
-                clean_fn = re.sub(r"[^a-zA-Z0-9_]", "", fallback_name.lower().replace(" ", "_"))
-                for ext in [".jpg", ".jpeg", ".png"]:
-                    cand_path = ASSETS_DIR / f"{clean_fn}{ext}"
-                    if not cand_path.exists():
-                        cand_path = ASSETS_DIR / "fallback" / f"{clean_fn}{ext}"
-                    if cand_path.exists() and cand_path.stat().st_size > 1000:
-                        try:
-                            shutil.copy2(cand_path, destination_jpg)
-                            clean_and_crop_image(destination_jpg)
-                            downloaded_ok = True
-                            final_action = "selected_image"
-                            chosen_cand_obj = {
-                                "candidate": {
-                                    "image_url": str(cand_path),
-                                    "post_url": "",
-                                    "username": "autotube_library",
-                                    "platform": "entity_library",
-                                }
+                cand_path = find_curated_asset_path(fallback_name)
+                if cand_path and cand_path.exists() and cand_path.stat().st_size > 1000:
+                    try:
+                        shutil.copy2(cand_path, destination_jpg)
+                        clean_and_crop_image(destination_jpg)
+                        downloaded_ok = True
+                        final_action = "selected_image"
+                        chosen_cand_obj = {
+                            "candidate": {
+                                "image_url": str(cand_path),
+                                "post_url": "",
+                                "username": "autotube_library",
+                                "platform": "entity_library",
                             }
-                            print(f"✅ Scene {scene_idx} -> Loaded curated library asset for '{fallback_name}'")
-                            break
-                        except Exception:
-                            pass
+                        }
+                        print(f"✅ Scene {scene_idx} -> Loaded curated library asset for '{fallback_name}' ({cand_path.name})")
+                        break
+                    except Exception:
+                        pass
                 if downloaded_ok:
                     break
             from providers.google_images import search_show_verified_images, search_duckduckgo_images
@@ -1374,35 +1417,53 @@ def select_image_for_scene(
         if not downloaded_ok:
             curated_pool = [person_name, entity_name]
             if is_bb:
-                curated_pool.extend(["bigg_boss", "nagarjuna"])
+                curated_pool.extend(["bigg_boss", "nagarjuna", "temper_vamsi", "thrigun_adith"])
             for fallback_name in curated_pool:
                 if not fallback_name:
                     continue
-                clean_fn = re.sub(r"[^a-zA-Z0-9_]", "", fallback_name.lower().replace(" ", "_"))
-                for ext in [".jpg", ".jpeg", ".png"]:
-                    cand_path = ASSETS_DIR / f"{clean_fn}{ext}"
-                    if not cand_path.exists():
-                        cand_path = ASSETS_DIR / "fallback" / f"{clean_fn}{ext}"
-                    if cand_path.exists() and cand_path.stat().st_size > 1000:
-                        try:
-                            shutil.copy2(cand_path, destination_jpg)
-                            clean_and_crop_image(destination_jpg)
-                            downloaded_ok = True
-                            final_action = "selected_image"
-                            chosen_cand_obj = {
-                                "candidate": {
-                                    "image_url": str(cand_path),
-                                    "post_url": "",
-                                    "username": "autotube_library",
-                                    "platform": "entity_library",
-                                }
+                cand_path = find_curated_asset_path(fallback_name)
+                if cand_path and cand_path.exists() and cand_path.stat().st_size > 1000:
+                    try:
+                        shutil.copy2(cand_path, destination_jpg)
+                        clean_and_crop_image(destination_jpg)
+                        downloaded_ok = True
+                        final_action = "selected_image"
+                        chosen_cand_obj = {
+                            "candidate": {
+                                "image_url": str(cand_path),
+                                "post_url": "",
+                                "username": "autotube_library",
+                                "platform": "entity_library",
                             }
-                            print(f"✅ Scene {scene_idx} -> Loaded curated library asset for '{fallback_name}'")
-                            break
-                        except Exception:
-                            pass
+                        }
+                        print(f"✅ Scene {scene_idx} -> Loaded curated library asset for '{fallback_name}' ({cand_path.name})")
+                        break
+                    except Exception:
+                        pass
                 if downloaded_ok:
                     break
+
+        # Check iconic Telugu reaction meme for comedic, shock, roast, or confusion beats
+        if not downloaded_ok and (is_bb or any(k in str(overall_context).lower() for k in ("entertainment", "reality", "roast", "sarcas"))):
+            try:
+                from tools.meme_manager import get_reaction_meme
+                meme_cand = get_reaction_meme(f"{scene_text} {person_name or ''} {entity_name or ''}")
+                if meme_cand and meme_cand.exists() and meme_cand.stat().st_size > 1000:
+                    shutil.copy2(meme_cand, destination_jpg)
+                    clean_and_crop_image(destination_jpg)
+                    downloaded_ok = True
+                    final_action = "selected_image"
+                    chosen_cand_obj = {
+                        "candidate": {
+                            "image_url": str(meme_cand),
+                            "post_url": "",
+                            "username": "telugu_meme",
+                            "platform": "telugu_reaction_meme",
+                        }
+                    }
+                    print(f"😂 Scene {scene_idx} -> Loaded iconic Telugu reaction meme: {meme_cand.name}")
+            except Exception as m_err:
+                pass
 
         # Dynamic AI Image Generation Fallback (FLUX) using beat narration context
         if not downloaded_ok:

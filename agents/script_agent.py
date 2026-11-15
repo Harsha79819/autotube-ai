@@ -1061,21 +1061,41 @@ Output valid JSON only:
         raw_emo = str(b.get("emotion", "")).lower()
 
         # Check if this beat is an emotional reaction / roast payoff moment for a Telugu reaction meme
+        max_script_memes = 4 if (is_roast or any(k in topic.lower() for k in ["roast", "sarcas", "funny", "troll"])) else 2
         is_meme_beat = (
-            meme_count < 2
+            meme_count < max_script_memes
             and idx > 1
             and idx < total_beats
             and (
-                raw_emo in ("shocked", "fake_shock", "mock", "roast", "overacting", "crying", "headache", "laughing")
-                or any(k in spoken_lower for k in ["మైండ్ బ్లాంక్", "షాక్", "షాకింగ్", "ఓవర్ యాక్షన్", "నవ్వు", "హాస్యం", "డ్రామా", "లాడూ", "లడూ", "shock", "overacting", "roast", "రచ్చ"])
+                raw_emo in ("shocked", "fake_shock", "mock", "roast", "overacting", "crying", "headache", "laughing", "confused")
+                or any(k in spoken_lower for k in [
+                    "మైండ్ బ్లాంక్", "షాక్", "షాకింగ్", "ఓవర్ యాక్షన్", "నవ్వు", "హాస్యం",
+                    "డ్రామా", "లాడూ", "లడూ", "shock", "overacting", "roast", "రచ్చ", "డౌట్",
+                    "డౌటు", "అర్థం", "సోది", "చెత్త", "బ్రెయిన్", "క్రాష్"
+                ])
             )
         )
         if is_meme_beat:
             meme_count += 1
             main_entity = "Telugu Reaction Meme"
-            emotion = "shocked" if ("షాక్" in spoken_lower or "మైండ్" in spoken_lower) else "comedy"
-            search_query = f"telugu reaction meme: Brahmanandam {emotion} | Sunil comedy reaction"
-            candidate = f"telugu_meme: Brahmanandam {emotion} | Telugu comedy reaction meme cutaway | iconic reaction"
+            if "షాక్" in spoken_lower or "మైండ్" in spoken_lower:
+                emotion = "shocked"
+                comedian = "Brahmanandam" if meme_count % 2 == 1 else "Sunil"
+            elif "డౌట్" in spoken_lower or "అర్థం" in spoken_lower or "బ్రెయిన్" in spoken_lower:
+                emotion = "confused"
+                comedian = "Brahmanandam"
+            elif "నవ్వు" in spoken_lower or "హాస్యం" in spoken_lower:
+                emotion = "comedy"
+                comedian = "Ali" if meme_count % 2 == 0 else "Sunil"
+            elif "సోది" in spoken_lower or "చెత్త" in spoken_lower or "రోస్ట్" in spoken_lower:
+                emotion = "roast"
+                comedian = "Dharmavarapu" if meme_count % 2 == 1 else "Posani"
+            else:
+                emotion = "comedy"
+                comedian = "Brahmanandam"
+
+            search_query = f"telugu reaction meme: {comedian} {emotion} | iconic comedy reaction"
+            candidate = f"telugu_meme: {comedian} {emotion} | Telugu comedy reaction meme cutaway | iconic reaction"
             b["main_entity"] = main_entity
             b["emotion"] = emotion
             b["search_query"] = search_query
@@ -3089,6 +3109,14 @@ CRITICAL VISUAL RELEVANCE & AUTHENTIC REAL-WORLD MEDIA:
    - In entertainment/reality show scripts, only anchor show names if the script is ACTUALLY about that show.
 5. 100% SUBJECT & ENTITY SYNCHRONIZATION WITH NARRATION (CRITICAL):
    - When a section discusses a specific physical phenomenon, scientific principle, contestant, or device, the corresponding visual MUST depict that exact subject!
+6. STRICT PROHIBITION ON ABSTRACT STOCK & CLIPART (FOR ROASTING & ENTERTAINMENT):
+   - NEVER output abstract or literal metaphors: ABSOLUTELY NO "Brain illustration", "Computer glitch", "Money burning in flames", "Musical notes floating", "Puzzle piece", "Silhouette", "Generic action movie poster", "Stock business handshake", or "Bored actor".
+   - When narration makes a comedic roast, sarcasm, calls out bad acting/direction, or expresses confusion, use TELUGU REACTION MEMES or REAL TELUGU STARS:
+     * Comedic confusion / doubt -> "telugu_meme: Brahmanandam confused reaction | Sunil shocked comedy meme"
+     * Laughing / savage roast -> "telugu_meme: Ali laughing reaction meme | Dharmavarapu sarcasm meme"
+     * Overacting / frustration -> "telugu_meme: Posani shouting meme | Venky frustrated reaction"
+     * Tollywood discussions -> Name the real Telugu star, director, or poster (e.g. "Prabhas Telugu movie still | Rajamouli press meet | Tollywood theater crowd | Allu Arjun Pushpa look")
+   - For every video, at least 2 to 4 comedic or reaction beats MUST use "telugu_meme: <comedian> <emotion>" cutaways so the visual pacing feels authentic to Telugu YouTube culture!
 
 SECTION MAPPING:
 

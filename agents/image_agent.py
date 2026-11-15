@@ -237,8 +237,23 @@ def is_blacklisted_candidate(
             return True
 
     # Multi-panel meme grids, template collections, stickers, and clipart packs
-    if any(tg in c_meta for tg in ("meme template", "meme templates", "templates free", "png transparent", "stickers pack", "wallpaper download", "vector clipart", "free download", "meme pack")):
+    if any(tg in c_meta for tg in (
+        "meme template", "meme templates", "templates free", "png transparent", "stickers pack",
+        "wallpaper download", "vector clipart", "free download", "meme pack",
+        "action movie the ultimate adventure", "stock vector", "clip art", "clipart",
+        "illustration vector", "stock illustration", "brain diagram", "glitch effect wallpaper"
+    )):
         return True
+
+    # Non-Telugu entertainment collision rejection for Telugu/Bigg Boss topics
+    is_telugu_show = any(tb in top_low or tb in t_low for tb in ("bigg boss", "telugu", "tollywood", "roast", "sarcas"))
+    if is_telugu_show:
+        if any(nt in c_meta for nt in (
+            "bbm8", "bbm7", "asianet", "mohanlal", "lalettan", "bb18", "bb17", "bb19",
+            "salman khan", "samay raina", "kamal haasan", "vijay tv", "vijay television",
+            "colors kannada", "kiccha sudeep"
+        )):
+            return True
 
     # Universal NSFW / Adult / Dating / Bikini / Lingerie / Inappropriate Ad Rejection
     if any(ad in c_meta for ad in (
@@ -3449,18 +3464,25 @@ def download_images_from_visual_plan(
         # ------------------------------------------------------------
         # TIER 1.2: ICONIC TELUGU REACTION MEME (FOR COMEDY / ROAST / OVERACTING)
         # ------------------------------------------------------------
-        if is_bb_scene or topic_category in ("entertainment", "reality") or "telugu_meme" in visual_query.lower() or "meme" in visual_query.lower():
+        is_abstract_stock = any(k in visual_query.lower() for k in (
+            "brain illustration", "computer glitch", "money burning", "musical notes",
+            "plot hole", "broken chain", "puzzle piece", "action movie", "confused face meme",
+            "empty stage", "sound wave visualization", "comment section interface", "error screen"
+        ))
+        if is_bb_scene or topic_category in ("entertainment", "reality") or "telugu_meme" in visual_query.lower() or "meme" in visual_query.lower() or is_abstract_stock:
             try:
                 from tools.meme_manager import get_reaction_meme, match_emotion_from_text
                 is_meme_worthy = (
                     "telugu_meme" in visual_query.lower()
                     or "meme" in visual_query.lower()
+                    or is_abstract_stock
                     or s_emotion in ("shocked", "comedy", "roast", "overacting", "laughing", "angry", "confused", "funny", "headache", "crying", "fake_shock", "mock", "smug")
                     or s_intent in ("reaction", "meme", "roast", "comedy")
                     or any(k in visual_query.lower() for k in ("meme", "reaction", "roast", "comedy", "funny", "shocked", "brahmanandam"))
                     or bool(match_emotion_from_text(assigned_narration))
                 )
-                max_memes = 2
+                is_roast_context = any(k in f"{topic} {topic_category}".lower() for k in ("roast", "sarcas", "funny", "troll", "entertainment", "reality"))
+                max_memes = 4 if is_roast_context else 2
                 with hash_lock:
                     can_use_meme = is_meme_worthy and len(used_memes) < max_memes
                     meme_path = get_reaction_meme(f"{s_emotion} {visual_query} {assigned_narration}", used_memes=used_memes) if can_use_meme else None
@@ -3496,6 +3518,12 @@ def download_images_from_visual_plan(
                     return visual_number, destination
             except Exception as m_err:
                 print(f"Telugu meme manager notice: {m_err}")
+
+        # Sanitize abstract stock queries away from literal clipart
+        if is_abstract_stock and topic_category in ("entertainment", "reality", "cinema", "news"):
+            fallback_target = global_entity_name or s_primary_ent or entity_name or "Tollywood"
+            visual_query = f"{fallback_target} Telugu cinema photoshoot HD"
+            print(f"🔄 Re-routed abstract stock query to realistic entity query: '{visual_query}'")
 
         # ------------------------------------------------------------
         # TIER 1.3: LIVE TELUGU NEWS PORTAL PHOTOS & EPISODE STILLS (PRIORITIZED ONLINE MEDIA)
