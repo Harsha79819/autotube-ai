@@ -284,8 +284,25 @@ def validate_candidate_metadata(
     if is_prior:
         return False, f"Matches disallowed prior season/language token: '{prior_tok}'"
 
-    # 4. Contestant-specific negative tokens disambiguation
+    # 3.1. Strict rejection of old Season 6 contestant Rohit Sahni
+    if any(rs in combined for rs in ("rohit sahni", "rohit_sahni", "రోహిత్ సాహ్ని")):
+        return False, "Disqualified old Season 6 contestant Rohit Sahni in Bigg Boss 10 context"
+
+    # 3.2. Unrelated Cinema / Celebrity Leakage Firewall for Reality TV
+    # When in Bigg Boss context, strictly reject non-contestant Tollywood superstars
+    # unless the entity_hint explicitly requested them
     ent_key = entity_hint.strip().lower()
+    NON_CONTESTANT_STARS = [
+        "allu arjun", "alluarjun", "pushpa", "prabhas", "kalki", "devara",
+        "ram charan", "ramcharan", "game changer", "gamechanger", "mahesh babu",
+        "maheshbabu", "pawan kalyan", "pawankalyan", "chiranjeevi", "balakrishna",
+        "sukumar", "prashanth neel", "dil raju"
+    ]
+    for star in NON_CONTESTANT_STARS:
+        if star in combined and star not in ent_key:
+            return False, f"Matches non-contestant Tollywood star '{star}' in Bigg Boss context"
+
+    # 4. Contestant-specific negative tokens disambiguation
     for key, c_info in CONTESTANTS_BB10.items():
         if key in ent_key or any(a in ent_key for a in c_info["aliases"]):
             for neg in c_info["negative_tokens"]:

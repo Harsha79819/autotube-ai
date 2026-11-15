@@ -465,8 +465,10 @@ def find_local_contestant_image(
 
         # Subdirectory check (data/entities/<slug>/neutral.png or assets/entities/<id>/image.jpg)
         for s_item in possible_slugs:
+            if s_item in ("rohit", "rohit_naidu", "rohit_patnam"):
+                s_item = "rohit_patnam"
             sub_dir = ref_dir / s_item
-            if sub_dir.exists() and sub_dir.is_dir():
+            if sub_dir.exists() and sub_dir.is_dir() and not sub_dir.name.startswith("_archive") and "sahni" not in sub_dir.name.lower():
                 for possible in ["neutral.png", "image.jpg", "profile.jpg", "neutral.jpg"]:
                     p_file = sub_dir / possible
                     if p_file.exists() and p_file.stat().st_size > 1000:

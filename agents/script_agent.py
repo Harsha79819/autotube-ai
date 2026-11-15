@@ -95,10 +95,13 @@ def _call_gemini_with_retry(contents, model, max_retries=2):
         ex = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         try:
             fut = ex.submit(active_client.models.generate_content, model=model, contents=contents)
-            return fut.result(timeout=45.0)
+            return fut.result(timeout=15.0)
         except Exception as error:
             err_str = str(error)
-            is_quota_err = "429" in err_str or "402" in err_str or "RESOURCE_EXHAUSTED" in err_str or "503" in err_str or "UNAVAILABLE" in err_str
+            if "402" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                print(f"⚠️ Gemini quota/credits exhausted ({err_str[:60]}), failing over immediately...")
+                raise error
+            is_quota_err = "429" in err_str or "503" in err_str or "UNAVAILABLE" in err_str
             if is_quota_err:
                 try:
                     from agents.env_loader import get_all_gemini_api_keys
@@ -910,6 +913,7 @@ def synthesize_beat_visual_plan(delivery_plan: List[Dict[str, Any]], topic: str 
         KNOWN_TELUGU_SHOW_PERSONS,
     )
     is_bb = is_bigg_boss_topic(topic)
+    is_roast = any(k in str(topic).lower() for k in ["roast", "sarcas", "funny", "troll"])
     total_beats = len(delivery_plan)
     if total_beats == 0:
         return []
@@ -2079,7 +2083,7 @@ def generate_three_script_versions(base_prompt: str, topic: str) -> List[Dict[st
             raw_text = generate_text_cascade(
                 prompt_with_persona,
                 step_name=f"script_v{idx}_{p_cfg['id']}",
-                per_provider_timeout=35.0,
+                per_provider_timeout=15.0,
             )
             cleaned = clean_response(raw_text)
             candidates.append({
@@ -2181,7 +2185,7 @@ CANDIDATES:
         raw_judge_resp = generate_text_cascade(
             judge_prompt,
             step_name="script_judge_rubric",
-            per_provider_timeout=35.0,
+            per_provider_timeout=15.0,
         )
         clean_resp = clean_response(raw_judge_resp)
         m = re.search(r"\{.*\}", clean_resp, flags=re.DOTALL)
@@ -3862,7 +3866,7 @@ def ensure_script_artifacts(
             "spoken_text": sc,
             "emotion": emo,
             "pause_before_ms": pause_ms,
-            "sfx": "ding" if (idx == len(scenes) and len(scenes) > 3) else None,
+            "sfx": None,
             "on_screen_text": "",
         })
     dp_file.write_text(json.dumps(delivery_plan, indent=2, ensure_ascii=False), encoding="utf-8")

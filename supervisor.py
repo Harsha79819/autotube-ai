@@ -309,9 +309,9 @@ def heal_network_or_quota(stage_name, context=None):
                 if tel:
                     if is_office_theme:
                         base = [
-                            (f"హాయ్ ఫ్రెండ్స్! {tel_topic} గురించి ఈరోజు మనం మాట్లాడబోయే అసలైన ఫన్నీ విషయాలు చూస్తే మీరు పడిపడి నవ్వుకుంటారు!",
+                            (f"హాయ్ ఫ్రెండ్స్! ఆఫీసులో జరిగే అసలైన ఫన్నీ విషయాలు చూస్తే మీరు పడిపడి నవ్వుకుంటారు!",
                              f"{clean_topic} funny office comedy scene | stressed corporate employee looking confused at computer monitor"),
-                            (f"బాస్, నిజంగా కష్టపడటం ఒక ఎత్తైతే, ఆఫీసులో కష్టపడుతున్నట్లు నటించడం ఇంకో పెద్ద కళ!",
+                            (f"నిజంగా కష్టపడటం ఒక ఎత్తైతే, ఆఫీసులో కష్టపడుతున్నట్లు నటించడం ఇంకో పెద్ద కళ!",
                              f"{clean_topic} busy office desk with papers and laptop | employee pretending to work comedy reaction"),
                             (f"ముఖ్యంగా ల్యాప్‌టాప్‌లో ఎక్సెల్ షీట్ ఓపెన్ చేసి, కీబోర్డ్ మీద సీరియస్‌గా ఏదో టైప్ చేస్తున్నట్లు ఫేస్ పెట్టడం మొదటి ట్రిక్!",
                              f"{clean_topic} office worker typing furiously on keyboard | funny corporate meme reaction expression"),
@@ -323,28 +323,28 @@ def heal_network_or_quota(stage_name, context=None):
                              f"{clean_topic} modern corporate office cubicles | person looking busy at desk workplace satire"),
                             (f"చివరిగా లాగ్ అవుట్ టైమ్ అయ్యేంత వరకు స్క్రీన్ చూస్తూ బిజీగా కనిపించడం ఒక సూపర్ పవర్!",
                              f"{clean_topic} clock on office wall end of work day | relieved office workers packing bags comedy"),
-                            (f"మరి మీ ఆఫీసులో కూడా ఇలాంటి ప్రో-లెవెల్ యాక్టర్స్ ఎవరైనా ఉన్నారా బాస్?",
+                            (f"మరి మీ ఆఫీసులో కూడా ఇలాంటి ప్రో-లెవెల్ యాక్టర్స్ ఎవరైనా ఉన్నారా?",
                              f"{clean_topic} laughing colleagues watching screen | funny office meme expression"),
                             (f"కింద కామెంట్స్ లో చెప్పండి, వీడియో నచ్చితే వెంటనే లైక్ చేసి సబ్‌స్క్రైబ్ చేసుకోండి!",
                              f"like share and subscribe animation youtube studio | comedy entertaining video closing call to action"),
                         ]
                     else:
                         base = [
-                            (f"హాయ్ ఫ్రెండ్స్! {tel_topic} గురించి సోషల్ మీడియాలో జరుగుతున్న ఫన్నీ రచ్చ చూశారా? అసలు ఏం జరుగుతుందో ఇప్పుడు చూద్దాం!",
+                            (f"హాయ్ ఫ్రెండ్స్! సోషల్ మీడియాలో జరుగుతున్న ఫన్నీ రచ్చ చూశారా? అసలు ఏం జరుగుతుందో ఇప్పుడు చూద్దాం!",
                              f"{clean_topic} dramatic entertainment moment | {clean_topic} viral discussion"),
-                            (f"బాస్, ఈ విషయంలో జరుగుతున్న డ్రామా చూస్తుంటే ఎవరికైనా మైండ్ బ్లాంక్ అవ్వాల్సిందే!",
+                            (f"ఈ విషయంలో జరుగుతున్న డ్రామా చూస్తుంటే ఎవరికైనా మైండ్ బ్లాంక్ అవ్వాల్సిందే!",
                              f"{clean_topic} shocking scene reaction | {clean_topic} heated discussion"),
                             (f"ఒకవైపు చూస్తే సీరియస్ ట్విస్ట్‌లు, మరోవైపు చూస్తే కడుపుబ్బా నవ్వించే ఓవరాక్షన్!",
                              f"{clean_topic} hilarious funny expression | {clean_topic} comedy reaction meme"),
                             (f"ఆడియన్స్ కూడా ఈ పరిణామాలను చూసి సోషల్ మీడియాలో మీమ్స్‌తో దుమ్మురేపుతున్నారు!",
                              f"{clean_topic} social media viral memes reaction | audience laughing comedy"),
-                            (f"అసలు వాళ్లు చేస్తున్న పనులకు, చెబుతున్న లాజిక్స్‌కి ఏమైనా సంబంధం ఉందా బాస్?",
+                            (f"అసలు వాళ్లు చేస్తున్న పనులకు, చెబుతున్న లాజిక్స్‌కి ఏమైనా సంబంధం ఉందా అనిపిస్తోంది!",
                              f"{clean_topic} confused reaction face | {clean_topic} surprising highlight"),
                             (f"స్క్రీన్ మీద వీళ్ల యాక్టింగ్ చూస్తుంటే ఆస్కార్ లెవెల్ పర్ఫార్మెన్స్ అండి బాబు!",
                              f"{clean_topic} dramatic expression close up | {clean_topic} highlight moment"),
                             (f"ఎవరి వ్యూహాలు వాళ్లవి, ఎవరి గేమ్ ప్లాన్ వాళ్లదే అన్నట్లుగా ఉంది పరిస్థితి!",
                              f"{clean_topic} dramatic confrontation scene | {clean_topic} intense moment"),
-                            (f"మరి ఈ క్రేజీ డ్రామా మరియు రచ్చపై మీరేమనుకుంటున్నారు బాస్?",
+                            (f"మరి ఈ క్రేజీ డ్రామా మరియు రచ్చపై మీరేమనుకుంటున్నారు?",
                              f"{clean_topic} iconic comedy reaction still | {clean_topic} audience verdict"),
                             (f"కింద కామెంట్స్‌లో చెప్పండి, వీడియో నచ్చితే వెంటనే లైక్ కొట్టి సబ్‌స్క్రైబ్ చేసుకోండి!",
                              f"like share and subscribe animation youtube studio | comedy entertaining video closing call to action"),
@@ -393,12 +393,17 @@ def heal_network_or_quota(stage_name, context=None):
                              f"like share and subscribe animation youtube studio | comedy entertaining video closing call to action"),
                         ]
             elif cat == "reality_tv":
-                vis_tag = "Bigg Boss Telugu" if ("telugu" in raw_topic_lower or is_tel or "bb" in raw_topic_lower) else "Bigg Boss"
+                vis_tag = "Bigg Boss Telugu 10" if ("telugu" in raw_topic_lower or is_tel or "bb" in raw_topic_lower) else "Bigg Boss"
+                # Extract clean contestant or drama focus without raw English title dump
+                from tools.build_entity_library import match_entities_in_text
+                matched_ents = match_entities_in_text(raw_topic_lower)
+                ent_focus = matched_ents[0]["canonical_name"] if matched_ents else "కంటెస్టెంట్స్"
+
                 if tel:
                     base = [
-                        (f"బిగ్ బాస్ హౌస్‌లో {clean_topic} రచ్చతో హై-వోల్టేజ్ డ్రామా పీక్స్‌కి చేరింది బాస్!",
+                        (f"బిగ్ బాస్ హౌస్‌లో తాజా పరిణామాలతో హై-వోల్టేజ్ డ్రామా పీక్స్‌కి చేరింది!",
                          f"{vis_tag} house dramatic moment | {vis_tag} contestants argument"),
-                        (f"ముఖ్యంగా హౌస్‌లో కంటెస్టెంట్స్ మధ్య జరిగిన తీవ్ర వాగ్వాదం మరియు నామినేషన్ల గొడవలు పీక్స్‌కి చేరాయి.",
+                        (f"ముఖ్యంగా హౌస్‌లో {ent_focus} మధ్య జరిగిన తీవ్ర వాగ్వాదం మరియు నామినేషన్ల గొడవలు హీట్ పెంచాయి.",
                          f"{vis_tag} nomination task fight | {vis_tag} housemates intense conflict"),
                         (f"ఒకరిపై ఒకరు వేసుకున్న నిందలు, ఎమోషనల్ ఓవరాక్షన్ చూసి ఆడియన్స్‌కి కూడా మైండ్ బ్లాంక్ అయిపోయింది.",
                          f"{vis_tag} contestant emotional reaction tears | {vis_tag} dramatic moment"),
@@ -418,7 +423,7 @@ def heal_network_or_quota(stage_name, context=None):
                          f"{vis_tag} house highlight moment | {vis_tag} contestants smiling"),
                         (f"ఆడియన్స్ కూడా ఎవరికి ఓట్లు వేయాలనే దానిపై సోషల్ మీడియాలో పోల్స్ పెడుతున్నారు.",
                          f"{vis_tag} viral social media poll | audience review discussion"),
-                        (f"మరి ఈ వారం హౌస్‌లో ఎవరి ప్రవర్తన మీకు నచ్చింది? ఎవరు ఎలిమినేట్ అయితే కరెక్ట్ అంటారు బాస్?",
+                        (f"మరి ఈ వారం హౌస్‌లో ఎవరి ఆట మీకు నచ్చింది? ఎవరు ఎలిమినేట్ అయితే కరెక్ట్ అంటారు? మీ అభిప్రాయం చెప్పండి.",
                          f"{vis_tag} audience verdict discussion | viewers poll reaction"),
                         (f"కింద కామెంట్స్‌లో మీ ఫేవరెట్ కంటెస్టెంట్ ఎవరో చెప్పండి, మరిన్ని బిగ్ బాస్ అప్‌డేట్స్ కోసం లైక్ కొట్టి సబ్‌స్క్రైబ్ చేసుకోండి!",
                          f"like share and subscribe animation youtube studio | reality show entertainment channel closing call to action"),
@@ -471,7 +476,7 @@ def heal_network_or_quota(stage_name, context=None):
                          f"{clean_topic} iconic movie celebration still | cinema highlights"),
                         (f"సోషల్ మీడియాలో కూడా దీనికి సంబంధించిన క్లిప్స్ విపరీతంగా ట్రెండ్ అవుతున్నాయి.",
                          f"{clean_topic} viral social media trend | audience reaction meme"),
-                        (f"మరి ఈ సినిమా లేదా అప్‌డేట్ పై మీ ఒపీనియన్ ఏంటి బాస్? మీరు చూశారా?",
+                        (f"మరి ఈ సినిమా లేదా అప్‌డేట్ పై మీ ఒపీనియన్ ఏంటి? మీరు చూశారా?",
                          f"{clean_topic} audience verdict discussion | cinema critic review desk"),
                         (f"కింద కామెంట్స్‌లో చెప్పండి, మరిన్ని మూవీ అప్‌డేట్స్ కోసం లైక్ కొట్టి సబ్‌స్క్రైబ్ చేసుకోండి!",
                          f"like share and subscribe animation youtube studio | cinema entertainment channel closing"),
@@ -520,7 +525,7 @@ def heal_network_or_quota(stage_name, context=None):
                          f"{clean_topic} international financial exchange market | stock tickers digital board"),
                         (f"రాబోయే సెషన్లలో మార్కెట్ కదలికలు మరింత ఆసక్తికరంగా మారనున్నాయి.",
                          f"{clean_topic} business investor smiling at laptop screen | profitable portfolio growth"),
-                        (f"మరి ఈ పరిణామాలపై మీ ఇన్వెస్ట్‌మెంట్ అభిప్రాయం ఏమిటి బాస్?",
+                        (f"మరి ఈ పరిణామాలపై మీ ఇన్వెస్ట్‌మెంట్ అభిప్రాయం ఏమిటి?",
                          f"{clean_topic} financial decision concept | modern finance office workspace"),
                         (f"కామెంట్స్‌లో చెప్పండి, రోజువారీ ఫైనాన్షియల్ అప్‌డేట్స్ కోసం లైక్ చేసి సబ్‌స్క్రైబ్ చేసుకోండి!",
                          f"like share and subscribe animation youtube studio | finance investment channel closing"),
@@ -563,7 +568,7 @@ def heal_network_or_quota(stage_name, context=None):
                          f"{clean_topic} dramatic historic landscape scenic cinematic | ancient civilization heritage"),
                         (f"నేటికీ చరిత్రకారులు ఈ అంశంపై మరింత పరిశోధనలు కొనసాగిస్తున్నారు.",
                          f"{clean_topic} history documentary researcher studying artifacts | library vintage books archive"),
-                        (f"మరి ఈ చారిత్రక విశేషాలపై మీరేమనుకుంటున్నారు బాస్?",
+                        (f"మరి ఈ చారిత్రక విశేషాలపై మీరేమనుకుంటున్నారు?",
                          f"{clean_topic} historic discovery showcase | documentary storytelling visual"),
                         (f"కింద కామెంట్స్ లో మీ ఆలోచనలు పంచుకోండి, మరిన్ని హిస్టరీ వీడియోల కోసం సబ్‌స్క్రైబ్ చేసుకోండి!",
                          f"like share and subscribe animation youtube studio | history documentary channel closing"),
@@ -608,7 +613,7 @@ def heal_network_or_quota(stage_name, context=None):
                          f"{clean_topic} comparison alongside competitor smartphones | side by side smartphone showcase"),
                         (f"త్వరలోనే ఇది అఫీషియల్ గా మార్కెట్లోకి రాబోతోంది!",
                          f"{clean_topic} gadget retail presentation | modern mobile device unboxing"),
-                        (f"మరి దీనిపై మీరేమంటారు బాస్? కామెంట్స్ లో చెప్పండి, వీడియో నచ్చితే లైక్ చేసి సబ్‌స్క్రైబ్ చేసుకోండి!",
+                        (f"మరి దీనిపై మీరేమంటారు? కామెంట్స్ లో చెప్పండి, వీడియో నచ్చితే లైక్ చేసి సబ్‌స్క్రైబ్ చేసుకోండి!",
                          f"like share and subscribe animation youtube studio | tech channel closing"),
                     ]
                 else:
@@ -657,7 +662,7 @@ def heal_network_or_quota(stage_name, context=None):
                          f"{clean_topic} practical real world connection | {clean_topic} practical illustration"),
                         (f"ప్రతీ ఒక్కరూ తప్పక తెలుసుకోవాల్సిన ఈ అరుదైన విషయాలు అందరినీ ఆశ్చర్యానికి గురిచేస్తాయి.",
                          f"{clean_topic} remarkable discovery still | {clean_topic} fascinating visual"),
-                        (f"మరి {tel_topic} గురించిన ఈ ఆసక్తికరమైన నిజాల్లో మీకు ఏది బాగా నచ్చింది బాస్?",
+                        (f"మరి {tel_topic} గురించిన ఈ ఆసక్తికరమైన నిజాల్లో మీకు ఏది బాగా నచ్చింది?",
                          f"{clean_topic} thought provoking question visual | viewers discussion studio"),
                         (f"కింద కామెంట్స్‌లో చెప్పండి, ఇలాంటి మరిన్ని సైన్స్ అండ్ ఇంట్రెస్టింగ్ ఫాక్ట్స్ కోసం వెంటనే లైక్ చేసి సబ్‌స్క్రైబ్ చేసుకోండి!",
                          f"like share and subscribe animation youtube studio | science educational channel closing call to action"),
@@ -692,7 +697,7 @@ def heal_network_or_quota(stage_name, context=None):
             else:  # tech, general
                 if tel:
                     base = [
-                        (f"బాస్, {tel_topic} విషయంలో ప్రస్తుతం జరుగుతున్న సరికొత్త పరిణామాలు చూశారా?",
+                        (f"హాయ్ ఫ్రెండ్స్! {tel_topic} విషయంలో ప్రస్తుతం జరుగుతున్న సరికొత్త పరిణామాలు చూశారా?",
                          f"{clean_topic} official news overview | {clean_topic} topic presentation cinematic studio"),
                         (f"అసలు దీని వెనుక ఉన్న ముఖ్యమైన విశేషాలు చాలా మందికి తెలియదు.",
                          f"{clean_topic} key details analysis | {clean_topic} important aspects presentation"),
@@ -716,9 +721,9 @@ def heal_network_or_quota(stage_name, context=None):
                          f"{clean_topic} audience live feedback | community conversation studio"),
                         (f"చివరిగా ఇది ఒక సుదీర్ఘ చర్చకు మరియు సరికొత్త ధోరణులకు నాంది పలకనుంది.",
                          f"{clean_topic} strategic future perspective | forward looking innovative design"),
-                        (f"మరి దీనిపై మీ అభిప్రాయం మరియు ఆలోచనలు ఏమిటి బాస్? కామెంట్స్ లో తెలియజేయండి!",
+                        (f"మరి దీనిపై మీ అభిప్రాయం మరియు ఆలోచనలు ఏమిటి? కామెంట్స్ లో తెలియజేయండి!",
                          f"{clean_topic} discussion wrap up | studio creator conversation"),
-                        (f"ఈ వీడియో నచ్చితే లైక్ కొట్టి, మీ ఫ్రెండ్స్‌కి షేర్ చేసి, వెంటనే సబ్‌స్క్రైబ్ చేసుకోండి బాస్!",
+                        (f"ఈ వీడియో నచ్చితే లైక్ కొట్టి, మీ ఫ్రెండ్స్‌కి షేర్ చేసి, వెంటనే సబ్‌స్క్రైబ్ చేసుకోండి!",
                          f"like share and subscribe animation youtube studio | modern channel closing call to action"),
                     ]
                 else:

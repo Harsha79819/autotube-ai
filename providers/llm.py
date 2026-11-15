@@ -61,8 +61,15 @@ OPENROUTER_MODELS = [
 ]
 
 
+_GEMINI_EXHAUSTED_UNTIL = 0.0
+
+
 def call_gemini(prompt: str, api_key: str = None) -> tuple[str, str]:
     """Call Google Gemini API across configured flash models with per-model timeout and multi-key rotation."""
+    global _GEMINI_EXHAUSTED_UNTIL
+    if time.time() < _GEMINI_EXHAUSTED_UNTIL and not api_key:
+        raise RuntimeError("Gemini is in fast cooldown (all keys exhausted/402)")
+
     keys = [api_key] if api_key else get_all_gemini_api_keys()
     if not keys:
         raise ValueError("GEMINI_API_KEY is not configured.")
@@ -102,16 +109,17 @@ def call_gemini(prompt: str, api_key: str = None) -> tuple[str, str]:
                 dur_ms = (time.time() - t0) * 1000
                 err_str = str(err)
                 is_quota = "429" in err_str or "402" in err_str or "RESOURCE_EXHAUSTED" in err_str
+                last_err = err
                 if is_quota:
                     if len(keys) > 1 and key_idx < len(keys):
                         print(f"⚠️ Gemini Key #{key_idx} exhausted/rate limited. Failing over to Key #{key_idx + 1}...")
-                        last_err = err
                         break
                     else:
-                        print(f"⚠️ Gemini model {model_name} rate limit (429), failing over immediately ({dur_ms:.0f}ms)...")
+                        print(f"⚠️ All Gemini keys exhausted ({err_str[:60]}). Enabling fast 15-minute cooldown...")
+                        _GEMINI_EXHAUSTED_UNTIL = time.time() + 900
+                        break
                 else:
                     print(f"⚠️ Gemini model {model_name} notice ({err_str[:80]}), trying next model...")
-                last_err = err
                 continue
             finally:
                 ex.shutdown(wait=False)

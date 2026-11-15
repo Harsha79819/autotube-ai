@@ -690,7 +690,7 @@ def markup_roast_delivery(script: str, topic: str = "") -> List[Dict[str, Any]]:
         elif idx == total_beats:
             emotion = "smug"
             pause_ms = 450
-            sfx = "ding" if sfx_assigned < 3 else None
+            sfx = None
         elif idx == total_beats - 1 or "?" in sentence or "ఏంటంటే" in sentence:
             emotion = "dramatic_question"
             pause_ms = 400
@@ -698,11 +698,7 @@ def markup_roast_delivery(script: str, topic: str = "") -> List[Dict[str, Any]]:
         elif idx % 2 == 0:
             emotion = "hype"
             pause_ms = 450
-            if sfx_assigned < 3 and idx > 1:
-                sfx = sfx_pool[sfx_assigned % len(sfx_pool)]
-                sfx_assigned += 1
-            else:
-                sfx = None
+            sfx = None
         elif any(k in sentence for k in ["అంట", "చూస్తే", "బాస్", "ఏంట్రా", "కథ"]):
             emotion = "mock"
             pause_ms = 350
@@ -890,10 +886,10 @@ CRITICAL CADENCE & SCRIPT RULES:
     if not final_script or len(final_script.strip()) < 30:
         # Resilient topic-anchored fallback script
         final_script = (
-            f"చూడండి బాస్, {topic} గురించి జరుగుతున్న హైప్ ఒక రేంజ్ లో ఉంటే — గ్రౌండ్ రియాలిటీ చూస్తే ఇంకో రేంజ్ లో ఉంది! "
+            f"చూడండి, {topic} గురించి జరుగుతున్న హైప్ ఒక రేంజ్ లో ఉంటే — గ్రౌండ్ రియాలిటీ చూస్తే ఇంకో రేంజ్ లో ఉంది! "
             f"అసలు ట్విస్ట్ ఏంటంటే... అందరూ అనుకున్నది ఒకటి, అక్కడ జరిగింది ఇంకొకటి. "
             f"ప్రతి ఒక్కరూ భారీ అంచనాలు పెట్టుకున్నారు, కానీ తీరా చూస్తే అంతా రివర్స్ అయింది! "
-            f"మరి దీనిపై మీరేమనుకుంటున్నారో కింద కామెంట్స్ లో చెప్పండి! వీడియో నచ్చితే లైక్ చేసి సబ్‌స్క్రైబ్ చేసుకోండి బాస్!"
+            f"మరి దీనిపై మీరేమనుకుంటున్నారో కింద కామెంట్స్ లో చెప్పండి! వీడియో నచ్చితే లైక్ చేసి సబ్‌స్క్రైబ్ చేసుకోండి!"
         )
 
     # Zero-Fail Pre-Execution Calibration: verify length and CTA before render

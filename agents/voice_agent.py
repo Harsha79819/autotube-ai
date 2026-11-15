@@ -1371,38 +1371,35 @@ async def create_voice(
 
                     emotion_cycle = [
                         ("neutral setup", 0, None),
-                        ("fake_shock", 350, "record_scratch"),
+                        ("fake_shock", 350, None),
                         ("smug", 350, None),
-                        ("mock", 400, "rimshot"),
-                        ("dramatic_question", 450, "crowd_ooh"),
+                        ("mock", 400, None),
+                        ("dramatic_question", 450, None),
                         ("hype", 350, None),
                     ]
                     roast_beats = []
                     for s_idx, sentence in enumerate(sentences):
-                        em, pause, sfx = emotion_cycle[s_idx % len(emotion_cycle)]
+                        em, pause, _ = emotion_cycle[s_idx % len(emotion_cycle)]
                         if s_idx == 0:
                             pause = 0
-                            sfx = None
                         elif s_idx == len(sentences) - 1 and len(sentences) > 2:
                             em = "hype"
-                            sfx = None
                         b_dict = {
                             "spoken_text": sentence,
                             "emotion": em,
                             "pause_before_ms": pause,
+                            "sfx": None,
                         }
-                        if sfx:
-                            b_dict["sfx"] = sfx
                         roast_beats.append(b_dict)
 
             if roast_beats and is_roast_delivery and not is_factual_news:
-                print(f"🔥 [Voice Agent] Running chunked multi-emotion roast synthesis with {edge_voice_id} ({len(roast_beats)} beats)...")
+                print(f"🔥 [Voice Agent] Running chunked multi-emotion roast synthesis with {edge_voice_id} ({len(roast_beats)} beats, clean narration)...")
                 from edge_tts_generator import generate_roast_speech_with_emotions
                 output_mp3, captured_words = await generate_roast_speech_with_emotions(
                     beats=roast_beats,
                     output_path=output_mp3,
                     voice=edge_voice_id,
-                    sfx_enabled=True,
+                    sfx_enabled=False,
                 )
             elif is_telugu_text or "te-in" in edge_voice_id.lower() or "mohan" in edge_voice_id.lower() or "shruti" in edge_voice_id.lower():
                 print(f"🎙️ [Voice Agent] Running clean news/fact anchor Telugu speech synthesis with {edge_voice_id} (rate={rate or '+4%'}, pitch={pitch or '+0Hz'})...")

@@ -640,5 +640,32 @@
       "avd_sec": null,
       "subscribers": null
     }
+  },
+  {
+    "experiment_id": "exp_20261115_115327_55980f",
+    "timestamp": "2026-11-15T11:53:27.217897+00:00",
+    "topic": "Test Topic Intelligence Run",
+    "content_pillar": "tollywood_celebrity",
+    "format": "Shorts",
+    "aspect_ratio": "9:16",
+    "target_duration": "30-50s",
+    "actual_duration_sec": 42.5,
+    "hook_variant": "immediate_hook",
+    "title_variant": "Test Title Curiosity",
+    "thumbnail_text": "TEST SHOCK",
+    "heuristic_scores": {
+      "retention_score": 88.0,
+      "packaging_score": 90.0
+    },
+    "youtube_video_id": null,
+    "recommendations_applied": [],
+    "retrieved_metrics": {
+      "retrieved_at": "2026-11-15T11:53:27.219525+00:00",
+      "views": 1500,
+      "impressions": null,
+      "ctr_percent": 3.8,
+      "avd_sec": null,
+      "subscribers": null
+    }
   }
 ]

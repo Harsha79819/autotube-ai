@@ -614,10 +614,14 @@ def find_curated_asset_path(fallback_name: str) -> Optional[Path]:
         return None
     clean_fn = re.sub(r"[^a-zA-Z0-9_]", "", fallback_name.lower().replace(" ", "_"))
 
+    # Canonical aliasing for reality show & celebrity contestants
+    if clean_fn in ("rohit", "rohit_naidu", "rohit_patnam"):
+        clean_fn = "rohit_patnam"
+
     # 1. Check assets/entities/<slug>/
     for ent_slug in [clean_fn, f"{clean_fn}_contestant", f"{clean_fn}_actor"]:
         ent_dir = ASSETS_DIR / "entities" / ent_slug
-        if ent_dir.is_dir():
+        if ent_dir.is_dir() and not ent_slug.startswith("_archive"):
             for img_name in ["image.jpg", "image.png", "1.jpg", "portrait.jpg"]:
                 p = ent_dir / img_name
                 if p.exists() and p.stat().st_size > 1000:
@@ -626,14 +630,15 @@ def find_curated_asset_path(fallback_name: str) -> Optional[Path]:
                 if p.stat().st_size > 1000:
                     return p
 
-    # Partial match in assets/entities/
+    # Partial match in assets/entities/ (strictly ignore archived / prior season entities)
     entities_dir = ASSETS_DIR / "entities"
     if entities_dir.is_dir():
         for d in entities_dir.iterdir():
-            if d.is_dir() and (clean_fn in d.name or d.name.replace("_", "") in clean_fn):
-                for p in d.glob("*.jpg"):
-                    if p.stat().st_size > 1000:
-                        return p
+            if d.is_dir() and not d.name.startswith("_archive") and "sahni" not in d.name:
+                if clean_fn in d.name or d.name.replace("_", "") in clean_fn:
+                    for p in d.glob("*.jpg"):
+                        if p.stat().st_size > 1000:
+                            return p
 
     # 2. Check assets/ direct and assets/fallback/
     for ext in [".jpg", ".jpeg", ".png"]:

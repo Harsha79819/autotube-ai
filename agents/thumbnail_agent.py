@@ -843,9 +843,21 @@ def create_playwright_canva_thumbnail(title, aspect_ratio="16:9", assets_dir=Non
 
         ent_slug = _find_contestant_slug(search_corpus)
 
-        # Strict cross-topic firewall: If Bigg Boss, strictly REJECT non-Bigg Boss entities (Prabhas, movie stars, etc.)
-        if is_bb_run and ent_slug in ("prabhas", "kalki_2898_ad_movie", "devara_movie", "dil_raju"):
-            ent_slug = None
+        # Strict cross-topic firewall: If Bigg Boss, strictly REJECT non-Bigg Boss entities (Allu Arjun, Prabhas, movie stars, etc.)
+        NON_BB_CELEBS = [
+            "allu_arjun", "allu arjun", "pushpa", "prabhas", "kalki_2898_ad_movie", "devara_movie",
+            "ram_charan", "ram charan", "ntr", "jr ntr", "mahesh", "mahesh babu", "pawan_kalyan",
+            "pawan kalyan", "chiranjeevi", "balakrishna", "dil_raju", "sukumar"
+        ]
+        if is_bb_run:
+            if ent_slug in ("prabhas", "kalki_2898_ad_movie", "devara_movie", "dil_raju", "allu_arjun", "ram_charan", "ntr", "mahesh", "pawan_kalyan", "chiranjeevi", "balakrishna"):
+                # Only keep if topic explicitly mentions them
+                if not any(c.replace("_", " ") in topic_text.lower() for c in NON_BB_CELEBS):
+                    ent_slug = None
+
+        # Canonical contestant aliasing for BB10
+        if ent_slug in ("rohit", "rohit_naidu", "rohit_patnam"):
+            ent_slug = "rohit_patnam"
 
         if not ent_slug and is_bb_run:
             ent_slug = "nagarjuna"
@@ -860,10 +872,11 @@ def create_playwright_canva_thumbnail(title, aspect_ratio="16:9", assets_dir=Non
             for ent_dir in [ROOT / "data" / "entities", ROOT / "assets" / "entities"]:
                 if ent_dir.exists():
                     for sub in ent_dir.iterdir():
-                        if sub.is_dir() and ent_slug.lower() in sub.name.lower():
-                            for em in ["portrait_clean", "portrait", "clean", "shocked", "angry", "reaction", "image", "surprised", "laughing", "smug", "crying", "neutral"]:
-                                cand_paths.append(sub / f"{em}.jpg")
-                                cand_paths.append(sub / f"{em}.png")
+                        if sub.is_dir() and not sub.name.startswith("_archive") and "sahni" not in sub.name.lower():
+                            if ent_slug.lower() in sub.name.lower() or sub.name.lower() in ent_slug.lower():
+                                for em in ["portrait_clean", "portrait", "clean", "shocked", "angry", "reaction", "image", "surprised", "laughing", "smug", "crying", "neutral"]:
+                                    cand_paths.append(sub / f"{em}.jpg")
+                                    cand_paths.append(sub / f"{em}.png")
             person_img_path = next((p for p in cand_paths if p.exists() and p.stat().st_size > 1000), None)
             if person_img_path:
                 hero_img_path = person_img_path
