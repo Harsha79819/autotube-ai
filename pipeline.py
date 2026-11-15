@@ -2690,37 +2690,37 @@ def generate_multi_media_video(
                 98,
                 text=f"Uploading video to YouTube ({youtube_channel} - {youtube_privacy.upper()})...",
             )
-                out_dir = Path(run_dir) if run_dir else Path("output")
-                video_file = out_dir / "final_video.mp4"
-                if not video_file.exists():
-                    video_file = Path("output/final_video.mp4")
-                thumb_file = out_dir / "thumbnail.jpg"
-                if not thumb_file.exists():
-                    thumb_file = Path("output/thumbnail.jpg")
+            out_dir = Path(run_dir) if run_dir else Path("output")
+            video_file = out_dir / "final_video.mp4"
+            if not video_file.exists():
+                video_file = Path("output/final_video.mp4")
+            thumb_file = out_dir / "thumbnail.jpg"
+            if not thumb_file.exists():
+                thumb_file = Path("output/thumbnail.jpg")
 
-                try:
-                    video_id, youtube_error = run_stage_with_timeout(
-                        "YouTube Upload",
-                        600,
-                        perform_youtube_upload,
-                        video_file=video_file,
-                        title=title,
-                        description=description,
-                        tags=tags,
-                        privacy=youtube_privacy,
-                        channel=youtube_channel,
-                        thumbnail_path=thumb_file,
-                        run_dir=out_dir,
-                        run_id=run_id,
-                    )
-                except TimeoutError as t_err:
-                    youtube_error = "YouTube upload timed out after 600s limit: the video file is large and network upload took longer than allowed. Your video was successfully created and is saved on disk ready to preview, download, or publish manually."
-                    video_id = None
-                    print(f"⚠️ {youtube_error}")
-                except Exception as yt_err:
-                    youtube_error = str(yt_err)
-                    video_id = None
-                    print(f"⚠️ YouTube upload error: {yt_err}")
+            try:
+                video_id, youtube_error = run_stage_with_timeout(
+                    "YouTube Upload",
+                    600,
+                    perform_youtube_upload,
+                    video_file=video_file,
+                    title=title,
+                    description=description,
+                    tags=tags,
+                    privacy=youtube_privacy,
+                    channel=youtube_channel,
+                    thumbnail_path=thumb_file,
+                    run_dir=out_dir,
+                    run_id=run_id,
+                )
+            except TimeoutError as t_err:
+                youtube_error = "YouTube upload timed out after 600s limit: the video file is large and network upload took longer than allowed. Your video was successfully created and is saved on disk ready to preview, download, or publish manually."
+                video_id = None
+                print(f"⚠️ {youtube_error}")
+            except Exception as yt_err:
+                youtube_error = str(yt_err)
+                video_id = None
+                print(f"⚠️ YouTube upload error: {yt_err}")
 
     else:
 
