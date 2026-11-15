@@ -905,14 +905,24 @@ def create_playwright_canva_thumbnail(title, aspect_ratio="16:9", assets_dir=Non
         except Exception:
             pass
 
-        if not bg_image_path and numbered_images:
-            bg_image_path = numbered_images[0]
+        if is_bb_run:
+            bb_house_p = ROOT / "assets" / "entities" / "bigg_boss_telugu" / "image.jpg"
+            bb_host_p = ROOT / "assets" / "entities" / "nagarjuna_akkineni" / "image.jpg"
+            if not bg_image_path and bb_house_p.exists():
+                bg_image_path = bb_house_p
+            if bb_host_p.exists():
+                ev_left_img = bb_host_p
+            elif len(numbered_images) >= 2:
+                ev_left_img = numbered_images[1]
+        else:
+            if not bg_image_path and numbered_images:
+                bg_image_path = numbered_images[0]
 
-        # Evidence image (scene 2 or secondary scene)
-        if len(numbered_images) >= 2:
-            ev_left_img = numbered_images[1]
-        elif len(numbered_images) == 1 and numbered_images[0] != bg_image_path:
-            ev_left_img = numbered_images[0]
+            # Evidence image (scene 2 or secondary scene)
+            if len(numbered_images) >= 2:
+                ev_left_img = numbered_images[1]
+            elif len(numbered_images) == 1 and numbered_images[0] != bg_image_path:
+                ev_left_img = numbered_images[0]
 
         out_png = out_dir / "thumbnail_prasad_16_9.png"
         res = render_prasad_tech_thumbnail(

@@ -724,3 +724,424 @@ def render_provider_audit_card():
         idx += 1
 
     st.markdown("</div></div>", unsafe_allow_html=True)
+
+
+# ============================================================
+# INTERACTIVE AI BUTTERFLY COMPANION WIDGET
+# ============================================================
+
+def render_ai_butterfly_companion():
+    """
+    Renders the modern, playful floating AI Butterfly Companion on the Streamlit dashboard.
+    Features:
+      1. Ethereal 3D animated cyber butterfly with fluttering wings and bioluminescent glow.
+      2. Playful Evasion & Perching: when user tries to hover/catch it, it flutters gracefully to perch on headlines/controls!
+      3. Real-time Live Status Ticker: every second streams live pipeline steps (percentage, current task, next step).
+      4. Context-aware Interactive Guide: explains page controls (Topic, Voice, Aspect, YouTube Mode, Generate) on hover/click.
+    """
+    companion_html = """
+<div id="ai-companion-root" style="position: fixed; top: 85px; right: 28px; z-index: 9999999; pointer-events: auto; transition: left 0.85s cubic-bezier(0.22, 1, 0.36, 1), top 0.85s cubic-bezier(0.22, 1, 0.36, 1); font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;">
+    <div id="companion-bubble" style="
+        background: rgba(6, 20, 32, 0.92);
+        backdrop-filter: blur(24px);
+        -webkit-backdrop-filter: blur(24px);
+        border: 1px solid rgba(56, 189, 248, 0.45);
+        border-radius: 18px;
+        padding: 12px 16px;
+        width: 290px;
+        max-width: 85vw;
+        box-shadow: 0 16px 36px rgba(0, 0, 0, 0.65), 0 0 25px rgba(6, 182, 212, 0.25);
+        margin-bottom: 8px;
+        transition: all 0.3s ease;
+        position: relative;
+    ">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <div id="companion-badge" style="
+                background: rgba(45, 212, 191, 0.15);
+                border: 1px solid rgba(45, 212, 191, 0.4);
+                color: #2dd4bf;
+                font-size: 0.72rem;
+                font-weight: 700;
+                letter-spacing: 0.05em;
+                padding: 2px 8px;
+                border-radius: 20px;
+                display: flex;
+                align-items: center;
+                gap: 5px;
+            ">
+                <span id="companion-dot" style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #2dd4bf; box-shadow: 0 0 8px #2dd4bf; animation: pulse-dot 1.5s infinite;"></span>
+                <span id="companion-badge-text">AI ASSISTANT</span>
+            </div>
+            <div style="display: flex; gap: 4px; align-items: center;">
+                <button id="companion-min-btn" title="Toggle Bubble" style="
+                    background: transparent;
+                    border: none;
+                    color: #94a3b8;
+                    cursor: pointer;
+                    font-size: 0.85rem;
+                    padding: 0 4px;
+                    line-height: 1;
+                ">━</button>
+            </div>
+        </div>
+
+        <div id="companion-body">
+            <div id="companion-main-msg" style="
+                color: #f1f5f9;
+                font-size: 0.85rem;
+                font-weight: 600;
+                line-height: 1.35;
+                margin-bottom: 4px;
+            ">
+                ✨ నమస్తే! మీ AI వీడియో అసిస్టెంట్‌ని. టాపిక్ ఇవ్వగానే వీడియో రెడీ చేస్తా!
+            </div>
+            
+            <div id="companion-next-step" style="
+                color: #38bdf8;
+                font-size: 0.75rem;
+                font-weight: 500;
+                line-height: 1.3;
+                display: flex;
+                align-items: center;
+                gap: 4px;
+            ">
+                <span>⏩</span> <span id="companion-next-text">Next: Pick a topic or hit Generate!</span>
+            </div>
+
+            <div id="companion-prog-wrap" style="
+                display: none;
+                width: 100%;
+                height: 5px;
+                background: rgba(255, 255, 255, 0.1);
+                border-radius: 6px;
+                margin-top: 8px;
+                overflow: hidden;
+            ">
+                <div id="companion-prog-bar" style="
+                    width: 0%;
+                    height: 100%;
+                    background: linear-gradient(90deg, #06b6d4, #38bdf8, #a855f7);
+                    transition: width 0.4s ease;
+                    border-radius: 6px;
+                "></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3D BUTTERFLY SPRITE -->
+    <div id="companion-butterfly" style="
+        width: 58px;
+        height: 48px;
+        cursor: grab;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        filter: drop-shadow(0 0 14px rgba(56, 189, 248, 0.85));
+        animation: bobbing 3.2s infinite ease-in-out;
+        transform-origin: center center;
+        user-select: none;
+    ">
+        <svg viewBox="0 0 100 80" width="58" height="48" style="overflow: visible;">
+            <defs>
+                <linearGradient id="bf-grad-left" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#38bdf8" />
+                    <stop offset="50%" stop-color="#06b6d4" />
+                    <stop offset="100%" stop-color="#9333ea" />
+                </linearGradient>
+                <linearGradient id="bf-grad-right" x1="100%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stop-color="#38bdf8" />
+                    <stop offset="50%" stop-color="#06b6d4" />
+                    <stop offset="100%" stop-color="#9333ea" />
+                </linearGradient>
+                <filter id="neon-glow" x="-20%" y="-20%" width="140%" height="140%">
+                    <feGaussianBlur stdDeviation="3" result="blur" />
+                    <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                </filter>
+            </defs>
+
+            <!-- LEFT WINGS -->
+            <g id="bf-wing-l" style="transform-origin: 50px 40px; animation: flap-left 0.24s infinite alternate ease-in-out;">
+                <!-- Forewing -->
+                <path d="M 50 38 C 42 12, 10 5, 2 24 C -4 38, 20 54, 50 42 Z" fill="url(#bf-grad-left)" opacity="0.92" stroke="#e0f2fe" stroke-width="1.2" />
+                <path d="M 46 36 C 36 20, 16 16, 10 26 C 6 34, 24 44, 46 38 Z" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="0.8" />
+                <!-- Hindwing -->
+                <path d="M 50 42 C 40 50, 18 56, 16 68 C 14 78, 38 78, 50 48 Z" fill="url(#bf-grad-left)" opacity="0.85" stroke="#bae6fd" stroke-width="1" />
+            </g>
+
+            <!-- RIGHT WINGS -->
+            <g id="bf-wing-r" style="transform-origin: 50px 40px; animation: flap-right 0.24s infinite alternate ease-in-out;">
+                <!-- Forewing -->
+                <path d="M 50 38 C 58 12, 90 5, 98 24 C 104 38, 80 54, 50 42 Z" fill="url(#bf-grad-right)" opacity="0.92" stroke="#e0f2fe" stroke-width="1.2" />
+                <path d="M 54 36 C 64 20, 84 16, 90 26 C 94 34, 76 44, 54 38 Z" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="0.8" />
+                <!-- Hindwing -->
+                <path d="M 50 42 C 60 50, 82 56, 84 68 C 86 78, 62 78, 50 48 Z" fill="url(#bf-grad-right)" opacity="0.85" stroke="#bae6fd" stroke-width="1" />
+            </g>
+
+            <!-- BODY & HEAD -->
+            <ellipse cx="50" cy="40" rx="3.5" ry="14" fill="#0f172a" stroke="#38bdf8" stroke-width="1.2" filter="url(#neon-glow)" />
+            <circle cx="50" cy="24" r="3" fill="#2dd4bf" />
+            <!-- Antennae -->
+            <path d="M 48 22 Q 40 10 34 14" fill="none" stroke="#38bdf8" stroke-width="1.2" stroke-linecap="round" />
+            <path d="M 52 22 Q 60 10 66 14" fill="none" stroke="#38bdf8" stroke-width="1.2" stroke-linecap="round" />
+            <circle cx="34" cy="14" r="1.5" fill="#f43f5e" />
+            <circle cx="66" cy="14" r="1.5" fill="#f43f5e" />
+        </svg>
+    </div>
+</div>
+
+<style>
+@keyframes flap-left {
+    0% { transform: rotateY(0deg) rotateZ(0deg); }
+    100% { transform: rotateY(65deg) rotateZ(-4deg); }
+}
+@keyframes flap-right {
+    0% { transform: rotateY(0deg) rotateZ(0deg); }
+    100% { transform: rotateY(-65deg) rotateZ(4deg); }
+}
+@keyframes bobbing {
+    0%, 100% { transform: translateY(0px) rotate(0deg); }
+    50% { transform: translateY(-7px) rotate(2deg); }
+}
+@keyframes pulse-dot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.8); }
+}
+.butterfly-flying #bf-wing-l {
+    animation-duration: 0.08s !important;
+}
+.butterfly-flying #bf-wing-r {
+    animation-duration: 0.08s !important;
+}
+.sparkle-particle {
+    position: fixed;
+    pointer-events: none;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #38bdf8 0%, #a855f7 100%);
+    box-shadow: 0 0 8px #38bdf8;
+    animation: fade-sparkle 0.8s forwards ease-out;
+    z-index: 9999998;
+}
+@keyframes fade-sparkle {
+    0% { opacity: 1; transform: scale(1) translateY(0); }
+    100% { opacity: 0; transform: scale(0.2) translateY(18px); }
+}
+</style>
+
+<script>
+(function() {
+    if (window._aiCompanionLoaded) return;
+    window._aiCompanionLoaded = true;
+
+    const root = document.getElementById("ai-companion-root");
+    const butterfly = document.getElementById("companion-butterfly");
+    const bubble = document.getElementById("companion-bubble");
+    const bodyEl = document.getElementById("companion-body");
+    const minBtn = document.getElementById("companion-min-btn");
+    const badgeEl = document.getElementById("companion-badge");
+    const badgeText = document.getElementById("companion-badge-text");
+    const dotEl = document.getElementById("companion-dot");
+    const mainMsg = document.getElementById("companion-main-msg");
+    const nextText = document.getElementById("companion-next-text");
+    const progWrap = document.getElementById("companion-prog-wrap");
+    const progBar = document.getElementById("companion-prog-bar");
+
+    let isMinimized = false;
+    let isEvading = false;
+    let lastStatusRunning = false;
+
+    // Toggle bubble minimize
+    if (minBtn) {
+        minBtn.addEventListener("click", function(e) {
+            e.stopPropagation();
+            isMinimized = !isMinimized;
+            bodyEl.style.display = isMinimized ? "none" : "block";
+            minBtn.textContent = isMinimized ? "➕" : "━";
+        });
+    }
+
+    // Spawn fairy dust sparkles
+    function spawnSparkles(x, y, count=5) {
+        for (let i = 0; i < count; i++) {
+            const sp = document.createElement("div");
+            sp.className = "sparkle-particle";
+            sp.style.left = (x + (Math.random() * 30 - 15)) + "px";
+            sp.style.top = (y + (Math.random() * 30 - 15)) + "px";
+            document.body.appendChild(sp);
+            setTimeout(() => sp.remove(), 800);
+        }
+    }
+
+    // Playful Evasion & Perching: flies away when user hovers/tries to catch it!
+    const playfulTeluguMessages = [
+        "పట్టుకోలేరు! 🦋😜 Catch me if you can!",
+        "ఇక్కడ వాలాను! 🌸 ఏం కావాలో చెప్పు...",
+        "హాహా! నేను వేగంగా ఎగురుతా! 💨✨",
+        "లెట్స్ మేక్ ఏ వైరల్ హిట్ వీడియో! 🎬🔥",
+        "బిగ్ బాస్ రోస్టింగ్ చేద్దామా? లేక టెక్ ఫ్యాక్టా? 📱"
+    ];
+
+    function evadeAndPerch() {
+        if (isEvading) return;
+        isEvading = true;
+
+        const curRect = root.getBoundingClientRect();
+        spawnSparkles(curRect.left + 30, curRect.top + 30, 8);
+        butterfly.classList.add("butterfly-flying");
+
+        // Perch candidates: headers, cards, or safe viewport margins
+        const candidates = document.querySelectorAll(".brand, .hero-title, .glass-card, [data-testid='stSelectbox'], .stButton");
+        let targetX = 0;
+        let targetY = 0;
+
+        if (candidates.length > 0 && Math.random() > 0.35) {
+            const randElem = candidates[Math.floor(Math.random() * candidates.length)];
+            const rRect = randElem.getBoundingClientRect();
+            targetX = Math.max(20, Math.min(window.innerWidth - 320, rRect.left + (Math.random() * 40 - 20)));
+            targetY = Math.max(70, Math.min(window.innerHeight - 180, rRect.top - 50));
+        } else {
+            // Free random coordinates in viewport
+            targetX = Math.floor(Math.random() * (window.innerWidth - 340)) + 30;
+            targetY = Math.floor(Math.random() * (window.innerHeight - 240)) + 75;
+        }
+
+        root.style.left = targetX + "px";
+        root.style.top = targetY + "px";
+        root.style.right = "auto";
+
+        // Show playful evasion dialogue if not actively rendering video
+        if (!lastStatusRunning) {
+            const randMsg = playfulTeluguMessages[Math.floor(Math.random() * playfulTeluguMessages.length)];
+            mainMsg.textContent = randMsg;
+            nextText.textContent = "Hover over controls for instant tips!";
+        }
+
+        // Particle trail during flight
+        let trailInterval = setInterval(() => {
+            const r = root.getBoundingClientRect();
+            spawnSparkles(r.left + 35, r.top + 35, 3);
+        }, 120);
+
+        setTimeout(() => {
+            clearInterval(trailInterval);
+            butterfly.classList.remove("butterfly-flying");
+            isEvading = false;
+        }, 850);
+    }
+
+    if (butterfly) {
+        butterfly.addEventListener("mouseenter", evadeAndPerch);
+        butterfly.addEventListener("click", evadeAndPerch);
+    }
+
+    // Context-Aware Inspector: explains interactive inputs on hover
+    function registerInteractiveInspectors() {
+        // Topic Input
+        document.querySelectorAll("input[type='text'], textarea").forEach(input => {
+            if (!input._hasAiHover) {
+                input._hasAiHover = true;
+                input.addEventListener("focus", () => {
+                    if (!lastStatusRunning) {
+                        mainMsg.textContent = "💡 Topic Box: తెలుగు బిగ్ బాస్ లేదా టెక్ ఫ్యాక్ట్స్ టాపిక్ ఇవ్వండి!";
+                        nextText.textContent = "Ground-truth filters will block old seasons & wrong actors.";
+                    }
+                });
+            }
+        });
+
+        // Selectboxes
+        document.querySelectorAll("[data-testid='stSelectbox']").forEach(box => {
+            if (!box._hasAiHover) {
+                box._hasAiHover = true;
+                box.addEventListener("mouseenter", () => {
+                    if (!lastStatusRunning) {
+                        const txt = box.textContent || "";
+                        if (txt.includes("Voice") || txt.includes("Shruti") || txt.includes("Mohan")) {
+                            mainMsg.textContent = "🎙️ Voice Tuning: శృతి వాయిస్ - వ్యంగ్యమైన, సహజమైన తెలుగు రోస్ట్!";
+                            nextText.textContent = "Intrusive SFX & 'బాస్' fillers are permanently disabled.";
+                        } else if (txt.includes("Privacy") || txt.includes("YouTube")) {
+                            mainMsg.textContent = "🔒 YouTube Destination: డూప్లికేట్స్ ఆటోమేటిక్‌గా ప్రైవేట్‌గా అప్‌లోడ్ అవుతాయి!";
+                            nextText.textContent = "Preserves channel authority while saving revision.";
+                        } else if (txt.includes("Aspect") || txt.includes("9:16") || txt.includes("16:9")) {
+                            mainMsg.textContent = "📱 9:16 Shorts Mode: 100% రీల్స్ & షార్ట్స్ ఆప్టిమైజ్డ్!";
+                            nextText.textContent = "Includes dynamic HarfBuzz Telugu pop-up subtitles.";
+                        }
+                    }
+                });
+            }
+        });
+
+        // Generate Buttons
+        document.querySelectorAll("button").forEach(btn => {
+            if (!btn._hasAiHover && !btn.id) {
+                btn._hasAiHover = true;
+                btn.addEventListener("mouseenter", () => {
+                    if (!lastStatusRunning && (btn.textContent.includes("Generate") || btn.textContent.includes("Create"))) {
+                        mainMsg.textContent = "🚀 Launch Video: Groq ఫాస్ట్ ఫెయిల్‌ఓవర్‌తో 2-3 నిమిషాల్లో రెడీ!";
+                        nextText.textContent = "Click to run end-to-end 4K video pipeline.";
+                    }
+                });
+            }
+        });
+    }
+
+    // Real-Time Poller: fetches static/pipeline_status.json every 1000ms
+    function fetchLiveTelemetry() {
+        fetch("/app/static/pipeline_status.json?t=" + Date.now())
+            .then(res => {
+                if (!res.ok) throw new Error("Status unavailable");
+                return res.json();
+            })
+            .then(data => {
+                if (!data) return;
+                const isRunning = !!data.is_running;
+                lastStatusRunning = isRunning;
+
+                if (isRunning) {
+                    // Pipeline is actively executing!
+                    badgeEl.style.background = "rgba(6, 182, 212, 0.25)";
+                    badgeEl.style.borderColor = "#38bdf8";
+                    badgeEl.style.color = "#38bdf8";
+                    dotEl.style.background = "#38bdf8";
+                    dotEl.style.boxShadow = "0 0 10px #38bdf8";
+                    badgeText.textContent = `RUNNING [${data.percent}%] • STEP ${data.step_number || 1}/${data.total_steps || 7}`;
+
+                    mainMsg.textContent = `⚙️ ${data.stage || 'Processing'}: ${data.current_task || 'Working...'}`;
+                    nextText.textContent = data.next_task ? `⏩ Next: ${data.next_task}` : "Finalizing video assets...";
+
+                    progWrap.style.display = "block";
+                    progBar.style.width = Math.max(5, data.percent) + "%";
+
+                    // Keep un-minimized during active run
+                    if (isMinimized) {
+                        isMinimized = false;
+                        bodyEl.style.display = "block";
+                        minBtn.textContent = "━";
+                    }
+                } else {
+                    // Idle state
+                    progWrap.style.display = "none";
+                    badgeEl.style.background = "rgba(45, 212, 191, 0.15)";
+                    badgeEl.style.borderColor = "rgba(45, 212, 191, 0.4)";
+                    badgeEl.style.color = "#2dd4bf";
+                    dotEl.style.background = "#2dd4bf";
+                    dotEl.style.boxShadow = "0 0 8px #2dd4bf";
+                    badgeText.textContent = "STUDIO READY";
+                }
+            })
+            .catch(() => {
+                // Fallback polling silence
+            });
+    }
+
+    // Run polling and inspector setup
+    setInterval(fetchLiveTelemetry, 1000);
+    setInterval(registerInteractiveInspectors, 2500);
+    fetchLiveTelemetry();
+    registerInteractiveInspectors();
+})();
+</script>
+"""
+    st.markdown(companion_html, unsafe_allow_html=True)
+

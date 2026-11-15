@@ -22,6 +22,13 @@ POLITICAL_URL_SEGMENTS: List[str] = [
     "/national/", "/crime/", "/assembly/", "/election/", "/elections/"
 ]
 
+NON_BB_CELEBS: List[str] = [
+    "allu arjun", "allu_arjun", "prabhas", "kalki", "devara", "ram charan",
+    "ram_charan", "game changer", "game_changer", "mahesh babu", "mahesh_babu",
+    "mahesh", "pawan kalyan", "pawan_kalyan", "chiranjeevi", "balakrishna",
+    "sukumar", "dil raju", "rajamouli", "ss rajamouli", "రాజమౌళి", "మహేష్ బాబు"
+]
+
 PRIOR_SEASON_REGEXES: List[str] = [
     r"\bseason\s*[-_]?(?:telugu\s*[-_]?)?([1-9]|1[1-9])\b",
     r"\bbigg\s*[-_]?boss\s*[-_]?(?:telugu\s*[-_]?)?([1-9]|1[1-9])\b",

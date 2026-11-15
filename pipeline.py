@@ -794,6 +794,19 @@ def perform_youtube_upload(
         except Exception:
             pass
 
+    # If privacy is private or duplicate run, archive to output/private_runs/<run_id>
+    if (privacy == "private" or "part 2" in title.lower() or "update" in title.lower()) and run_dir:
+        try:
+            import shutil
+            priv_dir = Path("output/private_runs") / Path(run_dir).name
+            priv_dir.mkdir(parents=True, exist_ok=True)
+            for item in Path(run_dir).iterdir():
+                if item.is_file():
+                    shutil.copy2(item, priv_dir / item.name)
+            print(f"📁 [Private Folder Sync] Run archived to private directory: {priv_dir}")
+        except Exception as priv_err:
+            print(f"Private folder notice: {priv_err}")
+
     return video_id, youtube_error
 
 
@@ -1185,6 +1198,35 @@ def generate_multi_media_video(
     failing_component = None
     feedback = None
 
+    _raw_progress_callback = progress_callback
+    def _unified_progress_callback(pct, text=""):
+        try:
+            from agents.companion_agent import update_companion_status
+            s_name = str(text).split("...")[0].replace("⏳", "").replace("🎨", "").replace("🎙️", "").replace("🎬", "").replace("📰", "").replace("⚖️", "").strip() if text else "Processing"
+            s_num = 1 if pct <= 15 else (2 if pct <= 30 else (3 if pct <= 50 else (4 if pct <= 70 else (5 if pct <= 85 else (6 if pct <= 95 else 7)))))
+            update_companion_status(
+                stage=s_name or "Processing",
+                percent=pct,
+                current_task=text or "Composing video assets...",
+                is_running=True,
+                step_number=s_num,
+                total_steps=7,
+            )
+        except Exception:
+            pass
+        if _raw_progress_callback:
+            try:
+                _raw_progress_callback(pct, text=text)
+            except TypeError:
+                try:
+                    _raw_progress_callback(pct)
+                except Exception:
+                    pass
+            except Exception:
+                pass
+
+    progress_callback = _unified_progress_callback
+
     if not topic or not topic.strip():
         raise RuntimeError(
             "Please enter a topic or video idea."
@@ -1202,11 +1244,25 @@ def generate_multi_media_video(
         print(f"⚠️ Workspace clean notice: {clean_err}")
 
     # Record topic in used topics ledger to guarantee future suggestions are novel
+    is_duplicate_run = False
     try:
-        from agents.topic_suggester import record_used_topic
+        from agents.topic_suggester import record_used_topic, load_used_topics
+        from agents.youtube_agent import load_uploaded_videos, normalize_title
+        used_topics_set = load_used_topics()
+        norm_t = normalize_title(topic)
+        if any(normalize_title(ut) == norm_t for ut in used_topics_set):
+            is_duplicate_run = True
+        upl_vids = load_uploaded_videos()
+        if any(normalize_title(uv) == norm_t for uv in upl_vids.keys()):
+            is_duplicate_run = True
         record_used_topic(topic)
     except Exception:
         pass
+
+    if is_duplicate_run and youtube_upload:
+        if youtube_privacy != "private":
+            print(f"🔒 [Duplicate/Re-run Detected] '{topic}' was already created/uploaded previously. Setting YouTube upload directly to PRIVATE mode to prevent duplicate channel pollution.")
+            youtube_privacy = "private"
 
     # Write topic files so downstream agents (voice, thumbnail, canvas) have guaranteed topic & tone context
     try:
@@ -2617,27 +2673,23 @@ def generate_multi_media_video(
 
         if youtube_upload:
             if upload_blocked:
-                print()
-                print("=" * 60)
-                print("🛑 [Phase 7 Quality Gate] YouTube upload BLOCKED.")
+                crit_summary = "Quality check review / retry"
                 if has_gate_critical:
                     crit_msgs = [f"[{r.gate_name}] {iss.rule}: {iss.actual}" for r in [gate_d] for iss in r.issues if iss.severity == "CRITICAL"]
                     crit_summary = "; ".join(crit_msgs[:2]) if crit_msgs else "Pre-upload barrier defect"
-                    print(f"   Reason: Validation gate failure: {crit_summary}")
-                    print(f"   AI Review Score: {review_score_final}/100")
-                    youtube_error = f"Upload skipped: Validation gate defect ({crit_summary}) [Review Score: {review_score_final}/100]."
-                else:
-                    print(f"   Reason: Video failed AI Review after {MAX_REVIEW_ATTEMPTS} healing attempts.")
-                    print(f"   Score: {review_score_final}/100 (< 65) or Critical Issues: {critical_issues_final}")
-                    youtube_error = f"Upload skipped: Review score below threshold ({review_score_final}/100) after {MAX_REVIEW_ATTEMPTS} attempts."
-                print("   Skipping upload to preserve channel authority and retention metrics.")
+                print()
                 print("=" * 60)
-                video_id = None
-            else:
-                progress.progress(
-                    98,
-                    text=f"Uploading video to YouTube ({youtube_channel})...",
-                )
+                print(f"🔒 [Auto-Private Safe Mode] Quality notice ({crit_summary}).")
+                print("   Routing video directly to YouTube as PRIVATE (never blocked or dropped).")
+                print("   You can inspect this video in YouTube Studio and manage publication safely.")
+                print("=" * 60)
+                youtube_privacy = "private"
+                upload_blocked = False
+
+            progress.progress(
+                98,
+                text=f"Uploading video to YouTube ({youtube_channel} - {youtube_privacy.upper()})...",
+            )
                 out_dir = Path(run_dir) if run_dir else Path("output")
                 video_file = out_dir / "final_video.mp4"
                 if not video_file.exists():
@@ -2819,6 +2871,12 @@ def generate_multi_media_video(
         (OUTPUT_DIR / "pipeline_status.json").write_text(
             json.dumps(status_data, indent=2), encoding="utf-8"
         )
+    except Exception:
+        pass
+
+    try:
+        from agents.companion_agent import reset_companion_status
+        reset_companion_status("Video generation completed successfully")
     except Exception:
         pass
 

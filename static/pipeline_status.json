@@ -1,0 +1,13 @@
+{
+  "is_running": false,
+  "stage": "Studio Ready",
+  "step_number": 0,
+  "total_steps": 7,
+  "percent": 100,
+  "current_task": "Studio Ready: Choose a topic and create video!",
+  "next_task": "Script generation with Groq AI",
+  "details": "Ready to compose 4K high-retention video with natural voice.",
+  "elapsed_sec": 0,
+  "updated_at": 1794747750.207453,
+  "last_run_result": "Unit test completed"
+}

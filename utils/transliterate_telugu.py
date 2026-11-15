@@ -136,6 +136,15 @@ COMMON_TELUGU_PHONETIC_LOANWORDS = [
     (r"\bHouse\b|\bhouse\b", "హౌస్"),
     (r"\bHousemates\b|\bhouse\s*mates\b", "హౌస్‌మేట్స్"),
     (r"\bContent\b|\bcontent\b", "కంటెంట్"),
+    (r"రాహిత్\s*పట్న[మ్ం]|\bRohit[h]?\s*Patnam\b", "రోహిత్ పట్నం"),
+    (r"రాహిత్|\bRohith\b|\bRohit\b", "రోహిత్"),
+    (r"సౌధీర్\s*రెడ్డి|\bSudheer\s*Reddy\b", "సుధీర్ రెడ్డి"),
+    (r"సౌధీర్|\bSudheer\b", "సుధీర్"),
+    (r"నరగజున|\bNagarjuna\b", "నాగార్జున"),
+    (r"వీకే\s*థ్రీ|\bWeek\s*3\b", "వీక్ 3"),
+    (r"యార్గ్ట్‌తో|యార్గ్ట్|\bargument\b", "ఆర్గ్యుమెంట్‌తో"),
+    (r"గ్రీల్\s*చేశారు|\bgrilled\b", "గ్రిల్ చేశారు"),
+    (r"వోట్\s*ఫ్యాటిగ్|\bvote\s*fatigue\b", "ఓటింగ్ ట్రెండ్స్"),
 ]
 
 

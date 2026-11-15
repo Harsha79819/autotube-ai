@@ -716,6 +716,19 @@ def perform_youtube_upload(
         except Exception:
             pass
 
+    # If privacy is private or duplicate run, archive to output/private_runs/<run_id>
+    if (privacy == "private" or "part 2" in title.lower() or "update" in title.lower()) and run_dir:
+        try:
+            import shutil
+            priv_dir = Path("output/private_runs") / Path(run_dir).name
+            priv_dir.mkdir(parents=True, exist_ok=True)
+            for item in Path(run_dir).iterdir():
+                if item.is_file():
+                    shutil.copy2(item, priv_dir / item.name)
+            print(f"📁 [Private Folder Sync] Run archived to private directory: {priv_dir}")
+        except Exception as priv_err:
+            print(f"Private folder notice: {priv_err}")
+
     return video_id, youtube_error
 
 
@@ -2233,9 +2246,10 @@ render_logout_button()
 # GLASS UI CSS
 # ============================================================
 
-from liquid_ui import inject_hud_glass_css, render_provider_audit_card
+from liquid_ui import inject_hud_glass_css, render_provider_audit_card, render_ai_butterfly_companion
 
 inject_hud_glass_css()
+render_ai_butterfly_companion()
 
 
 

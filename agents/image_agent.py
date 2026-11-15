@@ -299,6 +299,20 @@ def is_blacklisted_candidate(
         if "sudigali sudheer" not in t_low and "sudigali sudheer" not in top_low:
             return True
 
+    # Strict Tollywood Celebrity & Director firewall for Reality TV / Bigg Boss topics
+    is_bb_run = any(b in top_low or b in t_low for b in ("bigg boss", "bb10", "bb 10"))
+    if is_bb_run:
+        from data.bb10_contestants import NON_BB_CELEBS
+        for star in NON_BB_CELEBS:
+            if star in c_meta and star not in top_low and star not in t_low:
+                return True
+        for star_extra in (
+            "rajamouli", "ss rajamouli", "రాజమౌళి", "mahesh babu", "మహేష్ బాబు",
+            "mahesh", "trivikram", "koratala", "sukumar", "prashanth neel", "dil raju"
+        ):
+            if star_extra in c_meta and star_extra not in top_low and star_extra not in t_low:
+                return True
+
     return False
 
 

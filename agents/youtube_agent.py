@@ -538,8 +538,14 @@ def upload_video(
 
         print(f"🔄 [Auto-Disambiguation] Title '{title}' previously uploaded (ID: {prev_id}). Renaming to '{disambiguated_title}' to guarantee upload success.")
         title = disambiguated_title
+        if privacy != "private":
+            print(f"🔒 [Duplicate/Re-run Protection] Topic '{title}' was already uploaded previously (ID: {prev_id}). Auto-setting privacy directly to PRIVATE.")
+            privacy = "private"
     elif title in uploaded_videos and is_force_reupload:
         print(f"ℹ️ Re-uploading corrected video with title: '{title}' (previous ID: {uploaded_videos[title]})")
+        if privacy != "private":
+            print(f"🔒 [Re-run Protection] Re-uploading revision. Auto-setting privacy directly to PRIVATE to protect channel authority.")
+            privacy = "private"
 
     # Similar title / same-story disambiguation
     for (
@@ -561,6 +567,9 @@ def upload_video(
             else:
                 title = f"{title[:75]} | Update ({cur_tag})"
             print(f"🔄 [Auto-Disambiguation] Highly similar story to '{previous_title}' (ID: {previous_video_id}). Renamed to: '{title}'")
+            if privacy != "private":
+                print(f"🔒 [Duplicate/Re-run Protection] Similar story previously uploaded (ID: {previous_video_id}). Auto-setting privacy directly to PRIVATE.")
+                privacy = "private"
             break
 
     # --------------------------------------------------------
