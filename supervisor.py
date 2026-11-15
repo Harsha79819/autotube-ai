@@ -396,7 +396,7 @@ def heal_network_or_quota(stage_name, context=None):
                 vis_tag = "Bigg Boss Telugu" if ("telugu" in raw_topic_lower or is_tel or "bb" in raw_topic_lower) else "Bigg Boss"
                 if tel:
                     base = [
-                        (f"హాయ్ ఫ్రెండ్స్! బిగ్ బాస్ హౌస్‌లో జరిగిన రచ్చ, లేటెస్ట్ హై-వోల్టేజ్ డ్రామా ఇప్పుడు చూద్దాం.",
+                        (f"బిగ్ బాస్ హౌస్‌లో {clean_topic} రచ్చతో హై-వోల్టేజ్ డ్రామా పీక్స్‌కి చేరింది బాస్!",
                          f"{vis_tag} house dramatic moment | {vis_tag} contestants argument"),
                         (f"ముఖ్యంగా హౌస్‌లో కంటెస్టెంట్స్ మధ్య జరిగిన తీవ్ర వాగ్వాదం మరియు నామినేషన్ల గొడవలు పీక్స్‌కి చేరాయి.",
                          f"{vis_tag} nomination task fight | {vis_tag} housemates intense conflict"),
@@ -425,7 +425,7 @@ def heal_network_or_quota(stage_name, context=None):
                     ]
                 else:
                     base = [
-                        (f"Welcome back! Let's break down the wild high-voltage drama unfolding in the Bigg Boss house today.",
+                        (f"The high-voltage drama inside the Bigg Boss house regarding {clean_topic} just reached a boiling point!",
                          f"{vis_tag} house dramatic moment | {vis_tag} contestants argument"),
                         (f"The latest nominations sparked heated arguments, with contestants clashing over petty issues.",
                          f"{vis_tag} nomination task fight | {vis_tag} housemates intense conflict"),
