@@ -1208,6 +1208,23 @@ def generate_multi_media_video(
     except Exception:
         pass
 
+    # Write topic files so downstream agents (voice, thumbnail, canvas) have guaranteed topic & tone context
+    try:
+        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        (OUTPUT_DIR / "topic.txt").write_text(str(topic).strip(), encoding="utf-8")
+        (OUTPUT_DIR / "topic.json").write_text(
+            json.dumps({
+                "topic": str(topic).strip(),
+                "content_type": content_type,
+                "tone": tone or "roast",
+                "language_style": language_style,
+                "channel": youtube_channel,
+            }, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    except Exception as top_err:
+        print(f"⚠️ Topic context init notice: {top_err}")
+
     # --------------------------------------------------------
     # OMNI-ROUTE INTELLIGENCE (Dynamic Channel, Voice, Captions)
     # --------------------------------------------------------

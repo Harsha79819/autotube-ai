@@ -3027,9 +3027,9 @@ with st.container():
         is_telugu_lang = "telugu" in str(language_style).lower() or "తెలుగు" in str(language_style)
         if is_telugu_lang:
             voice_options = [
+                "🔥 👩 Shruti (Telugu Female - Sarcastic & Roasting)",
                 "👩 Shruti (Telugu Creator / Anchor) - Conversational",
                 "👨 Mohan (Telugu Creator / Anchor) - Natural Spoken Delivery",
-                "🔥 👩 Shruti (Telugu Female - Sarcastic & Roasting)",
                 "🤖 Clone My Voice with AI (Local XTTS-v2 / OmniVoice)",
                 "🎙️ Use My Own Voice Recording (Upload Audio)",
                 "👨 Adam (Male Creator) - Fast, Crisp & Natural",
@@ -3042,8 +3042,8 @@ with st.container():
             ]
         else:
             voice_options = [
-                "👩 Shruti (Telugu Creator / Anchor) - Conversational",
                 "🔥 👩 Shruti (Telugu Female - Sarcastic & Roasting)",
+                "👩 Shruti (Telugu Creator / Anchor) - Conversational",
                 "👨 Adam (Male Creator) - Fast, Crisp & Natural",
                 "👩 Heart (Female Creator) - Smooth & Conversational",
                 "👨 Michael (News Anchor) - Professional & Authoritative",

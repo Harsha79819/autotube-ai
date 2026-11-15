@@ -758,14 +758,14 @@ async def generate_modulated_telugu_speech(
 
 
 EMOTION_PRESETS = {
-    "deadpan": {"rate": "+12%", "pitch": "+0Hz", "volume": "+0%"},
-    "fake_shock": {"rate": "+16%", "pitch": "+1Hz", "volume": "+2%"},
-    "smug": {"rate": "+14%", "pitch": "+0Hz", "volume": "+0%"},
-    "mock": {"rate": "+15%", "pitch": "+1Hz", "volume": "+1%"},
-    "hype": {"rate": "+18%", "pitch": "+1Hz", "volume": "+2%"},
-    "neutral": {"rate": "+14%", "pitch": "+0Hz", "volume": "+0%"},
-    "neutral setup": {"rate": "+14%", "pitch": "+0Hz", "volume": "+0%"},
-    "dramatic_question": {"rate": "+6%", "pitch": "+0Hz", "volume": "+1%"},  # Slightly slower for dramatic punchline impact
+    "deadpan": {"rate": "+2%", "pitch": "-1Hz", "volume": "+0%"},
+    "fake_shock": {"rate": "+5%", "pitch": "+2Hz", "volume": "+2%"},
+    "smug": {"rate": "+3%", "pitch": "-1Hz", "volume": "+0%"},
+    "mock": {"rate": "+4%", "pitch": "+1Hz", "volume": "+1%"},
+    "hype": {"rate": "+6%", "pitch": "+2Hz", "volume": "+2%"},
+    "neutral": {"rate": "+2%", "pitch": "+0Hz", "volume": "+0%"},
+    "neutral setup": {"rate": "+2%", "pitch": "+0Hz", "volume": "+0%"},
+    "dramatic_question": {"rate": "-1%", "pitch": "+1Hz", "volume": "+1%"},  # Deliberate cadence for dramatic punchline impact
 }
 
 

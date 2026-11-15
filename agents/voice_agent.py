@@ -1328,18 +1328,28 @@ async def create_voice(
 
             # Check topic context to determine if this is really a roast/entertainment topic
             topic_str = ""
-            for t_file in [Path("output/topic.txt"), Path("output/topic.json")]:
-                if t_file.exists():
-                    try:
-                        topic_str = t_file.read_text(encoding="utf-8")
-                        break
-                    except Exception:
-                        pass
+            topic_tone = ""
+            topic_type = ""
+            if Path("output/topic.json").exists():
+                try:
+                    t_data = json.loads(Path("output/topic.json").read_text(encoding="utf-8"))
+                    topic_str = str(t_data.get("topic", ""))
+                    topic_tone = str(t_data.get("tone", "")).lower()
+                    topic_type = str(t_data.get("content_type", "")).lower()
+                except Exception:
+                    pass
+            if not topic_str and Path("output/topic.txt").exists():
+                try:
+                    topic_str = Path("output/topic.txt").read_text(encoding="utf-8").strip()
+                except Exception:
+                    pass
 
             is_explicit_roast = bool(
                 "roast" in voice_lower
                 or "sarcastic" in voice_lower
                 or "te-in-shrutineural-roast" in voice_lower
+                or topic_tone == "roast"
+                or "roast" in topic_type
             )
             is_factual_news = (
                 not is_explicit_roast
