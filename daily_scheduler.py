@@ -54,9 +54,9 @@ DEFAULT_PRIVACY = "public"
 # Master killswitch: All automatic background uploads are enabled when ENABLE_AUTO_UPLOAD=1 is set.
 ENABLE_AUTO_UPLOAD = os.getenv("ENABLE_AUTO_UPLOAD", "0").strip().lower() in ("1", "true", "yes")
 
-# Channel filter for automated background scheduler (default: 'Channel 1'):
-# Allows dedicating automated scheduling strictly to Channel 1, while preserving Channel 2 for manual runs.
-SCHEDULED_CHANNELS = os.getenv("SCHEDULED_CHANNELS", "Channel 1").strip()
+# Channel filter for automated background scheduler (default: 'both'):
+# Automates both Channel 1 (Facts/Tech) and Channel 2 (Bigg Boss/Entertainment)
+SCHEDULED_CHANNELS = os.getenv("SCHEDULED_CHANNELS", "both").strip()
 
 # Target Publish Timing: Videos must be uploaded and LIVE on YouTube BY scheduled_time.
 # Pre-generation lead time triggers production in advance so rendering, compositing, and uploading
@@ -559,7 +559,7 @@ class MultiSlotDailyScheduler:
         If SCHEDULED_CHANNELS='Channel 1', only Channel 1 slots will run automatically.
         Channel 2 is preserved strictly for manual/local runs by the user.
         """
-        sched_ch = os.getenv("SCHEDULED_CHANNELS", "Channel 1").strip().lower()
+        sched_ch = os.getenv("SCHEDULED_CHANNELS", "both").strip().lower()
         if not sched_ch or sched_ch in ("all", "both", "*"):
             return True
         ch_name = slot_conf.get("channel", "").lower()
