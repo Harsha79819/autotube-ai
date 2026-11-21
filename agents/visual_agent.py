@@ -56,8 +56,9 @@ def build_universal_search_query(
     - NEVER inject SHOW_CONTEXT unless content_type == 'reality_tv' and explicitly related.
     """
     from utils.season_guard import is_bigg_boss_topic
-    if content_type == "reality_tv" and show_context and is_bigg_boss_topic(show_context):
-        return f'"{primary_entity}" "{show_context}" {emotion_or_action}'.strip()
+    if content_type == "reality_tv" or (show_context and is_bigg_boss_topic(show_context)):
+        ctx = show_context if show_context and is_bigg_boss_topic(show_context) else "Bigg Boss Telugu 10"
+        return f'"{primary_entity}" "{ctx}" 2026 {emotion_or_action}'.strip()
 
     if is_person is None:
         is_person = content_type in ("cinema", "politics", "reality_tv")
@@ -65,9 +66,9 @@ def build_universal_search_query(
     if content_type in ("business", "tech") and not (is_person and content_type not in ("business", "tech")):
         act_part = f"{emotion_or_action} " if emotion_or_action else ""
         return f'"{primary_entity}" {act_part}modern high quality'.strip()
-    elif content_type in ("cinema", "politics", "reality_tv") or is_person:
+    elif content_type in ("cinema", "politics") or is_person:
         act_part = f"{emotion_or_action} " if emotion_or_action else ""
-        return f'"{primary_entity}" {act_part}face photo OR interview'.strip()
+        return f'"{primary_entity}" {act_part}photo HD'.strip()
     else:
         act_part = f"{emotion_or_action} " if emotion_or_action else ""
         return f'"{primary_entity}" {act_part}high quality HD'.strip()
@@ -489,8 +490,9 @@ def deduplicate_consecutive_assets(
             from utils.season_guard import is_bigg_boss_topic
             from agents.image_agent import find_local_contestant_image
             target_ent = r.get("entity") or ""
-            loc_c = find_local_contestant_image(f"{target_ent} {b_narr}")
-            is_bb_scene = bool(loc_c) or is_bigg_boss_topic(show_context or "") or is_bigg_boss_topic(topic_category or "") or any(k in str(topic_category).lower() for k in ["bigg boss", "reality"])
+            is_bb_context = is_bigg_boss_topic(show_context or "") or is_bigg_boss_topic(topic_category or "") or any(k in str(topic_category).lower() for k in ["bigg boss", "reality"])
+            loc_c = find_local_contestant_image(f"{target_ent} {b_narr}") if is_bb_context else None
+            is_bb_scene = is_bb_context and (bool(loc_c) or "bigg boss" in str(show_context or "").lower() or "bigg boss" in str(topic_category or "").lower())
 
             success = False
             if is_bb_scene:
@@ -515,13 +517,12 @@ def deduplicate_consecutive_assets(
                     try:
                         from agents.typography_card import generate_typography_card
                         av_p = str(loc_c[1]) if loc_c else None
-                        b_lbl = f"{loc_c[0].upper().replace('_', ' ')} • BIGG BOSS 10" if loc_c else (f"{target_ent.upper()} • HIGHLIGHT" if target_ent else "BIGG BOSS TELUGU 10")
+                        b_lbl = f"{loc_c[0].upper().replace('_', ' ')} • BIGG BOSS 10" if loc_c else "BIGG BOSS TELUGU 10"
                         if not av_p:
                             ROOT_DIR = Path(__file__).resolve().parent.parent
                             bb_host = ROOT_DIR / "reference_assets" / "contestants" / "akkineni_nagarjuna.jpg"
                             if bb_host.exists():
                                 av_p = str(bb_host)
-                                b_lbl = "BIGG BOSS TELUGU 10"
                         print(f"🎨 [Visual Dedup {b_id}] Generating Canva editorial card with real photo (avatar={av_p is not None})...")
                         success = generate_typography_card(
                             headline_text=b_narr,

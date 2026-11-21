@@ -256,6 +256,71 @@ def synthesize_viral_topics_omni(
     return scored_topics[:count]
 
 
+class OmniPreFlightGuard:
+    """
+    Omni AI Autonomous Pre-Flight Quality Guard & Auto-Healer:
+    1. Language & Vocabulary Guard: Strictly catches & auto-sanitizes broken machine-translated loanwords
+       ('నాన్‌ఆఫ్', 'జాతి గుండెలు', 'సటోర్ రూమ్', 'అసహాయకారపూర్వకతకు').
+    2. Visual Pacing & Dynamic Cuts Guard: Strictly guarantees 8 to 14 rapid cuts for 45-70s Shorts
+       (never permits static videos with only 3 frozen slides).
+    3. Image Relevance & Anti-Noise Guard: Strictly blocks personal life events (weddings, marriage,
+       receptions) and off-topic media interviews for reality TV & celebrity content.
+    """
+
+    FORBIDDEN_WORDS = [
+        "నాన్‌ఆఫ్", "నాన్ ఆఫ్", "జాతి గుండెలు", "సటోర్ రూమ్", "సటోర్ రూం",
+        "అసహాయకారపూర్వకతకు", "అసహాయకారపూర్వక", "డ్రామాట్టెక్‌గా", "ఐఫోల్",
+        "హాట్ డాగ్", "కాల్డ్ వెపన్", "పాఠశాల బ్యాటరీ", "ముచ్చుడు", "సైలింగ్", "అక్టోర్"
+    ]
+
+    OFF_TOPIC_VISUAL_TOKENS = [
+        "wedding", "marriage", "pelli", "pellillu", "reception", "engagement",
+        "bride", "groom", "wife", "spouse", "gulte", "press meet"
+    ]
+
+    @classmethod
+    def audit_and_heal_script(cls, script_text: str, topic: str = "") -> Tuple[str, List[str]]:
+        """Scans script for machine-translation defects and auto-heals them into authentic Telugu."""
+        issues = []
+        for fw in cls.FORBIDDEN_WORDS:
+            if fw in script_text:
+                issues.append(f"Forbidden machine-translation artifact: '{fw}'")
+
+        try:
+            from agents.roast_engine import validate_and_heal_script
+            healed = validate_and_heal_script(script_text, topic=topic)
+        except Exception:
+            healed = script_text
+
+        return healed, issues
+
+    @classmethod
+    def audit_scene_cuts(cls, cut_count: int, duration_sec: float) -> Tuple[bool, Optional[str]]:
+        """Enforces minimum 8-14 cuts for 45-70s Shorts to prevent static slides."""
+        if duration_sec >= 40.0:
+            if cut_count < 7:
+                return False, f"Static slide defect: Only {cut_count} visual cuts for a {duration_sec:.1f}s video ({duration_sec/max(1,cut_count):.1f}s per slide). Minimum 8-14 cuts required."
+        return True, None
+
+    @classmethod
+    def audit_visual_relevance(cls, chosen_meta_list: List[Dict[str, Any]], is_reality_tv: bool = False) -> Tuple[bool, List[str]]:
+        """Enforces zero wedding or off-topic press interviews in reality TV visuals."""
+        if not is_reality_tv:
+            return True, []
+        bad_scenes = []
+        for idx, item in enumerate(chosen_meta_list, start=1):
+            cap = (item.get("caption") or "").lower()
+            url = (item.get("url") or "").lower()
+            combined = f"{cap} {url}"
+            for ot in cls.OFF_TOPIC_VISUAL_TOKENS:
+                if ot in combined:
+                    bad_scenes.append(f"Scene {idx} contains '{ot}'")
+                    break
+        if bad_scenes:
+            return False, bad_scenes
+        return True, []
+
+
 if __name__ == "__main__":
     print("🚀 OMNI-ROUTE TEST RUN")
     test_topics = [

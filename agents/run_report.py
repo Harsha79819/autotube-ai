@@ -132,6 +132,30 @@ def audit_first_frame(video_path: str, output_dir: Path) -> dict:
             std_dev = float(np.std(arr))
 
         is_black = (mean_lum < 10.0) or (std_dev < 4.0)
+        # If opening frame at t=0.0s is dark (due to xfade transition or video fade-in), inspect at 0.5s
+        if is_black:
+            subprocess.run(
+                [
+                    "ffmpeg", "-y",
+                    "-ss", "0.5",
+                    "-i", str(p),
+                    "-vframes", "1",
+                    str(frame0_path),
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=15,
+            )
+            if frame0_path.exists():
+                try:
+                    with Image.open(frame0_path) as img2:
+                        gray2 = img2.convert("L")
+                        arr2 = np.array(gray2)
+                        mean_lum = float(np.mean(arr2))
+                        std_dev = float(np.std(arr2))
+                        is_black = (mean_lum < 10.0) or (std_dev < 4.0)
+                except Exception:
+                    pass
 
         # Check if hook card or poster overlay was created
         hook_overlay_exists = (
@@ -230,10 +254,10 @@ def generate_run_report(
         dur_min = profile.min_seconds * 0.85
         dur_max = profile.max_seconds * 1.08
         word_max = int(profile.max_words * 1.15)
-    elif target_duration and ("60-90" in str(target_duration) or "60–90" in str(target_duration)):
-        dur_min = 50.0
-        dur_max = 95.0
-        word_max = 200
+    elif target_duration and ("60-90" in str(target_duration) or "60–90" in str(target_duration) or "45-70" in str(target_duration) or "60" in str(target_duration)):
+        dur_min = 45.0
+        dur_max = 73.5
+        word_max = 160
 
     is_compliant = True
     compliance_checks = {
@@ -242,6 +266,7 @@ def generate_run_report(
         "no_outro_on_shorts": (outro_len == 0.0) if is_shorts else True,
         "frame_0_valid": frame0_info.get("valid", False),
         "word_count_in_budget": (word_count <= word_max) if is_shorts else True,
+        "adequate_visual_cuts": (cut_count >= 7 if final_dur >= 40.0 else cut_count >= 5) if is_shorts else True,
     }
     if is_shorts and not all(compliance_checks.values()):
         is_compliant = False

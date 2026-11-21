@@ -64,15 +64,15 @@ CONTESTANTS_BB10: Dict[str, Dict] = {
         "negative_tokens": ["verma", "nau", "hindi", "season 9", "bangladesh", "bnp", "politician", "narayanganj", "bengali", "party", "press conference", "rally", "election", "dhaka", "masuduzzaman"],
     },
     "thrigun": {
-        "full_name": "Thrigun Eswaran",
-        "aliases": ["thrigun", "trigun", "thrigun eswaran", "త్రిగుణ్", "త్రిగుణ్ ఈశ్వరన్"],
+        "full_name": "Thrigun",
+        "aliases": ["thrigun", "trigun", "త్రిగుణ్", "thrigun eswaran"],
         "negative_tokens": ["anime", "manga", "vash", "stampede", "badlands", "cartoon", "analysis of", "podcast", "review", "theme", "themes", "gun", "tri-gun"],
     },
     "temper vamsi": {
         "full_name": "Temper Vamsi",
         "aliases": ["temper vamsi", "vamsi", "టెంపర్ వంశీ", "వంశీ"],
         "negative_tokens": ["chiranjeevi", "balakrishna"],
-        "is_captain": True,
+        "is_captain": False,
     },
     "charan": {
         "full_name": "Charan Mahadev",
@@ -128,6 +128,7 @@ CONTESTANTS_BB10: Dict[str, Dict] = {
         "aliases": ["naresh", "potti naresh", "jabardasth naresh", "నరేష్", "పొట్టి నరేష్"],
         "negative_tokens": ["allari naresh", "senior naresh", "vk naresh", "pavitra lokesh", "actor naresh", "mahesh babu"],
         "is_active": True,
+        "is_captain": True,
     },
     "mukesh": {
         "full_name": "Mukesh Gowda",
@@ -161,17 +162,45 @@ CONTESTANTS_BB10: Dict[str, Dict] = {
     },
 }
 
-# Ground Truth Realities for Current Week:
-THIS_WEEK_NO_ELIMINATION = True
-CURRENT_CAPTAIN = "Temper Vamsi"
-ACTIVE_CONTESTANTS_SUMMARY = "Debjani Modak, Auto Ram Prasad, Shiv, Potti Naresh, Mukesh Gowda, Varshini Sounderajan, Aman Masud, Thrigun Eswaran, Rama Krishna, Swetha, Neethu Natraj, Temper Vamsi (Captain), Sudheer Reddy"
+# Ground Truth Realities for Current Timeline:
+CURRENT_SEASON = 10
+CURRENT_WEEK = 11
+CURRENT_DAY = 75
+THIS_WEEK_NO_ELIMINATION = False
+CURRENT_CAPTAIN = "Potti Naresh"
+CURRENT_CAPTAIN_TELUGU = "పొట్టి నరేష్"
+ACTIVE_CONTESTANTS_SUMMARY = "Debjani Modak, Auto Ram Prasad, Shiv, Potti Naresh (Current Captain), Mukesh Gowda, Varshini Sounderajan, Aman Masud, Thrigun, Rama Krishna, Swetha, Neethu Natraj, Temper Vamsi, Sudheer Reddy"
 
 PAST_SEASONS_KNOWN_NAMES: List[str] = [
-    "kalyan padala", "winner kalyan", "ashwini sri", "ashwini",
-    "pallavi prashanth", "sivaji", "amardeep chowdary", "shobha shetty",
-    "rohit sahni", "marina abraham", "vj sunny", "kaushal", "kaushal manda",
-    "bindu madhavi", "rahul sipligunj", "shiva jyothi", "shanmukh jaswanth",
-    "thakare", "shiv thakare", "jr ntr", "jr. ntr", "siva balaji", "abhijeet"
+    # Season 8 & 9
+    "nabeel", "nabeel afridi", "yashmi", "yashmi gowda", "prerana", "prerana kambam",
+    "vishnupriya", "vishnu priya", "nainika", "manikanta", "prithviraj", "sonia akula",
+    "aditya om", "seetha", "shekhar basha", "bebakka", "hariteja", "gangavva",
+    "avinash", "mukku avinash", "rohini", "gautam krishna", "nayani pavani", "mehboob",
+    # Season 7
+    "kalyan padala", "winner kalyan", "ashwini sri", "ashwini", "pallavi prashanth",
+    "sivaji", "amardeep chowdary", "shobha shetty", "tasty teja", "priyanka jain",
+    "rathika", "rathika rose", "damini", "subhashree", "pooja murthy", "bhole shavali",
+    "prince yawar", "yawar",
+    # Season 6
+    "revanth", "singer revanth", "srihan", "adi reddy", "geetu royal", "faima",
+    "inaya", "inaya sultana", "chanti", "chalaki chanti", "arjun kalyan", "bala aditya",
+    "keerthi bhat", "surya", "vj surya", "rohit sahni", "marina abraham",
+    # Season 5
+    "vj sunny", "shanmukh", "shanmukh jaswanth", "siri hanmanth", "manas", "kajal",
+    "priyanka singh", "anchor ravi", "lobo", "vishwa", "hamida", "sweta varma", "lahari shari",
+    # Season 4
+    "abhijeet", "akhil sarthak", "syed sohel", "ariyana", "ariyana glory", "dethadi harika",
+    "monal gajjar", "lasya", "kumar sai", "divi vadthya", "mehaboob",
+    # Season 3
+    "rahul sipligunj", "sreemukhi", "baba bhaskar", "varun sandesh", "vithika sheru",
+    "shiva jyothi", "ali reza", "mahesh vitta", "punarnavi", "ashu reddy", "himaja",
+    # Season 2
+    "kaushal", "kaushal manda", "geetha madhuri", "tanish", "deepti nallamothu", "samrat",
+    "roll rida", "babu gogineni", "tejaswi madivada", "nutan naidu",
+    # Season 1 & General non-S10
+    "siva balaji", "aadarsh", "navdeep", "archana", "mumaith khan", "dhanraj",
+    "sampoornesh babu", "bindu madhavi", "thakare", "shiv thakare"
 ]
 
 IRRELEVANT_DOMAINS_AND_PATHS: List[str] = [
@@ -339,3 +368,58 @@ def get_active_contestants() -> List[str]:
         and c_info.get("status") != "eliminated"
         and c_info["full_name"] != "Akkineni Nagarjuna"
     ]
+
+
+def get_eliminated_contestants() -> List[str]:
+    """Returns list of eliminated contestants in Bigg Boss Telugu 10."""
+    return [
+        c_info["full_name"]
+        for c_info in CONTESTANTS_BB10.values()
+        if c_info.get("status") == "eliminated" or not c_info.get("is_active", True)
+    ]
+
+
+def get_current_captain() -> Dict[str, str]:
+    """Returns current Week 11 captain details."""
+    return {"english": CURRENT_CAPTAIN, "telugu": CURRENT_CAPTAIN_TELUGU}
+
+
+def get_active_contestants_prompt_context() -> str:
+    """Returns grounded prompt instructions for BB10 Week 11 (Day 75+)."""
+    active = [
+        "Temper Vamsi (టెంపర్ వంశీ)",
+        "Thrigun (త్రిగుణ్)",
+        "Aman Masud (అమన్)",
+        "Sudheer Reddy (సుధీర్ రెడ్డి)",
+        "Auto Ram Prasad (ఆటో రామ్ ప్రసాద్)",
+        "Potti Naresh (పొట్టి నరేష్ - CURRENT WEEK 11 CAPTAIN)",
+        "Debjani Modak (దేబ్జాని)",
+        "Shiv (శివ్)",
+        "Mukesh Gowda (ముకేష్ గౌడ)",
+        "Varshini Sounderajan (వర్షిణి)",
+        "Rama Krishna (రామకృష్ణ)",
+        "Swetha Naidu (శ్వేత)",
+        "Neethu Natraj (నీతు)"
+    ]
+    eliminated = [
+        "Gundeboina Jhansi (సింగర్ ఝాన్సీ)",
+        "Rohit Patnam (రోహిత్)",
+        "Shalini Patel (శాలిని)",
+        "Charan Mahadev (చరణ్)",
+        "Chaithra Rai (చైత్ర)",
+        "Krishna Alluri (కృష్ణుడు)",
+        "Srishti Vyakaranam (సృష్టి)",
+        "Mithilesh Reddy (మిథిలేష్)"
+    ]
+    return (
+        f"CURRENT REALITY (Bigg Boss Telugu 10 - Day 75-76 / Week 11):\n"
+        f"- Current Captain (Week 11): Potti Naresh (పొట్టి నరేష్). CRITICAL: Potti Naresh is the sole current Captain of the house. Temper Vamsi is NOT the captain. NEVER describe Temper Vamsi as captain!\n"
+        f"- Active Housemates ONLY: {', '.join(active)}\n"
+        f"- Host: Akkineni Nagarjuna (గౌరవంగా 'నాగ్‌గారు' అని సంబోధించాలి)\n"
+        f"- Strictly Eliminated (DO NOT use as active housemates): {', '.join(eliminated)}\n"
+        f"- Real Timeline & Ongoing Drama (Day 75-76 / Week 11 Weekdays, Nov 20-21, 2026):\n"
+        f"  1. Ticket to Finale Arena Clash: Thrigun's team dominated the tasks with Aman Masud giving an explosive performance. Sanchalak Mukesh Gowda made biased, confusing decisions causing massive arguments in the house.\n"
+        f"  2. Upcoming Weekend Episode Expectations: The weekend episode has NOT aired yet. Frame Host Nagarjuna's grilling as UPCOMING ANTICIPATION ('ఈ వీకెండ్‌లో నాగార్జునగారు ముకేష్‌కి ఎలాంటి క్లాస్ పీకబోతున్నారో చూడాలి!', 'నాగ్‌గారి చేతిలో ముకేష్‌కి వార్నింగ్ తప్పేలా లేదు'). NEVER claim in past tense that Nagarjuna already grilled Mukesh this week!\n"
+        f"  3. House Satires: Swetha Naidu got store room sit-ups punishment, while Captain Potti Naresh issued hilarious warnings waving a toy dagger prop.\n"
+        f"  4. Elimination Stakes: Varshini Sounderajan and Debjani Modak facing intense tension in the Week 11 nomination danger zone."
+    )

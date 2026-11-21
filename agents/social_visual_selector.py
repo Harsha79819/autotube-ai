@@ -84,24 +84,9 @@ def split_script_into_scenes(script_text: str) -> List[str]:
     Splits narration script into individual scene units (sentences / distinct beats).
     Cleans teleprompter markers, bracketed SFX, and pacing tokens.
     Guarantees fast visual pacing (1 scene per 3.5 to 6 seconds / 8 to 15 words).
+    Strictly ensures 8-14 rapid visual cuts for 45-70s Shorts (never frozen static visuals).
     Syncs 1-to-1 with section_map.txt when available.
     """
-    # 1. First priority: if section_map.txt already exists for this script, align 100% with it!
-    sec_map_path = OUTPUT_DIR / "section_map.txt"
-    if sec_map_path.exists():
-        try:
-            from agents.video_agent import get_section_map
-            existing_sections = get_section_map()
-            if existing_sections and len(existing_sections) >= 3:
-                sec_texts = [s.get("narration", "").strip() for s in existing_sections if s.get("narration", "").strip()]
-                first_snippet = sec_texts[0][:20].strip() if sec_texts else ""
-                if first_snippet and first_snippet in script_text and len(sec_texts) >= 3:
-                    print(f"🎬 [Scene Segmentation] Aligned 1-to-1 with {len(sec_texts)} sections from section_map.txt")
-                    return sec_texts
-        except Exception as e:
-            print(f"Notice: Could not load existing section map: {e}")
-
-    # 2. Otherwise parse script into sentences
     clean_lines = []
     for line in script_text.splitlines():
         line = line.strip()
@@ -116,18 +101,51 @@ def split_script_into_scenes(script_text: str) -> List[str]:
         if cleaned:
             clean_lines.append(cleaned)
 
+    # If the script already has 8 to 14 nicely-sized beat lines (each <= 18 words and >= 5 words), use them directly
+    if 8 <= len(clean_lines) <= 14 and all(5 <= len(l.split()) <= 18 for l in clean_lines):
+        return clean_lines
+
+    # Otherwise parse full text into granular beats (8-14 cuts for 45-70s Shorts)
     full_text = " ".join(clean_lines)
-    # Protect ellipsis (...) from splitting into fragment sentences
     full_text = re.sub(r"\.{2,}", "__ELLIPSIS__", full_text)
-    raw_sentences = re.split(r"(?<=[.!?।\n])\s+", full_text)
+
+    # Split by major sentence delimiters
+    raw_chunks = re.split(r"(?<=[.!?।\n])\s+", full_text)
+
+    # Second-level split: if any chunk has > 15 words, split at clause delimiters (, or — or ; or conjunctions)
+    finer_chunks = []
+    for chunk in raw_chunks:
+        chunk = chunk.replace("__ELLIPSIS__", "...").strip()
+        if not chunk:
+            continue
+        w_count = len(chunk.split())
+        if w_count > 15:
+            sub_parts = re.split(r"(?<=[,;—–])\s+|\s+(?=కానీ|మరోపక్క|ఇక|చూశారా|అసలు|అయితే|మరి)\s*", chunk)
+            sub_buf = ""
+            for sp in sub_parts:
+                sp = sp.strip()
+                if not sp:
+                    continue
+                sub_buf = f"{sub_buf} {sp}".strip() if sub_buf else sp
+                if len(sub_buf.split()) >= 8:
+                    finer_chunks.append(sub_buf)
+                    sub_buf = ""
+            if sub_buf:
+                if finer_chunks and len(sub_buf.split()) < 5:
+                    finer_chunks[-1] = f"{finer_chunks[-1]} {sub_buf}"
+                else:
+                    finer_chunks.append(sub_buf)
+        else:
+            finer_chunks.append(chunk)
+
+    # Consolidate finer chunks into balanced beats of 8-15 words
     scenes = []
     buf = ""
-    for s in raw_sentences:
-        s = s.replace("__ELLIPSIS__", "...").strip()
+    for s in finer_chunks:
+        s = s.strip()
         if not s:
             continue
         buf = f"{buf} {s}".strip() if buf else s
-        # Consolidate sentences into coherent visual beats of at least 8 words
         if len(buf.split()) >= 8:
             scenes.append(buf)
             buf = ""
@@ -137,11 +155,26 @@ def split_script_into_scenes(script_text: str) -> List[str]:
         else:
             scenes.append(buf)
 
-    # For Shorts, limit scene count to max 16 scenes for optimal visual pacing and low CPU heat
-    if len(scenes) > 16:
+    # For Shorts: guarantee 8 to 14 scenes (1 cut every 4-6 seconds)
+    total_words = len(full_text.split())
+    if total_words >= 95 and len(scenes) < 8:
+        # Re-split scenes that are longest to reach at least 8 scenes
+        while len(scenes) < 8:
+            longest_idx = max(range(len(scenes)), key=lambda i: len(scenes[i].split()))
+            longest_text = scenes[longest_idx]
+            l_words = longest_text.split()
+            if len(l_words) < 14:
+                break
+            half = len(l_words) // 2
+            p1 = " ".join(l_words[:half])
+            p2 = " ".join(l_words[half:])
+            scenes = scenes[:longest_idx] + [p1, p2] + scenes[longest_idx + 1:]
+
+    # Cap at 14 scenes for optimal video rendering and visual stability
+    if len(scenes) > 14:
         consolidated = []
         c_buf = ""
-        target_len = max(8, len(full_text.split()) // 14)
+        target_len = max(9, total_words // 12)
         for sc in scenes:
             c_buf = f"{c_buf} {sc}".strip() if c_buf else sc
             if len(c_buf.split()) >= target_len:
@@ -172,6 +205,35 @@ def analyze_scene_with_llm(scene_text: str, overall_context: str = "Bigg Boss Te
     - 3 relevant hashtags
     - clip_text (concise English description of the ideal visual)
     """
+    # Fast Deterministic Path: Check if scene mentions known person/entities first to avoid LLM rate limit loops
+    from utils.season_guard import (
+        extract_person_from_scene,
+        is_bigg_boss_topic,
+        get_current_season_number,
+        format_strict_visual_query,
+    )
+    det_person = extract_person_from_scene(scene_text)
+    is_bb = is_bigg_boss_topic(f"{overall_context} {scene_text}")
+    cur_s = get_current_season_number(overall_context) or 10
+    s_name = f"Bigg Boss Telugu {cur_s}" if is_bb else str(overall_context)
+    yr = 2026 if cur_s >= 10 else 2025
+
+    if det_person:
+        clean_ent = re.sub(r"[^A-Za-z0-9]", "", det_person).strip()
+        tags = [f"#{clean_ent}" if clean_ent else "#Tollywood", "#BiggBossTelugu10", "#TrendingTelugu"]
+        return {
+            "person_name": det_person,
+            "main_entity": det_person,
+            "event_type": "scene reaction",
+            "hashtags": tags,
+            "clip_text": f"{det_person} photo candid expression",
+            "contestant_names": [det_person],
+            "season_name": s_name,
+            "year": yr,
+            "incident_context": "scene reaction",
+            "strict_query": format_strict_visual_query(det_person, s_name, yr),
+        }
+
     prompt = f"""You are an expert visual director for viral social media videos.
 Analyze this single script sentence from a video about '{overall_context}':
 
@@ -345,6 +407,7 @@ def batch_analyze_scenes_with_llm(scenes: List[str], overall_context: str = "Big
         return [analyze_scene_with_llm(scenes[0], overall_context)]
 
     formatted_scenes = "\n".join([f"Scene {i+1}: \"{s}\"" for i, s in enumerate(scenes)])
+
     prompt = f"""You are an expert visual director for viral social media videos.
 Analyze these {len(scenes)} sequential script scenes from a video about '{overall_context}'.
 For each scene, extract structured visual metadata.
@@ -936,6 +999,7 @@ def select_image_for_scene(
     topic_candidate_pool: Optional[List[Dict[str, Any]]] = None,
     overall_context: Optional[str] = None,
     state_lock: Optional[Any] = None,
+    aspect_ratio: str = "9:16",
 ) -> Dict[str, Any]:
     """
     Fix only the selection step (Strict 7-Step Verified Pipeline):
@@ -1151,6 +1215,35 @@ def select_image_for_scene(
             rejected_posts.append({"url": u, "username": username, "caption": caption[:100], "reason": rej_reason})
             continue
 
+        # Personal life & off-topic interview noise rejection (weddings, marriage, interviews, gulte, etc.)
+        if is_bb:
+            personal_noise = (
+                "wedding", "marriage", "pelli", "pellillu", "reception", "engagement",
+                "bride", "groom", "wife", "spouse", "gulte", "press meet", "interview",
+                "audio launch", "pre release", "pre-release", "success meet"
+            )
+            found_noise = [pn for pn in personal_noise if pn in cand_combined]
+            if found_noise:
+                rej_reason = f"Personal life event / off-topic interview noise detected: {found_noise[0]}"
+                rejected_posts.append({"url": u, "username": username, "caption": caption[:100], "reason": rej_reason})
+                print(f"🚫 [Rejected Personal Noise] Scene {scene_idx} -> @{username}: \"{caption[:50]}...\" | Reason: {rej_reason}")
+                continue
+
+        # Universal blacklist verification from image_agent
+        try:
+            from agents.image_agent import is_blacklisted_candidate
+            cand_meta = {
+                "title": caption,
+                "image_url": u,
+                "source_url": post_url,
+            }
+            if is_blacklisted_candidate(cand_meta, target_entity=entity_name, topic_context=script_line):
+                rej_reason = "Blacklisted candidate (anti-collision / season guard / spam / wedding)"
+                rejected_posts.append({"url": u, "username": username, "caption": caption[:100], "reason": rej_reason})
+                continue
+        except Exception:
+            pass
+
         filtered_candidates.append(cand)
 
     after_filter_count = len(filtered_candidates)
@@ -1312,7 +1405,7 @@ def select_image_for_scene(
 
         # Copy to destination asset
         shutil.copy2(chosen_file, destination_jpg)
-        clean_and_crop_image(destination_jpg)
+        clean_and_crop_image(destination_jpg, aspect_ratio=aspect_ratio)
 
         # Thread-safe record of used hash and url
         if state_lock:
@@ -1348,7 +1441,7 @@ def select_image_for_scene(
                 if cand_path and cand_path.exists() and cand_path.stat().st_size > 1000:
                     try:
                         shutil.copy2(cand_path, destination_jpg)
-                        clean_and_crop_image(destination_jpg)
+                        clean_and_crop_image(destination_jpg, aspect_ratio=aspect_ratio)
                         downloaded_ok = True
                         final_action = "selected_image"
                         chosen_cand_obj = {
@@ -1401,7 +1494,7 @@ def select_image_for_scene(
                 if download_image_file(cand_url, temp_dl):
                     try:
                         shutil.copy2(temp_dl, destination_jpg)
-                        clean_and_crop_image(destination_jpg)
+                        clean_and_crop_image(destination_jpg, aspect_ratio=aspect_ratio)
                         used_urls.add(cand_url)
                         downloaded_ok = True
                         final_action = "selected_image"
@@ -1430,7 +1523,7 @@ def select_image_for_scene(
                 if cand_path and cand_path.exists() and cand_path.stat().st_size > 1000:
                     try:
                         shutil.copy2(cand_path, destination_jpg)
-                        clean_and_crop_image(destination_jpg)
+                        clean_and_crop_image(destination_jpg, aspect_ratio=aspect_ratio)
                         downloaded_ok = True
                         final_action = "selected_image"
                         chosen_cand_obj = {
@@ -1455,7 +1548,7 @@ def select_image_for_scene(
                 meme_cand = get_reaction_meme(f"{scene_text} {person_name or ''} {entity_name or ''}")
                 if meme_cand and meme_cand.exists() and meme_cand.stat().st_size > 1000:
                     shutil.copy2(meme_cand, destination_jpg)
-                    clean_and_crop_image(destination_jpg)
+                    clean_and_crop_image(destination_jpg, aspect_ratio=aspect_ratio)
                     downloaded_ok = True
                     final_action = "selected_image"
                     chosen_cand_obj = {
@@ -1485,18 +1578,19 @@ def select_image_for_scene(
                                 break
                     except Exception:
                         pass
+                ratio_desc = "16:9 widescreen landscape" if aspect_ratio == "16:9" else "9:16 vertical ratio"
                 if not flux_prompt and (person_name or entity_name):
                     target_ent = person_name or entity_name
-                    flux_prompt = f"Cinematic {target_ent} in intense expression, 9:16 vertical ratio, photorealistic, 8k, dramatic lighting"
+                    flux_prompt = f"Cinematic {target_ent} in intense expression, {ratio_desc}, photorealistic, 8k, dramatic lighting"
                 elif not flux_prompt:
                     flux_prompt = build_scene_flux_prompt(
                         scene_text,
-                        aspect_ratio="9:16",
+                        aspect_ratio=aspect_ratio,
                         topic_category="entertainment",
                         show_context=show_context if is_bb else "",
                     )
                 print(f"🎨 Scene {scene_idx} -> Real photo missing. Synthesizing dynamic FLUX AI visual: '{flux_prompt[:50]}...'")
-                if generate_ai_visual(flux_prompt, destination_jpg, aspect_ratio="9:16"):
+                if generate_ai_visual(flux_prompt, destination_jpg, aspect_ratio=aspect_ratio):
                     downloaded_ok = True
                     final_action = "selected_image"
                     chosen_cand_obj = {
@@ -1534,7 +1628,7 @@ def select_image_for_scene(
                 headline_text=card_text,
                 output_path=str(destination_jpg),
                 topic_category="entertainment",
-                aspect_ratio="9:16",
+                aspect_ratio=aspect_ratio,
                 badge_label=badge_label[:25] if badge_label else None,
             )
 
@@ -1689,6 +1783,7 @@ def select_visuals_for_script(
     script_text: str,
     overall_context: Optional[str] = None,
     threshold: Optional[float] = None,
+    aspect_ratio: str = "9:16",
 ) -> List[Tuple[int, Path]]:
     """
     Orchestrates the entire social visual selection pipeline for a script:
@@ -1723,7 +1818,7 @@ def select_visuals_for_script(
         raise ValueError("Script is empty or has no segmentable scenes.")
 
     print("=" * 70)
-    print(f"🎬 SOCIAL VISUAL SELECTION: {len(scenes)} Scenes (Context: '{ctx}')")
+    print(f"🎬 SOCIAL VISUAL SELECTION: {len(scenes)} Scenes (Context: '{ctx}', Aspect: {aspect_ratio})")
     print(f"🎯 CLIP ViT-B-32 Threshold: {sim_threshold} | Entity Caption Boost: +{boost_val}")
     print("=" * 70)
 
@@ -1759,6 +1854,7 @@ def select_visuals_for_script(
             topic_candidate_pool=topic_pool,
             overall_context=ctx,
             state_lock=state_lock,
+            aspect_ratio=aspect_ratio,
         )
         return (idx, dest_jpg, scene_audit, meta)
 

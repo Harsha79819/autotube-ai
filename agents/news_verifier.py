@@ -136,6 +136,8 @@ def _extract_article_media(soup, article_url):
             "pixel", "1x1", "spacer", "tracking", "beacon", "ad-banner",
             "advertisement", "sponsor-logo", "newsletter", "watermark",
             "placeholder", "loading.gif", "blank.png", "spinner",
+            "taboola", "outbrain", "mgid", "colombia", "doubleclick",
+            "googlesyndication", "sponsored", "adservice", "posani", "comedy_nonstop",
         ]
         for pat in junk_patterns:
             if pat in combined:

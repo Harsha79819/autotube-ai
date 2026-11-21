@@ -18,7 +18,7 @@ import random
 import re
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -74,9 +74,12 @@ NATIVE TELUGU SCRIPT FOR ALL ENGLISH LOANWORDS (CRITICAL FOR NATURAL HUMAN AI VO
 PUNCTUATION & NATURAL HUMAN EXPRESSION WORDS:
 - Break sentences into short punchy fragments (under 6-10 words) separated by commas (,), question marks (?), exclamation marks (!), and ellipsis (...) for realistic breathing room.
 - Sprinkle lively conversational human reaction words: "అసలు...", "చూశారా!", "అబ్బా!", "ఏంటో భయ్యా...", "నెక్స్ట్ లెవెల్ అండి బాబు...", "బాబోయ్!"
-- STRICT BAN ON MECHANICAL TRANSLATION:
-  DO NOT translate English headlines literally (e.g. NEVER write "యూపీ ఎందుకు బ్యాక్ ఉంది", "ఏపీ ఎందుకు ర్యాంక్ అని ఉంది").
-  Always speak in natural, colloquial Telugu conversation (సరళమైన సహజ వాడుక భాష) like an authentic Telugu YouTuber!
+- STRICT BAN ON MECHANICAL TRANSLATION & INVENTED GIBBERISH:
+  * STRICTLY FORBIDDEN: NEVER invent literal word-by-word machine translations of English idioms or slang (e.g. STRICTLY FORBID: "షాపింగ్ లిస్ట్", "క్లబ్‌బింగ్ చేస్తూ", "హాస్యం చోటు చేసుకుంది", "ఇక్కడా భారతదేశమేనా", "క్షేత్రం", "నోరు మళ్ళించాడు", "హోమ్‌వర్క్ హెడ్‌ఫోన్లు", "హ్యూమన్ స్నూ", "టూ-బీడెల్‌బ్రైట్", "ఐబర్ప్పింగ్", "సెగాబ్రేక్", "స్పష్టీకరణ కెమ్", "హేయాజము", or awkward pseudo-Telugu compounds).
+  * MANDATORY: Always speak in 100% natural, colloquial spoken Telugu conversation (సరళమైన సహజ వాడుక భాష) as spoken by authentic Telugu YouTubers (like Mahathalli, Praneeth Hanumantu, 301 Diaries)!
+  * Use real, natural creator expressions: "ఓవరాక్టింగ్", "ఎలిమినేషన్ భయం", "షాకింగ్ ఎక్స్‌ప్రెషన్స్", "కవరింగ్ మాస్టర్లు", "ఫేక్ డ్రామా", "డబుల్ స్టాండర్డ్స్", "ముఖంలో కలవరం", "పచ్చి అబద్ధాలు", "మైండ్ బ్లాంక్", "ఫన్నీ కౌంటర్లు", "ఫ్యూజులు ఎగిరిపోయాయి", "గాలి తీసేశాడు", "పరువు పోయింది", "రచ్చ రంబోలా".
+  * HOST NAGARJUNA HONORIFIC RULE: ALWAYS refer to Host Akkineni Nagarjuna with respectful plural honorifics: "నాగ్‌గారు అన్నారు", "నాగ్‌గారు కౌంటర్ వేశారు", "నాగ్‌గారు క్లాస్ పీకారు". NEVER use singular ("ఇచ్చాడు", "జోక్ చేశాడు")!
+  * CONTESTANT NAMES RULE: Use clean, authentic names: "త్రిగుణ్" (NEVER "ట్రైగన్" or "ఎస్వరన్"), "ముకేష్ గౌడ", "సుధీర్ రెడ్డి", "అమన్", "టెంపర్ వంశీ".
 
 TONE & COMEDY PHILOSOPHY:
 1. WE DO NOT JUDGE OR PREACH. We don't judge anyone morally. We simply highlight the sheer comedy, irony, and absurdity of what actually happened.
@@ -101,10 +104,283 @@ def _sanitize_awkward_loanwords(text: str) -> str:
         (r"పారాడైమ్", "పద్ధతి"),
         (r"యాంబిగ్విటీ", "కన్ఫ్యూజన్"),
         (r"ఎమోషనల్ బ్లాక్‌మెయిల్", "సెంటిమెంట్ డ్రామా"),
+        (r"హోమ్‌వర్క్\s*హెడ్‌ఫోన్లు?", "హౌస్ రూల్స్"),
+        (r"హ్యూమన్\s*స్నూ[^\s]*", "నిద్రపోవడం"),
+        (r"టూ-బీడెల్‌బ్రైట్|టూ\s*బీడెల్[^\s]*", "ఓవర్ యాక్షన్"),
+        (r"సెగాబ్రేక్|సియో\s*\d+\s*నిమిషాల", "షాకింగ్ ట్విస్ట్"),
+        (r"ఐబర్ప్పింగ్[^\s]*", "కళ్ళు తేలేయడం"),
+        (r"స్పష్టీకరణ\s*కెమ్[^\s]*", "కెమెరా ముందు క్లారిటీ"),
+        (r"కామెడీ-ఫాటిగ్యూ[^\s]*", "బోరింగ్ కామెడీ"),
+        (r"హేయాజము[^\s]*", "ఓవర్ యాక్షన్"),
+        (r"స్ట్రాటజిక్\s*ఘోస్టింగ్[^\s]*", "సైలెంట్ గేమ్"),
+        (r"ఎక్స్‌ఫ్లేషన్[^\s]*", "టెన్షన్"),
+        (r"హాస్య\s*ప్రాగల్భ్యత", "కామెడీ రచ్చ"),
+        (r"సగటు\s*రోజులోనే", "టాస్క్ మొదలవగానే"),
+        (r"ఏ\s*పిచ్చి\s*రాత్రి", "నిన్న రాత్రి జరిగిన రచ్చ"),
+        (r"గందరగోళం\s*ఆవిడలా", "ఫుల్ కన్‌ఫ్యూజన్"),
+        (r"నాయుడు\s*కాదు!?", ""),
+        (r"పుచ్చుకున్నాడు", "నిలదీశాడు"),
+        (r"ఎంబరాస్[^\s]*", "షాకయ్యారు"),
+        (r"సెన్సరల్[^\s]*", "హౌస్ లో"),
+        (r"టీకా[^\s]*", "క్లాస్ పీకింది"),
+        (r"సేమా\s*ఉపన్యాసం", "సినిమా ఉపన్యాసం"),
+        (r"మోడ్\s*క్లోజ్\s*అయిపోయింది", "ఫ్యూజులు ఎగిరిపోయాయి"),
+        (r"తాడుతో\s*బైండ్", "తాడుతో కట్టేసి"),
+        (r"బైండ్\s*చేశాడు", "కట్టేశాడు"),
+        (r"(?<![\u0C00-\u0C7F])అమ్‌న(?![\u0C00-\u0C7F])", "అమన్"),
+        (r"(?<![\u0C00-\u0C7F])అమ్నా(?![\u0C00-\u0C7F])", "అమన్"),
+        (r"(?<![\u0C00-\u0C7F])ట్రైగన్\s*ఎస్వరన్(?![\u0C00-\u0C7F])", "త్రిగుణ్"),
+        (r"(?<![\u0C00-\u0C7F])ట్రిగన్\s*ఎస్వరన్(?![\u0C00-\u0C7F])", "త్రిగుణ్"),
+        (r"(?<![\u0C00-\u0C7F])ట్రైగన్(?![\u0C00-\u0C7F])", "త్రిగుణ్"),
+        (r"(?<![\u0C00-\u0C7F])ట్రిగన్(?![\u0C00-\u0C7F])", "త్రిగుణ్"),
+        (r"(?<![\u0C00-\u0C7F])త్రిగన్(?![\u0C00-\u0C7F])", "త్రిగుణ్"),
+        (r"(?<![\u0C00-\u0C7F])నామల్\s*టీజర్", "నార్మల్ టీజర్"),
+        (r"(?<![\u0C00-\u0C7F])నామల్(?![\u0C00-\u0C7F])", "నార్మల్"),
+        (r"అక్టోర్\s*షాపింగ్\s*లిస్ట్[^\s]*", "టార్గెట్ లిస్ట్"),
+        (r"షాపింగ్\s*లిస్ట్[^\s]*", "టార్గెట్ లిస్ట్"),
+        (r"(?<![\u0C00-\u0C7F])అక్టోర్(?![\u0C00-\u0C7F])", "యాక్టర్"),
+        (r"సైలింగ్\s*చేశాడు", "స్మైల్ చేశాడు"),
+        (r"నాగార్జున\s*క్షేత్రంలో?", "బిగ్ బాస్ హౌస్ లో"),
+        (r"ఇక్కడా\s*భారతదేశమేనా[?!]?", "ఇదేం ఆటయ్యా బాబు!"),
+        (r"నోరు\s*మళ్ళించాడు", "కవరింగ్ మొదలెట్టాడు"),
+        (r"క్లబ్‌బింగ్\s*చేస్తూ", "బిల్డప్ ఇస్తూ"),
+        (r"హాస్యం\s*చోటు\s*చేసుకుంది", "అందరూ పగలబడి నవ్వుకున్నారు"),
+        (r"(?<![\u0C00-\u0C7F])కమెడీ(?![\u0C00-\u0C7F])", "కామెడీ"),
+        (r"ఓవర్‌కాన్ఫ్డెంట్\s*గా\s*ఆన్స్వర్", "ఓవర్ కాన్ఫిడెన్స్ తో ఆన్సర్"),
+        (r"నాగ్[\u200c\u200d]?గారి\s*(.*?)\s*జోక్\s*చేశాడు", r"నాగ్‌గారు \1 జోక్ చేశారు"),
+        (r"నాగ్[\u200c\u200d]?గారి\s*(.*?)\s*రీప్లై\s*ఇచ్చాడు", r"నాగ్‌గారు \1 కౌంటర్ ఇచ్చారు"),
+        (r"నాగ్[\u200c\u200d]?గారి\s*(.*?)\s*రిప్లై\s*ఇచ్చాడు", r"నాగ్‌గారు \1 కౌంటర్ ఇచ్చారు"),
+        (r"నాగ్[\u200c\u200d]?గారి\s*చిరునవ్వుతో", "నాగ్‌గారు చిరునవ్వుతో"),
+        (r"నాగ్[\u200c\u200d]?గారి\s*(.*?)\s*అన్నాడు", r"నాగ్‌గారు \1 అన్నారు"),
+        (r"నాగ్[\u200c\u200d]?గారి\s*(.*?)\s*ఇచ్చాడు", r"నాగ్‌గారు \1 ఇచ్చారు"),
+        # Anti-machine-translation replacements
+        (r"(?<![\u0C00-\u0C7F])యాజ్(?![\u0C00-\u0C7F])", "ప్లాన్"),
+        (r"ముచ్చుడు\s*పెట్టారు|ముచ్చుడు", "చురకలు అంటించారు"),
+        (r"ప్లీడ్\s*చేశాడు", "బ్రతిమిలాడాడు"),
+        (r"(?<![\u0C00-\u0C7F])ప్లీడ్(?![\u0C00-\u0C7F])", "రిక్వెస్ట్"),
+        (r"డ్రామాట్టెక్‌గా", "డ్రామా చేస్తూ"),
+        (r"ఐసీయూకి\s*వెళ్తాను", "హౌస్ లో ఉండలేను"),
+        (r"(?<![\u0C00-\u0C7F])ఐసీయూ[^\s]*", "హాస్పిటల్"),
+        (r"సౌండ్\s*అవుతూ", "సపోర్ట్ చేస్తూ"),
+        (r"నెట్టెగిరించాడు", "పక్కన పెట్టేశాడు"),
+        (r"ఓట్లు\s*వస్తున్నాలో\s*కాదు", "ఓట్లు వస్తున్నాయో లేదో"),
+        # Anti-robot literal English-to-Telugu translations
+        (r"పాత్ర\s*తీసుకున్నాడు", "లీడ్ తీసుకున్నాడు"),
+        (r"ఇంటిలో\s*ఉష్ణోగ్రత\s*పెరిగింది", "హౌస్‌లో రచ్చ మొదలైంది"),
+        (r"చిన్న\s*అర్థమైన\s*దావాపేదావాను?", "మాటల యుద్ధాన్ని"),
+        (r"దావాపేదావా", "మాటల యుద్ధం"),
+        (r"యూనిట్‌లోనే\s*ముఖ్యంగా", "హౌస్‌లో"),
+        (r"(?<![\u0C00-\u0C7F])నాగర్‌జున(?![\u0C00-\u0C7F])", "నాగార్జున"),
+        (r"(?<![\u0C00-\u0C7F])డీబ్జాని(?![\u0C00-\u0C7F])", "దేబ్జాని"),
+        (r"(?<![\u0C00-\u0C7F])ఊర్వశి(?![\u0C00-\u0C7F])", "వర్షిణి"),
+        (r"ఆల్ఫా\s*మేల్", "టాప్ ప్లేయర్"),
+        (r"తర్క\s*వాదాలు", "మాటల యుద్ధం"),
+        (r"బెట్రయల్|బెత్రాయల్", "వెన్నుపోటు"),
+        (r"బిజినెస్\s*మోడల్", "స్ట్రాటజీ"),
+        (r"డామర్జ్[^\s]*", "డేంజర్ జోన్"),
+        (r"బూం[^\s]*", "మారిపోయి"),
+        (r"పాపా\s*బోధించడానికి", "టార్గెట్ చేయడానికి"),
+        (r"బ్లైండ్‌ఫోల్డ్[^\s]*", "హౌస్"),
+        (r"అంకామోకాన్ని\s*ప్యాకేజీగా", "ఓవరాక్షన్"),
+        (r"పురుషుల\s*కలహాల", "హౌస్‌లో గొడవల"),
+        (r"బలీగా", "బలిపశువుగా"),
+        # Anti-bizarre tech metaphors and transliterations
+        (r"ఐఫోల్", "యాపిల్"),
+        (r"థెర్మల్\s*కాఫీ|థర్మల్\s*కాఫీ", "టీ కప్పులా వేడెక్కిపోతోంది"),
+        (r"హాట్\s*డాగ్", "ఇస్త్రీ పెట్టె"),
+        (r"కాల్డ్\s*వెపన్", "రహస్య ఆయుధం"),
+        (r"థర్మల్\s*క్రైసిస్", "హీటింగ్ సమస్య"),
+        (r"పాఠశాల\s*బ్యాటరీ", "ఫోన్ బ్యాటరీ"),
+        (r"లావెండర్\s*తలంపు", ""),
+        (r"బాలాథ్", ""),
+        (r"బంగారు\s*బాస్కెట్", "భగ్గుమంది బాస్"),
+        (r"త్రిగుణ్‌ను\s*వార్నింగ్", "త్రిగుణ్‌కి వార్నింగ్"),
+        # Anti-machine-translation hallucinations (Groq/OpenSource Telugu defects)
+        (r"నాన్‌ఆఫ్|నాన్\s*ఆఫ్", "డిస్క్వాలిఫై"),
+        (r"జాతి\s*గుండెలు(?:\s*మరుస్తున్నాక)?", "గుండెల్లో రైళ్లు పరిగెడుతుంటే"),
+        (r"సటోర్\s*రూమ్|సటోర్\s*రూం", "స్టోర్ రూమ్"),
+        (r"అసహాయకారపూర్వకతకు|అసహాయకారపూర్వక", "పక్షపాతానికి"),
+        (r"డ్యాగర్\s*వేసిన", "గట్టి"),
+        (r"గుంజీలు\s*చేస్తున్నాక", "గుంజీలు తీస్తుంటే"),
+        (r"(?:Bigg Boss Telugu|బిగ్ బాస్ Telugu|బిగ్ బాస్ తెలుగు)\s*మధ్య", "కంటెస్టెంట్ల మధ్య"),
+        (r"(?<![\u0C00-\u0C7F])Telugu(?![\u0C00-\u0C7F])", "తెలుగు"),
     ]
     for pat, rep in replacements:
         text = re.sub(pat, rep, text, flags=re.IGNORECASE)
+    # Strip orphan quotes at start of lines or sentences or before 'అని'
+    text = re.sub(r'^\s*["\'“”‘’`]+', '', text, flags=re.MULTILINE)
+    text = re.sub(r'(?<=[.!?\n])\s*["\'“”‘’`]+(?=\S)', ' ', text)
+    text = re.sub(r'["\'“”‘’`]+\s*(?=అని\b)', ' ', text)
+
     return text
+
+
+def validate_and_heal_script(script: str, topic: str = "") -> str:
+    """
+    Pre-flight quality gate ensuring authentic native Telugu language:
+    - Runs loanword sanitization and honorific repair
+    - Checks for hallucination artifacts ('క్షేత్రం', 'క్లబ్బింగ్', 'షాపింగ్ లిస్ట్', 'భారతదేశమేనా', 'హాస్యం చోటు చేసుకుంది', 'యాజ్', 'ముచ్చుడు', 'ప్లీడ్', 'ఐసీయూ', 'ఐఫోల్', 'హాట్ డాగ్', 'నాన్‌ఆఫ్', 'జాతి గుండెలు', 'సటోర్ రూమ్', 'అసహాయకారపూర్వకతకు')
+    - If severe artifacts exist, triggers a rapid native Telugu rephrase pass
+    - Guarantees respectful honorifics for Nagarjuna ('నాగ్‌గారు', 'అన్నారు', 'కౌంటర్ వేశారు')
+    - Purges eliminated contestants from active house gameplay
+    """
+    cleaned = _sanitize_awkward_loanwords(script)
+    try:
+        from analytics.youtube_director import get_youtube_director
+        cleaned = get_youtube_director().sanitize_script_cliches(cleaned)
+    except Exception:
+        pass
+
+    # Check for severe machine-translation or hallucination flags
+    hallucination_flags = [
+        "క్షేత్రం", "క్లబ్బింగ్", "షాపింగ్ లిస్ట్", "భారతదేశమేనా",
+        "సైలింగ్", "అక్టోర్", "ట్రైగన్", "ఎస్వరన్", "నోరు మళ్ళించాడు",
+        "యాజ్", "ముచ్చుడు", "ప్లీడ్", "ఐసీయూ", "డ్రామాట్టెక్‌గా",
+        "ఐఫోల్", "హాట్ డాగ్", "థర్మల్ కాఫీ", "థెర్మల్ కాఫీ", "కాల్డ్ వెపన్", "పాఠశాల బ్యాటరీ",
+        "నాన్‌ఆఫ్", "నాన్ ఆఫ్", "జాతి గుండెలు", "సటోర్ రూమ్", "సటోర్ రూం", "అసహాయకారపూర్వకతకు", "అసహాయకారపూర్వక"
+    ]
+    detected_flags = [f for f in hallucination_flags if f in cleaned]
+
+    orig_words = len(cleaned.split())
+    if detected_flags:
+        print(f"⚠️ [Script Quality Guard] Detected unnatural machine-translation flags: {detected_flags}. Healing with Native Telugu Rephrase pass...")
+        healing_prompt = f"""You are an elite Telugu YouTube comedy reviewer and roaster.
+The following Telugu roast script contains awkward, machine-translated English phrases or hallucinated words ({', '.join(detected_flags)}).
+Rewrite it into 100% natural, colloquial, lively spoken Telugu (సరళమైన సహజ వాడుక తెలుగు) as spoken by authentic Telugu creators.
+
+Original Topic: {topic}
+Original Draft:
+{cleaned}
+
+MANDATORY RULES:
+1. Write 100% in natural spoken Telugu script (తెలుగు లిపి).
+2. Use authentic conversational Telugu phrases: 'రచ్చ రంబోలా', 'కౌంటర్ పడింది', 'ఫ్యూజులు ఎగిరిపోయాయి', 'గాలి తీసేశాడు', 'ఓవర్ యాక్షన్ పీక్స్', 'సీన్ కట్ చేస్తే'.
+3. Contestant Names: 'త్రిగుణ్' (NOT 'ట్రైగన్' or 'ఎస్వరన్'), 'ముకేష్ గౌడ', 'సుధీర్ రెడ్డి', 'అమన్', 'టెంపర్ వంశీ'.
+4. Host Honorifics: Always address Host Nagarjuna respectfully in plural: 'నాగ్‌గారు అన్నారు', 'నాగ్‌గారు కౌంటర్ వేశారు', 'నాగ్‌గారు క్లాస్ పీకారు' (NEVER singular 'ఇచ్చాడు' or 'జోక్ చేశాడు').
+5. Maintain the exact same length and punchy structure (~{orig_words} words, do NOT shrink the script below {int(orig_words * 0.85)} words).
+Return ONLY the healed Telugu script narration text."""
+        try:
+            healed = generate_text_cascade(healing_prompt, step_name="roast_heal", per_provider_timeout=12.0)
+            clean_healed = re.sub(r"```[a-zA-Z]*", "", healed).replace("```", "").strip()
+            min_keep_words = max(40, int(orig_words * 0.80))
+            if len(clean_healed.split()) >= min_keep_words:
+                cleaned = _sanitize_awkward_loanwords(clean_healed)
+                print("✅ [Script Quality Guard] Script healed into authentic native Telugu successfully!")
+        except Exception as e:
+            print(f"⚠️ [Script Quality Guard] Rephrase notice: {e}")
+
+    # Final honorific assurance pass
+    cleaned = re.sub(r"నాగ్[\u200c\u200d]?గారి\s*(.*?)\s*జోక్\s*చేశాడు", r"నాగ్‌గారు \1 జోక్ చేశారు", cleaned)
+    cleaned = re.sub(r"నాగ్[\u200c\u200d]?గారి\s*(.*?)\s*రీప్లై\s*ఇచ్చాడు", r"నాగ్‌గారు \1 కౌంటర్ ఇచ్చారు", cleaned)
+    cleaned = re.sub(r"నాగ్[\u200c\u200d]?గారి\s*(.*?)\s*రిప్లై\s*ఇచ్చాడు", r"నాగ్‌గారు \1 కౌంటర్ ఇచ్చారు", cleaned)
+    cleaned = re.sub(r"నాగ్[\u200c\u200d]?గారి\s*(.*?)\s*ఇచ్చాడు", r"నాగ్‌గారు \1 ఇచ్చారు", cleaned)
+    # Check and replace eliminated contestants and captaincy errors in Bigg Boss context
+    try:
+        from utils.season_guard import is_bigg_boss_topic
+        is_bb_check = is_bigg_boss_topic(topic) if topic else False
+    except Exception:
+        is_bb_check = False
+    if is_bb_check or any(bb in cleaned for bb in ["బిగ్ బాస్", "బిగ్‌బాస్", "నామినేషన్", "హౌస్‌లో", "హౌస్ లో", "ఎలిమినేషన్", "క్యాప్టెన్", "కెప్టెన్"]):
+        # 1. Captaincy Guard: Week 11 captain is Potti Naresh. Temper Vamsi is NOT captain.
+        if re.search(r"(?:టెంపర్\s*)?(?:వాంశీ|వంశీ)\s*(?:ఈ\s*వారం\s*)?(?:క్యాప్టెన్సీ|కెప్టెన్సీ)", cleaned):
+            cleaned = re.sub(
+                r"(?:టెంపర్\s*)?(?:వాంశీ|వంశీ)\s*(?:ఈ\s*వారం\s*)?(?:క్యాప్టెన్సీ|కెప్టెన్సీ)",
+                "పొట్టి నరేష్ క్యాప్టెన్సీ",
+                cleaned
+            )
+            print("⚡ [Script Guard] Corrected captaincy hallucination: Potti Naresh captaincy.")
+        if re.search(r"(?:టెంపర్\s*)?(?:వాంశీ|వంశీ)\s*(?:ఈ\s*వారం\s*)?(?:క్యాప్టెన్|కెప్టెన్)(?!సీ)", cleaned):
+            cleaned = re.sub(
+                r"(?:టెంపర్\s*)?(?:వాంశీ|వంశీ)\s*(?:ఈ\s*వారం\s*)?(?:క్యాప్టెన్|కెప్టెన్)(?!సీ)",
+                "పొట్టి నరేష్ ఈ వారం క్యాప్టెన్",
+                cleaned
+            )
+            print("⚡ [Script Guard] Corrected captaincy hallucination: Potti Naresh is Week 11 captain (not Temper Vamsi).")
+        # Fix awkward Telugu spelling of Vamsi
+        cleaned = re.sub(r"(?<![\u0C00-\u0C7F])వాంశీ(?![\u0C00-\u0C7F])", "వంశీ", cleaned)
+
+        # 2. Week 11 Active Elimination Guard: Purge false 'no elimination' claims unless topic is about no elimination
+        topic_str = (topic or "").lower()
+        if "no elimination" not in topic_str and "ఎలిమినేషన్ లేదు" not in (topic or ""):
+            cleaned = re.sub(
+                r"(?:కానీ\s*నిజం\s*చెప్పాలంటే,?\s*)?(?:ఈ\s*వారం\s*)?(?:ఎలిమినేషన్‌|ఎలిమినేషన్)\s*జరగలేదు[.!।]*",
+                "ఈ వారం ఎలిమినేషన్ గండం ఎవరి మెడకు చుట్టుకుంటుందో వేచి చూడాలి!",
+                cleaned
+            )
+            cleaned = re.sub(
+                r"ఖచ్చితంగా\s*ఎలిమినేషన్‌\s*లేదు[.!।]*",
+                "ఓటింగ్ లెక్కలు రోజురోజుకీ మారిపోతున్నాయి!",
+                cleaned
+            )
+            cleaned = re.sub(
+                r"హౌస్‌లో\s*అందరూ\s*సురక్షితంగా\s*ఉన్నారు[.!।]*",
+                "డేంజర్ జోన్‌లో ఉన్న కంటెస్టెంట్లకు ముచ్చెమటలు పడుతున్నాయి!",
+                cleaned
+            )
+            cleaned = re.sub(
+                r"ఎలిమినేషన్‌\s*నిజం\s*కాదని\s*తెలిసింది[.!।]*",
+                "ఎలిమినేషన్ పోరు హోరాహోరీగా సాగుతోంది!",
+                cleaned
+            )
+
+        # 3. Eliminated contestants purge
+        evicted_replacements = [
+            (r"(?<![\u0C00-\u0C7F])ఝాన్సీ(?:ని|తో|పై|కి|తోటి|ను)?(?![\u0C00-\u0C7F])", "వర్షిణి"),
+            (r"(?<![\u0C00-\u0C7F])రోహిత్(?:ని|తో|పై|కి|తోటి|ను)?(?![\u0C00-\u0C7F])", "సుధీర్ రెడ్డి"),
+            (r"(?<![\u0C00-\u0C7F])శాలిని(?:ని|తో|పై|కి|తోటి|ను)?(?![\u0C00-\u0C7F])", "దేబ్జాని"),
+            (r"(?<![\u0C00-\u0C7F])చరణ్(?:ని|తో|పై|కి|తోటి|ను)?(?![\u0C00-\u0C7F])", "త్రిగుణ్"),
+            (r"(?<![\u0C00-\u0C7F])చైత్ర(?:ని|తో|పై|కి|తోటి|ను)?(?![\u0C00-\u0C7F])", "శ్వేత"),
+            (r"(?<![\u0C00-\u0C7F])కృష్ణుడు(?:ని|తో|పై|కి|తోటి|ను)?(?![\u0C00-\u0C7F])", "ముకేష్"),
+        ]
+        for pat, rep in evicted_replacements:
+            if re.search(pat, cleaned):
+                cleaned = re.sub(pat, rep, cleaned)
+                print(f"⚡ [Script Guard] Replaced eliminated housemate match ({pat}) with active housemate ({rep}).")
+        # 4. Anti-Hallucination: Fake numerical elimination claims in hook (e.g. "1 నిమిషంలో 3 లేడీలు ఎలిమినేట్")
+        if re.search(r"(?:ఈ\s*వారం\s*)?\d+\s*(?:నిమిషంలో|నిమిషాల్లో|సెకన్లలో|రోజుల్లో)\s*\d+\s*(?:లేడీలు|మంది|కంటెస్టెంట్లు)?\s*ఎలిమినేట్", cleaned):
+            cleaned = re.sub(
+                r"(?:ఈ\s*వారం\s*)?\d+\s*(?:నిమిషంలో|నిమిషాల్లో|సెకన్లలో|రోజుల్లో)\s*\d+\s*(?:లేడీలు|మంది|కంటెస్టెంట్లు)?\s*ఎలిమినేట్\s*(?:అయ్యారు|అయ్యారా|అయ్యారని)[.!।?]*",
+                "ఈ వారం ఎలిమినేషన్ రచ్చతో బిగ్ బాస్ హౌస్ మొత్తం షేక్ అయింది!",
+                cleaned
+            )
+            print("⚡ [Script Guard] Purged hallucinated rapid elimination numbers in hook.")
+
+        # 5. Sanitize alien transliteration of 'myth' ("మిథే")
+        cleaned = re.sub(r"అయ్యో,?\s*ఇది\s*మరీ\s*మిథే,?\s*(?:ఫ్రెండ్స్|బాస్)?[.!।?]*", "కానీ సోషల్ మీడియాలో జరుగుతున్న ప్రచారం ఎంతవరకు నిజం?", cleaned)
+        cleaned = re.sub(r"(?<![\u0C00-\u0C7F])మిథే(?![\u0C00-\u0C7F])", "అబద్ధం", cleaned)
+
+    return cleaned
+
+
+def load_golden_full_script(topic: str = "") -> str:
+    """Loads a complete 120-150 word golden script example matching the topic category."""
+    ex_file = ROOT / "config" / "roast_examples.json"
+    if not ex_file.exists():
+        return ""
+    try:
+        data = json.loads(ex_file.read_text(encoding="utf-8"))
+        full_scripts = data.get("full_scripts", [])
+        if not full_scripts:
+            return ""
+        from utils.season_guard import is_bigg_boss_topic
+        is_bb = is_bigg_boss_topic(topic) if topic else False
+        t_low = (topic or "").lower()
+
+        if is_bb:
+            target_cat = "reality_tv"
+        elif any(k in t_low for k in ["tech", "phone", "iphone", "apple", "samsung", "ai", "laptop", "gadget", "software", "code"]):
+            target_cat = "tech"
+        elif any(k in t_low for k in ["movie", "cinema", "film", "teaser", "trailer", "box office", "actor", "hero", "star"]):
+            target_cat = "cinema"
+        else:
+            target_cat = "reality_tv" if is_bb else "cinema"
+
+        for fs in full_scripts:
+            if fs.get("category") == target_cat:
+                return fs.get("script", "")
+        return full_scripts[0].get("script", "")
+    except Exception:
+        return ""
 
 
 def load_roast_examples(topic: str = "") -> str:
@@ -144,7 +420,7 @@ def load_roast_examples(topic: str = "") -> str:
 # 1. EXTRACT VERIFIED FACTS
 # ------------------------------------------------------------
 def extract_topic_facts(topic: str, source_context: Optional[Dict] = None) -> List[str]:
-    """Extracts 5-8 verified facts with names, numbers, plot points, or claims from topic."""
+    """Extracts 3-4 cohesive narrative story points that form ONE complete comedic arc."""
     from utils.season_guard import is_bigg_boss_topic
     is_bb = is_bigg_boss_topic(topic)
 
@@ -156,29 +432,29 @@ def extract_topic_facts(topic: str, source_context: Optional[Dict] = None) -> Li
     contestant_context = ""
     if is_bb:
         try:
-            c_file = ROOT / "contestants.json"
-            if c_file.exists():
-                c_data = json.loads(c_file.read_text(encoding="utf-8"))
-                c_list = [f"{v.get('full_name', k)} ({v.get('telugu_name', '')})" for k, v in list(c_data.items())[:8]]
-                contestant_context = f"\nActive Bigg Boss Telugu Housemates: {', '.join(c_list)}, Host Akkineni Nagarjuna.\n"
+            from data.bb10_contestants import get_active_contestants_prompt_context
+            contestant_context = f"\n{get_active_contestants_prompt_context()}\n"
         except Exception:
-            pass
+            contestant_context = "\nActive Bigg Boss Telugu Housemates: Temper Vamsi, Thrigun (త్రిగుణ్), Aman Masud, Sudheer Reddy, Auto Ram Prasad, Potti Naresh (Captain), Debjani, Shiv, Mukesh Gowda, Varshini Sounderajan, Rama Krishna, Swetha, Neethu. Host: Akkineni Nagarjuna.\n"
 
     if is_bb:
-        prompt = f"""You are an entertainment news reporter and savage comedy writer for Bigg Boss Telugu.
-Extract 5-7 CONCRETE, SPECIFIC reality show news facts and dramatic incidents about this topic:
+        prompt = f"""You are an entertainment comedy script writer for Bigg Boss Telugu.
+Extract 3 to 4 CONCRETE, COHESIVE story points forming ONE single narrative arc about this topic:
 Topic: {topic}
 {contestant_context}
 Context:
 {context_text or "Latest Bigg Boss Telugu house events, nominations, voting flips, and housemate conflicts"}
 
 MANDATORY RULES:
-- MUST name specific ACTIVE housemates (e.g. Temper Vamsi, Thrigun Eswaran, Aman Masud, Sudheer Reddy, Auto Ram Prasad, or Host Akkineni Nagarjuna). STRICT: DO NOT name eliminated housemates (Rohit Patnam, Shalini Patel, Gundeboina Jhansi, Chaithra Rai, Krishna Alluri, Srishti, and Charan Mahadev were eliminated).
-- MUST describe concrete events: heated nomination arguments, captaincy betrayal, secret room twist, shocking voting trend change, or weekend host grilling.
-- STRICTLY FORBIDDEN: Do NOT write generic empty filler like 'creators made claims', 'fake tears', or 'high voltage drama'. Give REAL actions, who said what, and why it exploded!
-Return ONLY a bulleted list of 5-7 concrete facts in English or Tanglish, one per line."""
+- Focus on ONE continuous narrative arc with active housemates:
+  Point 1: The Core Conflict / Clash: Which active housemates clashed (e.g. Potti Naresh, Temper Vamsi, Thrigun, Aman Masud, Sudheer Reddy, Mukesh Gowda) and what triggered the argument.
+  Point 2: The Overacting / Hypocrisy: How housemates overreacted, played safe games, or tried to cover up.
+  Point 3: The Reality Check / Stakes: What Nag's weekend reality check or the Week 11 voting danger zone means for them.
+- STRICT: Only name ACTIVE housemates. Current Captain is Potti Naresh (పొట్టి నరేష్). DO NOT name eliminated housemates (Rohit, Shalini, Jhansi, Chaithra, Krishnudu, Srishti, Charan were evicted).
+- STRICT: Ground statements in realistic house conflicts. DO NOT invent fake voting percentages or impossible events.
+Return ONLY a bulleted list of 3-4 cohesive story points in natural spoken Telugu script (తెలుగు లిపి). One per line."""
     else:
-        prompt = f"""Extract 5-8 concrete, verified facts about this topic.
+        prompt = f"""Extract 3-5 concrete, verified facts about this topic forming a cohesive narrative.
 Focus on specific names, numbers, prices, physical mechanisms, claims, quotes, or events that can be roasted or highlighted.
 Topic: {topic}
 Context:
@@ -188,13 +464,13 @@ MANDATORY RULES:
 - Ground all facts strictly in {topic}.
 - STRICTLY FORBIDDEN: This topic is NOT Bigg Boss or a reality show. Do NOT mention Bigg Boss, housemates, contestants, nominations, eliminations, Nagarjuna, or reality show drama.
 
-Return ONLY a bulleted list of 5-8 facts in English or Tanglish, one per line. No filler."""
+Return ONLY a bulleted list of 3-5 facts in English or Tanglish, one per line. No filler."""
 
     try:
         raw = generate_text_cascade(prompt, step_name="roast_facts", per_provider_timeout=10.0)
         facts = [re.sub(r"^[\*\-\d\.\s]+", "", line).strip() for line in raw.splitlines() if line.strip()]
-        facts = [f for f in facts if len(f) > 5][:8]
-        if len(facts) >= 3:
+        facts = [f for f in facts if len(f) > 5][:5]
+        if len(facts) >= 2:
             return facts
     except Exception as e:
         print(f"⚠️ Fact extraction notice: {e}")
@@ -202,17 +478,15 @@ Return ONLY a bulleted list of 5-8 facts in English or Tanglish, one per line. N
     # Fallback default facts anchored to real entities rather than generic filler
     if is_bb:
         return [
-            "Bigg Boss Telugu heated nomination clash broke out between Temper Vamsi and Aman Masud",
-            "Temper Vamsi's controversial captaincy decisions and biased task judgements sparked intense house rebellion",
-            "Thrigun Eswaran and Sudheer Reddy went head-to-head challenging house game strategies",
-            "Host Akkineni Nagarjuna's weekend reality check exposed secret voting pacts and overacting",
-            "Voting trend shockwaves created panic across housemates facing danger zone nominations",
+            "డే 75-76 టికెట్ టు ఫినాలే ఏరీనా టాస్క్‌లో త్రిగుణ్ టీమ్ ప్లానింగ్, అమన్ మసూద్ దూకుడు గేమ్",
+            "సంచాలక్ రూల్స్ మర్చిపోయి పక్షపాతం చూపించిన ముకేష్ గౌడ తప్పుల తడక నిర్ణయాలు",
+            "శ్వేత స్టోర్ రూమ్ గుంజీల పనిష్మెంట్, కెప్టెన్ పొట్టి నరేష్ బొమ్మ బాకు వార్నింగ్స్, వర్షిణి-దేబ్జాని నామినేషన్ల టెన్షన్",
+            "ఈ వీకెండ్‌లో నాగార్జునగారు ముకేష్ పక్షపాతానికి ఎలాంటి క్లాస్ పీకబోతున్నారో చూడాలనే ప్రేక్షకుల ఆసక్తి",
         ]
     return [
         f"Verified core principles and physical mechanisms behind {topic}",
         f"Dramatic instant changes, momentum shifts, and extreme impacts of {topic}",
         f"Surprising real-world consequences and sudden aftermath triggered by {topic}",
-        f"Intriguing observations and scientific or practical measurements about {topic}",
         f"Hilarious expectations vs shocking reality when examining {topic}",
     ]
 
@@ -274,13 +548,25 @@ RULES:
 def generate_roast_draft(topic: str, facts: List[str], target_duration_sec: int = 38) -> str:
     """Generates initial roast script draft anchored to facts, calibrated to target duration."""
     examples_str = load_roast_examples(topic=topic)
+    golden_script = load_golden_full_script(topic=topic)
+    golden_section = f"""
+============================================================
+🌟 GOLDEN BENCHMARK TELUGU CREATOR SCRIPT (FOLLOW THIS EXACT VIBE, FLOW & QUALITY):
+============================================================
+"{golden_script}"
+============================================================
+""" if golden_script else ""
 
-    if target_duration_sec <= 50:
-        word_target = "75-90 words (for a crisp, high-retention 35s Short)"
-        beats_count = "4-5 punchy beats"
+    if target_duration_sec <= 44:
+        word_target = "70-88 words (for a crisp, high-retention 30-40s Short)"
+        beats_count = "4-6 punchy visual beats"
+    elif target_duration_sec <= 75:
+        # User requirement: Strictly 45 to 70 seconds duration (nominal 60 seconds)
+        word_target = "115-145 words (for a dynamic 45-70s Short, nominal 60s)"
+        beats_count = "8-12 punchy visual beats (10-14 words per beat)"
     else:
-        word_target = "140-170 words (for an extended Short)"
-        beats_count = "7-9 punchy beats"
+        word_target = "150-185 words (for an extended Short)"
+        beats_count = "12-16 punchy visual beats"
 
     from utils.season_guard import is_bigg_boss_topic
     is_bb = is_bigg_boss_topic(topic)
@@ -289,22 +575,29 @@ def generate_roast_draft(topic: str, facts: List[str], target_duration_sec: int 
 - Hook (0-3s): SAVAGE HIGH-VOLTAGE OBSERVATIONAL HOOK (0.0s START):
   * STRICTLY FORBIDDEN: NEVER open with flat questions like "నిన్న రాత్రి జరిగిన ఎపిసోడ్ చూశారా", "అసలు ఏం జరిగిందో తెలుసా", or flat greetings.
   * MANDATORY: Open directly with a hilarious disbelief reality-check or witty hyperbole that shocks the viewer!
-    Example: "నిన్న రాత్రి బిగ్ బాస్ హౌస్‌లో జరిగిన డ్రామా చూశాక... వీళ్లు హౌస్‌లో ఉన్నారా లేక సీరియల్ సెట్‌లో ఉన్నారా అని డౌట్ వస్తుంది!"
+    Example: "బిగ్ బాస్ 10 హౌస్‌లో సంచాలక్ ముకేష్ గౌడ చేసిన రచ్చతో సీన్ మొత్తం సితార అయిపోయింది బాస్!"
 - Beat 1 & 2 (DRAMATIC OVERACTION SATIRE):
-  * Describe the concrete drama using vivid comedic hyperbole and contestant antics.
-    Example: "లగ్జరీ బడ్జెట్ పోయేసరికి అమన్ బాబు గార్డెన్ ఏరియాలో ఏకంగా ఆస్కార్ రేంజ్ ఓవర్ యాక్షన్ తో వీధి నాటకం స్టార్ట్ చేశాడు!"
+  * Describe the concrete arena task drama using vivid comedic hyperbole and contestant antics.
+    Example: "రూల్స్ బుక్ మర్చిపోయిన ముకేష్ గౌడ సంచాలక్ పోస్ట్ దొరికిందే ఛాన్స్ అని తన గ్రూప్‌కే సపోర్ట్ చేస్తూ ఆడియన్స్‌కి కూడా మైండ్ బ్లాంక్ చేశాడు!"
 - Beat 3 (COVERING & REACTIONS):
-  * Roast the hypocrisies, fake alliances, and excuses.
-    Example: "టాస్క్ పోగానే కవరింగ్ మాస్టర్లు రంగంలోకి దిగారు... తప్పు ఒప్పుకోవడం తప్ప మిగతావన్నీ మాట్లాడేశారు బాస్!"
-- Beat 4 / Ending: Savage punchline summarizing the comedy/hypocrisy.
+  * Roast the gameplay, physical arena fights, and punishments.
+    Example: "మరోపక్క త్రిగుణ్ తెలివైన గేమ్ ప్లాన్‌తో అమన్ మసూద్ టాస్క్‌లో దుమ్మురేపితే, శ్వేత స్టోర్ రూమ్‌లో గుంజీలు తీస్తూ కెప్టెన్ పొట్టి నరేష్ బొమ్మ బాకు పట్టుకుని వార్నింగ్ ఇవ్వడం చూస్తే నవ్వు ఆపుకోవడం ఎవరి వల్లా కాలేదు!"
+- Beat 4 / Ending: Upcoming Weekend reality check or voting stakes.
+  * Note: The weekend episode has NOT aired yet. Frame Host Nagarjuna as UPCOMING EXPECTATION.
+    Example: "మరి ఈ వీకెండ్‌లో నాగార్జునగారు వచ్చి ముకేష్ పక్షపాతానికి ఎలాంటి క్లాస్ పీకబోతున్నారో చూడాలి బాస్!"
 - Comment Trigger & CTA (Final Beat):
-  * End with a provocative, polarizing debate question (e.g. "ఈ వారం బిగ్ బాస్ హౌస్‌లో అసలైన కవర్ డ్రైవర్ ఎవరు? మీ అభిప్రాయం ఏమిటో కింద కామెంట్ చేయండి!") followed by witty లైక్, షేర్, సబ్‌స్క్రైబ్."""
-        bb_constraint = """BIGG BOSS TELUGU 10 ROSTER RULES:
-- ACTIVE HOUSEMATES: Temper Vamsi (CAPTAIN THIS WEEK), Thrigun Eswaran (Trigun), Aman Masud, Sudheer Reddy (Sudheer), Auto Ram Prasad, Potti Naresh, Debjani Modak, Shiv, Mukesh Gowda, Varshini Sounderajan, Rama Krishna, Swetha, Neethu Natraj.
-- HOST: Akkineni Nagarjuna.
-- THIS WEEK GROUND TRUTH: NO ELIMINATION THIS WEEK! Temper Vamsi is the current Captain of the house.
-- ELIMINATED CONTESTANTS: Rohit Patnam, Shalini Patel, Gundeboina Jhansi (Singer Jhansi), Chaithra Rai, Krishna Alluri (Krishnudu), Srishti Vyakaranam, Charan Mahadev, Mithilesh Reddy.
-- CRITICAL ACCURACY RULE: Rohit Patnam, Shalini Patel, Jhansi, Chaithra, Krishnudu, Srishti, and Charan are ALREADY ELIMINATED! DO NOT describe them inside the house, in captaincy, getting immunity, or performing weekly tasks! Focus strictly on the active housemates above."""
+  * End with a provocative, polarizing debate question followed by creator లైక్, షేర్, సబ్‌స్క్రైబ్.
+    Example: "మరి ముకేష్ సంచాలక్‌గా ఫెయిల్ అయ్యాడా? కింద కామెంట్ చేయండి! మరిన్ని కిర్రాక్ రోస్ట్‌ల కోసం లైక్ కొట్టి, ఇప్పుడే సబ్‌స్క్రైబ్ చేసుకోండి!" """
+        try:
+            from data.bb10_contestants import get_active_contestants_prompt_context
+            bb_constraint = get_active_contestants_prompt_context()
+        except Exception:
+            bb_constraint = """BIGG BOSS TELUGU 10 ROSTER RULES:
+- CURRENT CAPTAIN: Potti Naresh (పొట్టి నరేష్). CRITICAL: Potti Naresh is the sole current Captain of the house. Temper Vamsi is NOT the captain!
+- ACTIVE HOUSEMATES: Potti Naresh (Captain), Temper Vamsi, Thrigun (Trigun / త్రిగుణ్), Aman Masud, Sudheer Reddy (Sudheer), Auto Ram Prasad, Debjani Modak, Shiv, Mukesh Gowda, Varshini Sounderajan, Rama Krishna, Swetha, Neethu Natraj.
+- HOST: Akkineni Nagarjuna (గౌరవంగా 'నాగ్‌గారు' అని సంబోధించాలి).
+- THIS WEEK REALITY: Week 11 nomination clashes, voting trends, and Ticket to Finale race are underway. There IS an active elimination race this week (DO NOT claim 'no elimination this week'!).
+- ELIMINATED CONTESTANTS: Rohit Patnam, Shalini Patel, Gundeboina Jhansi, Chaithra Rai, Krishna Alluri, Srishti Vyakaranam, Charan Mahadev, Mithilesh Reddy."""
         loanword_samples = "'బిగ్ బాస్', 'మైండ్ బ్లాంక్', 'సీన్ కట్', 'పీఆర్ స్ట్రాటజీ', 'టీఆర్పీ రేటింగ్స్', 'సీక్రెట్ రూమ్', 'ఎలిమినేషన్', 'ఓటింగ్', 'కెప్టెన్'"
     else:
         struct_text = f"""Structure:
@@ -325,24 +618,30 @@ def generate_roast_draft(topic: str, facts: List[str], target_duration_sec: int 
 
     prompt = f"""{ROAST_PERSONA_PROMPT}
 
+{golden_section}
+
 Examples of good roast lines:
 {examples_str}
 
 Topic: {topic}
 Target Duration: {target_duration_sec} seconds
 Target Word Count: STRICTLY {word_target} ({beats_count})
-Anchored Facts to Roast:
+Anchored Story Beats to Cover:
 {chr(10).join(f"- {fact}" for fact in facts)}
 
 {struct_text}
 
 {bb_constraint}
 
-CRITICAL CADENCE & SCRIPT RULES:
-- STRICT PROHIBITION ON ALIEN TRANSLITERATIONS: NEVER phonetically transliterate obscure English words into Telugu (e.g. NEVER write 'సింకోఫాంట్', 'స్పానియెనిటీ', 'పారాడైమ్', 'మానిప్యులేషన్'). ALWAYS use natural Telugu colloquial idioms that real Telugu people speak (e.g. use 'భజన బ్యాచ్' or 'చంచాగిరీ' instead of sycophant; use 'సొంత తెలివి' or 'ఓన్ గేమ్' instead of spontaneity; use 'మైండ్ గేమ్' or 'ఎత్తుగడలు' instead of manipulation).
-- Punctuation-Driven Cadence: Break long lines into short punchy fragments using commas, dashes (—), and ellipsis (...) for organic breathing room, natural inflection, and anticipation.
-- 100% Telugu Script for All Loanwords: NEVER write English alphabet letters (do NOT write 'Mind blank', 'Scene cut', 'PR', 'TRP'). ALWAYS write loanwords in pure Telugu script (e.g. {loanword_samples}). English characters break neural TTS into an American/robotic accent.
-- Natural Conversational Expressions: Weave in lively creator spoken markers ('అసలు...', 'చూశారా!', 'అబ్బా!', 'ఏంటో భయ్యా...', 'నెక్స్ట్ లెవెల్ అండి బాబు...', 'బాబోయ్!') so narration feels like a friendly friend gossip, not robotic dubbing.
+CRITICAL SCRIPT & FLOW RULES:
+- STRUCTURE INTO {beats_count}:
+  * Divide the script into {beats_count} (each beat on a separate line with 10-14 words).
+  * This guarantees rapid, dynamic visual transitions (cuts every 4-6 seconds) instead of frozen static visuals.
+  * Tell ONE cohesive story from start to finish (Hook -> Conflict -> Hilarious Roast -> Reality Check -> Polarizing Question + CTA).
+- STRICT PROHIBITION ON ALIEN TRANSLITERATIONS: NEVER phonetically transliterate obscure English words into Telugu (e.g. NEVER write 'సింకోఫాంట్', 'స్పానియెనిటీ', 'పారాడైమ్', 'మానిప్యులేషన్', 'నాన్‌ఆఫ్', 'సటోర్ రూమ్', 'జాతి గుండెలు'). ALWAYS use natural Telugu colloquial idioms that real Telugu people speak (e.g. use 'భజన బ్యాచ్' instead of sycophant; use 'సొంత గేమ్' instead of spontaneity; use 'స్టోర్ రూమ్' instead of 'సటోర్ రూమ్'; use 'డిస్క్వాలిఫై' instead of 'నాన్‌ఆఫ్').
+- Punctuation-Driven Cadence: Use commas (,), dashes (—), and ellipsis (...) inside sentences for natural breath pauses and comedic timing.
+- 100% Telugu Script for All Loanwords: NEVER write English alphabet letters (write 'బిగ్ బాస్', 'మైండ్ బ్లాంక్', 'సీన్ కట్', 'పీఆర్', NOT English letters).
+- Natural Spoken Expressions: Include real creator conversational words ('అసలు...', 'చూశారా బాస్!', 'అబ్బో!', 'సీన్ కట్ చేస్తే...', 'ఫ్యూజులు ఎగిరిపోయాయి', 'గాలి తీసేశాడు').
 - Return ONLY the spoken narration text."""
 
     raw_script = generate_text_cascade(prompt, step_name="roast_draft", per_provider_timeout=18.0)
@@ -352,7 +651,7 @@ CRITICAL CADENCE & SCRIPT RULES:
         cleaned = ensure_telugu_script(cleaned)
     except Exception:
         pass
-    cleaned = _sanitize_awkward_loanwords(cleaned)
+    cleaned = validate_and_heal_script(cleaned, topic=topic)
     return cleaned
 
 
@@ -361,12 +660,15 @@ CRITICAL CADENCE & SCRIPT RULES:
 # ------------------------------------------------------------
 def punch_up_script(draft: str, facts: List[str], target_duration_sec: int = 38) -> str:
     """Tightens setups, ensures punchline is at the very end of every sentence, maintains target length."""
-    if target_duration_sec <= 50:
+    if target_duration_sec <= 44:
         length_rule = "Maintain total script strictly between 70 and 88 words (minimum 65 words) so spoken narration completes in 30-40 seconds with maximum audience retention."
         min_keep = 60
+    elif target_duration_sec <= 75:
+        length_rule = "Maintain total script STRICTLY between 115 and 145 words (minimum 110 words) structured into 8-12 punchy beat lines so spoken narration completes in 45-70 seconds (target ~60s) with rapid visual cuts."
+        min_keep = 105
     else:
-        length_rule = "Maintain total script STRICTLY between 140 and 175 words (minimum 135 words) so spoken narration lasts 65-85 seconds."
-        min_keep = 130
+        length_rule = "Maintain total script STRICTLY between 150 and 185 words (minimum 140 words) so spoken narration lasts 75-90 seconds."
+        min_keep = 135
 
     prompt = f"""You are a master comedy punch-up writer for Telugu YouTube Shorts.
 Take this roast draft and punch it up with Grok-style witty sarcasm:
@@ -420,10 +722,16 @@ def calibrate_script_before_execution(
     Validates and auto-calibrates script length and CTA BEFORE voice/image synthesis.
     Eliminates downstream Gate A / Gate B / Gate C failures with 0% risk of wasted render time.
     """
-    words = script.split()
-    word_count = len(words)
-    min_required = 120 if target_duration_sec > 50 else 65
-    max_allowed = 160 if target_duration_sec > 50 else 90
+    if target_duration_sec <= 44:
+        min_required = 65
+        max_allowed = 90
+    elif target_duration_sec <= 75:
+        # Strictly calibrated for 45 to 70s duration (nominal 60s)
+        min_required = 115
+        max_allowed = 145
+    else:
+        min_required = 145
+        max_allowed = 185
 
     print(f"🎯 [Script Calibration] Validating script: {word_count} words (Target: {min_required}-{max_allowed} words)...")
 
@@ -489,26 +797,26 @@ Return ONLY the expanded spoken narration in native Telugu script (తెలు�
 
         if is_bb_exp:
             roast_blocks = [
-                "అసలు హౌస్‌లో జరుగుతున్న ఈ గేమ్ స్ట్రాటజీ చూస్తుంటే ఆడియన్స్‌కి నవ్వాలో ఏడ్వాలో అర్థం కావడం లేదు బాస్.",
+                "అసలు హౌస్‌లో జరుగుతున్న ఈ గేమ్ స్ట్రాటజీ చూస్తుంటే ఆడియన్స్‌కి నవ్వాలో ఏడ్వాలో అర్థం కావడం లేదు.",
                 "కెమెరాలు ఉన్నాయని తెలిసి కూడా చేసే ఈ హై ఓవరాక్షన్ చూసి అందరి మైండ్ బ్లాంక్ అయిపోతోంది.",
-                "నామినేషన్లలో ఇంత పచ్చిగా డ్రామాలు ఆడుతూ సేఫ్ గేమ్ ప్లాన్ చేయడం వీళ్ళకే చెల్లింది బాస్.",
+                "నామినేషన్లలో ఇంత పచ్చిగా డ్రామాలు ఆడుతూ సేఫ్ గేమ్ ప్లాన్ చేయడం వీళ్ళకే చెల్లింది.",
                 "మొత్తానికి ఈ వీక్ ఎలిమినేషన్ ఎవరు అవుతారో చూడాలి కానీ, ఇదంతా ప్యూర్ టిఆర్పీ స్టంట్ తప్ప మరొకటి కాదు.",
             ]
         elif any(k in t_low for k in ["tech", "ai", "phone", "iphone", "apple", "samsung", "gadget", "software", "google"]):
             roast_blocks = [
-                "టెక్నాలజీ రంగంలో ఇలాంటి క్రేజీ డెవలప్‌మెంట్స్ చూస్తుంటే భవిష్యత్తు ఎలా ఉండబోతోందో అర్థం చేసుకోవచ్చు బాస్.",
+                "టెక్నాలజీ రంగంలో ఇలాంటి క్రేజీ డెవలప్‌మెంట్స్ చూస్తుంటే భవిష్యత్తు ఎలా ఉండబోతోందో అర్థం చేసుకోవచ్చు.",
                 "కొత్త ఫీచర్లు వినడానికి చాలా బాగున్నా, నిజ జీవితంలో యూజర్లకి ఎంతవరకు ఉపయోగపడతాయో వేచి చూడాలి.",
                 "ఈ రేంజ్ టెక్ వార్ చూస్తుంటే రాబోయే రోజుల్లో మార్కెట్లో కాంపిటీషన్ నెక్స్ట్ లెవెల్ ఉండబోతోంది.",
             ]
         elif any(k in t_low for k in ["movie", "cinema", "film", "teaser", "trailer", "tollywood"]):
             roast_blocks = [
-                "టాలీవుడ్ సినిమా ఇండస్ట్రీలో ఇలాంటి సర్ప్రైజ్‌లు ఎప్పుడూ ఆడియన్స్‌ని విపరీతంగా ఆకట్టుకుంటూనే ఉంటాయి బాస్.",
+                "టాలీవుడ్ సినిమా ఇండస్ట్రీలో ఇలాంటి సర్ప్రైజ్‌లు ఎప్పుడూ ఆడియన్స్‌ని విపరీతంగా ఆకట్టుకుంటూనే ఉంటాయి.",
                 "హైప్ పెంచడంలో మూవీ టీమ్ సక్సెస్ అయినా, థియేటర్లలో అసలు రిజల్ట్ ఎలా ఉంటుందో వేచి చూడాల్సిందే.",
                 "ఈ క్రేజీ కాంబినేషన్ బాక్సాఫీస్ దగ్గర ఎలాంటి రికార్డులు సృష్టిస్తుందో చూడటం చాలా ఆసక్తికరంగా మారింది.",
             ]
         else:
             roast_blocks = [
-                "ఇలాంటి ఆసక్తికరమైన విషయాలు విన్నప్పుడు ఎవరికైనా ఆశ్చర్యం కలగడం చాలా సహజం బాస్.",
+                "ఇలాంటి ఆసక్తికరమైన విషయాలు విన్నప్పుడు ఎవరికైనా ఆశ్చర్యం కలగడం చాలా సహజం.",
                 "మనం ఊహించిన దానికంటే నిజాలు చాలా భిన్నంగా, ఆలోచింపజేసేలా ఉంటాయి.",
                 "ఈ అంశంపై మీ ఆలోచనలు, నిజాలు ఏంటో కామెంట్లలో పంచుకోవడం మర్చిపోకండి.",
             ]
@@ -521,7 +829,14 @@ Return ONLY the expanded spoken narration in native Telugu script (తెలు�
             added.append(block)
             curr_w += len(block.split())
         if added:
-            script = f"{script.rstrip()} " + " ".join(added)
+            # If script already ends with a CTA, insert added before the CTA so the CTA remains at the very end
+            sents = [s.strip() for s in re.split(r"(?<=[.!?।\n])\s+", script) if s.strip()]
+            if sents and any(k in sents[-1].lower() for k in ["లైక్", "సబ్‌స్క్రైబ్", "కామెంట్", "subscribe", "like"]):
+                body = " ".join(sents[:-1])
+                cta = sents[-1]
+                script = f"{body} " + " ".join(added) + f" {cta}"
+            else:
+                script = f"{script.rstrip()} " + " ".join(added)
             words = script.split()
 
     # Check for quirky CTA presence; if missing, append dynamic quirky CTA
@@ -537,7 +852,7 @@ Return ONLY the expanded spoken narration in native Telugu script (తెలు�
     except Exception:
         pass
 
-    return script
+    return validate_and_heal_script(script, topic=topic)
 
 
 # ------------------------------------------------------------
@@ -609,49 +924,66 @@ Return valid JSON strictly matching:
 # ------------------------------------------------------------
 # 7. DELIVERY MARKUP (Universal Topics, Emotions, Pauses, SFX)
 # ------------------------------------------------------------
-def markup_roast_delivery(script: str, topic: str = "") -> List[Dict[str, Any]]:
+def markup_roast_delivery(script: Union[str, List[Any]], topic: str = "") -> List[Dict[str, Any]]:
     """Splits roast script into beats and tags with emotion presets, pauses, SFX, and on_screen_text."""
-    # Split into clean, cohesive beats (aim for 8-14 words per beat, 12-16 beats total)
-    # Avoid micro-slicing every 2-word fragment which floods the project with 35+ redundant image downloads
-    raw_tokens = [s.strip() for s in re.split(r"([.!?।]+|\n+)", script) if s.strip()]
-    merged_beats = []
-    curr = ""
-    for token in raw_tokens:
-        curr += (" " + token if curr and token not in (".", "!", "?", "।") else token)
-        # Consolidate sentences into semantic beats (min 7 words per beat)
-        if token in (".", "!", "?", "।", "\n") and len(curr.split()) >= 7:
-            merged_beats.append(curr.strip())
-            curr = ""
-    if curr.strip():
-        if merged_beats and len(curr.split()) < 5:
-            merged_beats[-1] = f"{merged_beats[-1]} {curr.strip()}"
-        else:
-            merged_beats.append(curr.strip())
-
-    # Clamp total beats between 10 and 16 for optimal 60-90s pacing
-    if len(merged_beats) > 16:
-        # Consolidate smallest adjacent beats
-        consolidated = []
-        c_buf = ""
-        target_per_beat = max(8, len(script.split()) // 14)
-        for b in merged_beats:
-            c_buf = f"{c_buf} {b}".strip() if c_buf else b
-            if len(c_buf.split()) >= target_per_beat:
-                consolidated.append(c_buf)
-                c_buf = ""
-        if c_buf:
-            if consolidated:
-                consolidated[-1] = f"{consolidated[-1]} {c_buf}"
+    if isinstance(script, list):
+        merged_beats = []
+        for item in script:
+            if isinstance(item, dict):
+                merged_beats.append(item.get("spoken_text", ""))
             else:
-                consolidated.append(c_buf)
-        merged_beats = consolidated
+                merged_beats.append(str(item))
+    else:
+        # Split into clean, cohesive beats (aim for 8-14 words per beat, 12-16 beats total)
+        # Avoid micro-slicing every 2-word fragment which floods the project with 35+ redundant image downloads
+        raw_tokens = [s.strip() for s in re.split(r"([.!?।]+|\n+)", str(script)) if s.strip()]
+        merged_beats = []
+        curr = ""
+        for token in raw_tokens:
+            curr += (" " + token if curr and token not in (".", "!", "?", "।") else token)
+            # Consolidate sentences into semantic beats (min 7 words per beat)
+            if token in (".", "!", "?", "।", "\n") and len(curr.split()) >= 7:
+                merged_beats.append(curr.strip())
+                curr = ""
+        if curr.strip():
+            if merged_beats and len(curr.split()) < 5:
+                merged_beats[-1] = f"{merged_beats[-1]} {curr.strip()}"
+            else:
+                merged_beats.append(curr.strip())
 
-    if len(merged_beats) < 4:
-        parts = [p.strip() for p in re.split(r"[,;]+", script) if len(p.strip()) > 15]
-        if len(parts) >= 4:
-            merged_beats = parts
-        else:
-            merged_beats = [script]
+        # Clamp total beats between 10 and 16 for optimal 60-90s pacing
+        if len(merged_beats) > 16:
+            # Consolidate smallest adjacent beats
+            consolidated = []
+            c_buf = ""
+            target_per_beat = max(8, len(str(script).split()) // 14)
+            for b in merged_beats:
+                c_buf = f"{c_buf} {b}".strip() if c_buf else b
+                if len(c_buf.split()) >= target_per_beat:
+                    consolidated.append(c_buf)
+                    c_buf = ""
+            if c_buf:
+                if consolidated:
+                    consolidated[-1] = f"{consolidated[-1]} {c_buf}"
+                else:
+                    consolidated.append(c_buf)
+            merged_beats = consolidated
+
+        if len(merged_beats) < 4:
+            parts = [p.strip() for p in re.split(r"[,;]+", str(script)) if len(p.strip()) > 15]
+            if len(parts) >= 4:
+                merged_beats = parts
+            else:
+                merged_beats = [str(script)]
+
+    # Clean up quotation marks, whitespace, and orphan quotes from each beat
+    cleaned_beats = []
+    for b in merged_beats:
+        b_clean = re.sub(r'[\"“”‘’`]+', '', b)
+        b_clean = re.sub(r'\s+', ' ', b_clean).strip()
+        if b_clean:
+            cleaned_beats.append(b_clean)
+    merged_beats = cleaned_beats or merged_beats
 
     beats_out = []
     sfx_pool = ["rimshot", "record_scratch", "crowd_ooh", "sad_trombone", "ding", "whoosh"]
@@ -681,12 +1013,12 @@ def markup_roast_delivery(script: str, topic: str = "") -> List[Dict[str, Any]]:
     CONTESTANT_BADGE_VARIANTS = ["గేమ్!", "ప్లాన్!", "రియాక్షన్!", "డ్రామా!", "షాక్!"]
 
     for idx, sentence in enumerate(merged_beats, 1):
-        # Determine emotion preset
-        # Dynamic Speed Adjustment: Dialogue tags and dramatic questions slow down slightly for impact
+        # Determine emotion preset and dynamic comedy SFX hit
+        sfx = None
         if idx == 1:
             emotion = "fake_shock"
             pause_ms = 0
-            sfx = None
+            sfx = "whoosh"
         elif idx == total_beats:
             emotion = "smug"
             pause_ms = 450
@@ -694,19 +1026,24 @@ def markup_roast_delivery(script: str, topic: str = "") -> List[Dict[str, Any]]:
         elif idx == total_beats - 1 or "?" in sentence or "ఏంటంటే" in sentence:
             emotion = "dramatic_question"
             pause_ms = 400
-            sfx = None
+            sfx = "ding" if sfx_assigned < 3 else None
+        elif any(k in sentence for k in ["అంట", "చూస్తే", "బాస్", "ఓవర్", "డ్రామా", "యాక్టింగ్"]):
+            emotion = "mock"
+            pause_ms = 350
+            if sfx_assigned < 3 and idx % 2 == 1:
+                sfx = "record_scratch"
         elif idx % 2 == 0:
             emotion = "hype"
             pause_ms = 450
-            sfx = None
-        elif any(k in sentence for k in ["అంట", "చూస్తే", "బాస్", "ఏంట్రా", "కథ"]):
-            emotion = "mock"
-            pause_ms = 350
-            sfx = None
+            if sfx_assigned < 3 and idx in (2, 4):
+                sfx = "rimshot"
         else:
             emotion = "deadpan"
             pause_ms = 300
             sfx = None
+
+        if sfx:
+            sfx_assigned += 1
 
         # Universal Entity / Badge Extraction with pure Telugu punchlines (Zero debug #numbers)
         matched_sentence = match_entities_in_text(sentence)
@@ -797,6 +1134,35 @@ def generate_roast_package(
     print("🔥 [Roast Engine] Generating 3 distinct script versions across personas...")
     from agents.script_agent import SCRIPT_PERSONAS, judge_and_select_best_script
 
+    golden_script = load_golden_full_script(topic=topic)
+    golden_section = f"""
+============================================================
+🌟 GOLDEN BENCHMARK TELUGU CREATOR SCRIPT (FOLLOW THIS EXACT VIBE, FLOW & QUALITY):
+============================================================
+"{golden_script}"
+============================================================
+""" if golden_script else ""
+
+    try:
+        from analytics.youtube_director import get_youtube_director
+        director = get_youtube_director()
+        fresh_directive = director.get_fresh_dialogue_directive(channel="Channel 2", topic=topic)
+    except Exception:
+        fresh_directive = {
+            "archetype_id": "skeptical_truth_teller",
+            "archetype_name": "Skeptical Truth-Teller (నిజాలు నిలదీసే శైలి)",
+            "fresh_hooks": ["పైకి కనిపించే డ్రామా ఒకటైతే... లోపల తెరవెనుక నడిచిన అసలు కథ వేరే లెవల్!"],
+            "fresh_punchlines": ["చెప్పే మాటలకి చేసే పనులకి అస్సలు సంబంధమే లేదు!"],
+            "fresh_cta": "మరి ఇందులో ఎవరు నిజాయితీగా ఉన్నారు? మీ ఆలోచనలను కింద కామెంట్స్ లో చెప్పండి! జెన్యూన్ అనాలిసిస్ కోసం లైక్ చేసి సబ్‌స్క్రైబ్ చేసుకోండి!",
+            "banned_cliches": ["వాతావరణం భగ్గుమంది బాస్", "ఫ్యూజులు ఎగిరిపోయాయి బాస్", "చూశారా బాస్", "గాలి తీసేశాడు"],
+            "prompt_directive": "",
+        }
+
+    fresh_hook_sample = fresh_directive["fresh_hooks"][0]
+    fresh_cta_sample = fresh_directive["fresh_cta"]
+
+    examples_str = load_roast_examples(topic=topic)
+
     word_target = "75-90 words (for a crisp, high-retention 35s Short)" if target_duration_sec <= 50 else "140-170 words"
     beats_count = "4-5 punchy beats" if target_duration_sec <= 50 else "7-9 punchy beats"
 
@@ -804,21 +1170,35 @@ def generate_roast_package(
     from utils.season_guard import is_bigg_boss_topic
     is_bb_pkg = is_bigg_boss_topic(topic)
     if is_bb_pkg:
-        struct_candidate = """Structure:
-- Hook (0-3s): High-curiosity news reveal or provocative question about a specific person/incident (e.g. "బిగ్ బాస్ హౌస్‌లో నిన్న రాత్రి జరిగిన నామినేషన్లలో అసలు ఏం జరిగిందో తెలుసా?"). No greetings, straight into the action at 0.0s.
-- Beat 1 & 2: The concrete event/incident mentioning specific housemates + absurd comedic contrast or mock praise.
-- Beat 3: The escalation or reaction of other contestants / Host Nagarjuna + witty sarcastic breakdown.
-- Beat 4 / Ending: Savage punchline summarizing the comedy/hypocrisy.
-- Comment Trigger & CTA: Engagement question provoking viewer comments (e.g. "మరి ఈ వారం ఎవరు ఎలిమినేట్ అవుతారో కింద కామెంట్ చేయండి!") followed by witty లైక్, షేర్, సబ్‌స్క్రైబ్."""
+        struct_candidate = f"""Structure:
+- Hook (0-3s): Fresh high-curiosity reveal matching style '{fresh_directive["archetype_name"]}': (e.g. "{fresh_hook_sample}")
+- Beat 1 & 2: The concrete event/clash mentioning active housemates + sharp comedic contrast. (e.g. "టాస్క్‌లో అమన్ మసూద్ దూకుడు చూపిస్తే, ముకేష్ గౌడ సంచాలక్‌గా తప్పుల తడక నిర్ణయాలు తీసుకుని ఆడియన్స్‌ని కూడా అయోమయంలో పడేశాడు!")
+- Beat 3: The escalation/reactions of housemates or upcoming Host Nagarjuna grilling. (e.g. "ఈ వీకెండ్ వేదికపై నాగార్జునగారు వచ్చి ముకేష్ పక్షపాతానికి ఎలాంటి క్లాస్ పీకబోతున్నారో చూడాలి!")
+- Beat 4: Weekend reality check or elimination stakes. (e.g. "ఇక డేంజర్ జోన్‌లో వర్షిణి, డెబ్జాని ఉండగా.. కెప్టెన్ పొట్టి నరేష్ ఇచ్చిన వార్నింగ్ పంచ్‌లు హౌస్‌లో వైరల్ అవుతున్నాయి!")
+- Comment Trigger & CTA: Polarizing debate question: (e.g. "{fresh_cta_sample}")"""
     else:
         struct_candidate = f"""Structure:
-- Hook (0-3s): High-curiosity shocking reveal or provocative observation about {topic}. No greetings, straight into the action at 0.0s.
+- Hook (0-3s): Fresh high-curiosity shocking reveal or provocative observation about {topic}. No greetings, straight into the action at 0.0s. (e.g. "{fresh_hook_sample}")
 - Beat 1 & 2: The concrete phenomenon/facts about {topic} + sharp comedic contrast, ironic observation, or mock praise.
 - Beat 3: The extreme reaction, physical/practical consequence, or chain reaction regarding {topic} + witty sarcastic breakdown.
 - Beat 4 / Ending: Savage punchline summarizing the ironic truth or reality check.
-- Comment Trigger & CTA: Polarizing question provoking viewer opinions in the comments about {topic} followed by creator లైక్, షేర్, సబ్‌స్క్రైబ్."""
+- Comment Trigger & CTA: Polarizing question provoking viewer opinions in the comments about {topic}: (e.g. "{fresh_cta_sample}")"""
 
-    bb_pkg_constraint = "" if is_bb_pkg else f"""STRICT TOPIC ISOLATION:
+    if is_bb_pkg:
+        try:
+            from data.bb10_contestants import get_active_contestants_prompt_context
+            bb_context = get_active_contestants_prompt_context()
+        except Exception:
+            bb_context = "Active: Temper Vamsi, Thrigun, Aman, Sudheer, Ram Prasad, Naresh (Captain), Debjani, Shiv, Mukesh, Varshini, Rama Krishna, Swetha, Neethu. Host: Nagarjuna."
+        bb_pkg_constraint = f"""BIGG BOSS TELUGU 10 GROUND TRUTH & ACCURACY CONSTRAINTS:
+{bb_context}
+- CRITICAL RULES:
+  1. Only mention active housemates. DO NOT mention eliminated contestants (Rohit Patnam, Shalini Patel, Gundeboina Jhansi, Charan Mahadev, Chaithra Rai, Krishna Alluri, Srishti Vyakaranam).
+  2. Respectful Host Honorifics: Always address Host Nagarjuna respectfully in plural ('నాగ్‌గారు అన్నారు', 'నాగ్‌గారు కౌంటర్ ఇచ్చారు', 'నాగ్‌గారు క్లాస్ పీకారు'). NEVER use singular.
+  3. Clean Contestant Names: 'త్రిగుణ్' (NOT 'ట్రైగన్' or 'ఎస్వరన్'), 'ముకేష్ గౌడ', 'సుధీర్ రెడ్డి', 'అమన్', 'టెంపర్ వంశీ'.
+  4. Week 11 Captain: Potti Naresh is the Captain. Temper Vamsi is NOT captain."""
+    else:
+        bb_pkg_constraint = f"""STRICT TOPIC ISOLATION:
 - This video is strictly about: {topic}.
 - STRICTLY FORBIDDEN: Do NOT mention Bigg Boss, contestants/housemates, nominations, eliminations, Nagarjuna, or reality show drama.
 - Keep 100% of the narrative, humor, and references anchored to {topic}."""
@@ -827,31 +1207,45 @@ def generate_roast_package(
     for idx, p_cfg in enumerate(SCRIPT_PERSONAS, start=1):
         p_prompt = f"""{ROAST_PERSONA_PROMPT}
 
+{golden_section}
+
+{fresh_directive.get('prompt_directive', '')}
+
 ============================================================
 MANDATORY VOCAL & NARRATIVE PERSONA: {p_cfg['name'].upper()}
 {p_cfg['directive']}
 ============================================================
 
+Examples of witty comedic lines:
+{examples_str}
+
 Topic: {topic}
 Target Duration: {target_duration_sec} seconds
 Target Word Count: STRICTLY {word_target} ({beats_count})
-Anchored Facts to Roast:
+Anchored Story Beats to Cover:
 {chr(10).join(f"- {fact}" for fact in facts)}
 
 {struct_candidate}
 
 {bb_pkg_constraint}
 
-CRITICAL CADENCE & SCRIPT RULES:
-- Punctuation-Driven Cadence: Break long lines into short punchy fragments using commas, dashes (—), and ellipsis (...) for organic breathing room and anticipation.
-- 100% Telugu Script for All Loanwords: NEVER write English alphabet letters (do NOT write 'Mind blank', 'Scene cut', 'PR', 'TRP'). ALWAYS write loanwords in pure Telugu script (e.g. {loanword_pkg_samples}).
-- Natural Spoken Expressions: Include real human expressions ('అసలు...', 'చూశారా!', 'అబ్బా!', 'ఏంటో భయ్యా...', 'నెక్స్ట్ లెవెల్ అండి బాబు...', 'బాబోయ్!') for organic creator warmth.
+CRITICAL SCRIPT & FLOW RULES:
+- WRITE A CONTINUOUS SPOKEN TELUGU MONOLOGUE (ఒకే ప్రవాహంలా సాగే ప్యూర్ తెలుగు సంభాషణ):
+  * Combine your thoughts into natural, connected sentences (do NOT put each short phrase on a separate line!).
+  * Strictly FORBIDDEN: DO NOT write 1-sentence fragmented lines or bullet points.
+  * Tell ONE cohesive story from start to finish (Hook -> Conflict -> Hilarious Roast -> Reality Check -> Polarizing Question + CTA).
+- STRICT BAN ON BIZARRE METAPHORS & LITERAL MACHINE TRANSLATIONS: Write straightforward, relatable humor! NEVER invent weird metaphors like 'thermal coffee', 'hot dog', 'cold weapon', or literal English translations. Use real relatable comparisons (e.g. 'ఇస్త్రీ పెట్టెలా వేడెక్కింది', 'టీ కప్పులా కాలిపోతోంది', 'కరెంట్ బిల్లులా ఎగిరిపోయింది'). For tech brands, write 'యాపిల్' (NEVER 'ఐఫోల్').
+- STRICT PROHIBITION ON ALIEN TRANSLITERATIONS: NEVER phonetically transliterate obscure English words into Telugu (e.g. NEVER write 'సింకోఫాంట్', 'స్పానియెనిటీ', 'పారాడైమ్', 'మానిప్యులేషన్'). ALWAYS use natural Telugu colloquial idioms that real Telugu people speak (e.g. use 'భజన బ్యాచ్' or 'చంచాగిరీ' instead of sycophant; use 'సొంత తెలివి' or 'ఓన్ గేమ్' instead of spontaneity; use 'మైండ్ గేమ్' or 'ఎత్తుగడలు' instead of manipulation).
+- Punctuation-Driven Cadence: Use commas (,), dashes (—), and ellipsis (...) inside sentences for natural breath pauses and comedic timing.
+- 100% Telugu Script for All Loanwords: NEVER write English alphabet letters (write 'బిగ్ బాస్', 'మైండ్ బ్లాంక్', 'సీన్ కట్', 'పీఆర్', NOT English letters).
+- Natural Spoken Expressions: Include real creator conversational words ('అసలు...', 'గమనించారా!', 'అబ్బో!', 'కానీ తీరా చూస్తే...', 'దిమ్మతిరిగే కౌంటర్').
 - Return ONLY the spoken narration text."""
         try:
             p_raw = generate_text_cascade(p_prompt, step_name=f"roast_v{idx}_{p_cfg['id']}", per_provider_timeout=14.0)
             cleaned = re.sub(r"```[a-zA-Z]*", "", p_raw).replace("```", "").strip()
             from utils.transliterate_telugu import ensure_telugu_script
             cleaned = ensure_telugu_script(cleaned)
+            cleaned = _sanitize_awkward_loanwords(cleaned)
             if cleaned and len(cleaned) >= 150:
                 candidates.append({
                     "index": idx,
@@ -900,6 +1294,19 @@ CRITICAL CADENCE & SCRIPT RULES:
         topic=topic,
         facts=facts,
     )
+
+    try:
+        from analytics.youtube_director import get_youtube_director
+        director = get_youtube_director()
+        calibrated_script = director.sanitize_script_cliches(calibrated_script)
+        director.record_script_dialogues(
+            script=calibrated_script,
+            topic=topic,
+            channel="Channel 2",
+            archetype_id=fresh_directive.get("archetype_id", ""),
+        )
+    except Exception as d_err:
+        print(f"⚠️ [YouTube Director Notice] {d_err}")
 
     print("🔥 [Roast Engine] Generating Delivery Markup & Emotion Presets...")
     beats = markup_roast_delivery(calibrated_script, topic=topic)

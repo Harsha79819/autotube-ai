@@ -870,11 +870,14 @@ def create_subtitle_chunks(
             current + chunk_duration,
         )
 
+        clean_chunk = chunk.strip()
+        clean_chunk = re.sub(r'^\s*["\'“”‘’`]+', '', clean_chunk).strip()
+
         subtitles.append(
             {
                 "start": start,
                 "end": end,
-                "text": chunk,
+                "text": clean_chunk or chunk,
             }
         )
 

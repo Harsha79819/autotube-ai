@@ -1,0 +1,39 @@
+{
+  "version": "2.0.0",
+  "last_updated": "2026-11-21T15:23:09.972854+00:00",
+  "history": [
+    {
+      "timestamp": "2026-11-21T15:23:00.692856+00:00",
+      "channel": "Channel 2",
+      "topic": "Bigg Boss 10 Mukesh Clashes",
+      "archetype_id": "witty_observational",
+      "hook_lead": "బిగ్ బాస్ హౌస్‌లో ముకేష్ గౌడ",
+      "detected_cliches": [
+        "సీన్ కట్ చేస్తే",
+        "వాతావరణం భగ్గుమంది బాస్",
+        "ఫ్యూజులు ఎగిరిపోయాయి బాస్"
+      ],
+      "cta_sample": "బిగ్ బాస్ హౌస్‌లో ముకేష్ గౌడ చేసిన రచ్చతో వాతావరణం భగ్గుమంది బాస్! సీన్ కట్ చేస్",
+      "word_count": 26
+    },
+    {
+      "timestamp": "2026-11-21T15:23:09.972838+00:00",
+      "channel": "Channel 1",
+      "topic": "Bigg Boss Telugu 10 Exposed",
+      "archetype_id": "skeptical_truth_teller",
+      "hook_lead": "60 కెమెరాలు తిరుగుతున్నా ఒక్క ఫ్రేమ్",
+      "detected_cliches": [],
+      "cta_sample": "60 కెమెరాలు తిరుగుతున్నా ఒక్క ఫ్రేమ్ కూడా దొరకలేదంటే నమ్ముతారా? అసలు మనం సీజన్ ఎ",
+      "word_count": 156
+    }
+  ],
+  "active_banned_cliches": [],
+  "archetype_usage_counts": {
+    "skeptical_truth_teller": 1,
+    "high_voltage_alert": 0,
+    "witty_observational": 1,
+    "dramatic_suspense": 0,
+    "tech_science_wonder": 0,
+    "direct_provocative": 0
+  }
+}

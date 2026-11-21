@@ -243,28 +243,19 @@ def clean_and_crop_image(image_path: Path, aspect_ratio: str = "9:16") -> Path:
                     im_rgb = bg_blurred.convert("RGB")
             elif aspect_ratio == "16:9":
                 target_w, target_h = 1920, 1080
+                current_ratio = w / float(h)
                 if (w, h) == (target_w, target_h):
                     pass
-                elif abs(w / float(h) - (target_w / float(target_h))) < 0.03:
+                elif abs(current_ratio - (target_w / float(target_h))) < 0.03:
                     im_rgb = im_rgb.resize((target_w, target_h), Image.Resampling.LANCZOS)
                 else:
-                    bg_scale = max(target_w / float(w), target_h / float(h))
-                    bg_w, bg_h = int(w * bg_scale), int(h * bg_scale)
-                    bg_im = im_rgb.resize((bg_w, bg_h), Image.Resampling.LANCZOS)
-                    crop_x = max(0, (bg_w - target_w) // 2)
-                    crop_y = max(0, (bg_h - target_h) // 2)
-                    bg_cropped = bg_im.crop((crop_x, crop_y, crop_x + target_w, crop_y + target_h))
-                    bg_blurred = bg_cropped.filter(ImageFilter.GaussianBlur(radius=28)).convert("RGBA")
-                    scrim = Image.new("RGBA", (target_w, target_h), (0, 0, 0, 50))
-                    bg_blurred = Image.alpha_composite(bg_blurred, scrim)
-
-                    fg_scale = min(target_w / float(w), target_h / float(h))
-                    fg_w, fg_h = int(w * fg_scale), int(h * fg_scale)
-                    fg_resized = im_rgb.resize((fg_w, fg_h), Image.Resampling.LANCZOS).convert("RGBA")
-                    fg_x = (target_w - fg_w) // 2
-                    fg_y = (target_h - fg_h) // 2
-                    bg_blurred.paste(fg_resized, (fg_x, fg_y), fg_resized)
-                    im_rgb = bg_blurred.convert("RGB")
+                    # Full-bleed 16:9 Cinema Crop: fills full 1920x1080 canvas without blurry side margins or boxed cards
+                    scale = max(target_w / float(w), target_h / float(h))
+                    new_w, new_h = int(w * scale), int(h * scale)
+                    im_scaled = im_rgb.resize((new_w, new_h), Image.Resampling.LANCZOS)
+                    crop_x = max(0, (new_w - target_w) // 2)
+                    crop_y = max(0, (new_h - target_h) // 2)
+                    im_rgb = im_scaled.crop((crop_x, crop_y, crop_x + target_w, crop_y + target_h))
 
             im_rgb.save(p, "JPEG", quality=95)
     except Exception as e:
@@ -290,7 +281,9 @@ def search_bing_images(query, max_results=16):
         "walmart.com", "aliexpress.com", "shopee.", "etsy.com", "shopify.com",
         "golove", "hot series", "livechat", "live-chat", "dating", "bikini", "lingerie",
         "underwear", "bra", "cleavage", "sexy", "nude", "naked", "erotic", "xxx", "porn",
-        "escort", "adult", "onlyfans", "char-creation", "hot-girls", "camgirl", "webcam", "strip"
+        "escort", "adult", "onlyfans", "char-creation", "hot-girls", "camgirl", "webcam", "strip",
+        "ytimg.com", "youtube.com", "i.ytimg.com", "clickbait",
+        "blood", "gore", "corpse", "wound", "injury", "accident", "murder", "dead_body", "hospital_bed"
     )
 
     # Method 1: Desktop HTML Search endpoint (most reliable, returns 20-40 direct murl photos)
@@ -619,6 +612,13 @@ def search_duckduckgo_images(query, max_results=12):
                             continue
                         low_url = direct_url.lower()
                         if any(low_url.endswith(ext) for ext in [".svg", ".gif", ".ico"]):
+                            continue
+                        # Strictly reject YouTube thumbnails and blood/gore/unsafe content
+                        bad_keywords = (
+                            "ytimg.com", "youtube.com", "i.ytimg.com", "clickbait",
+                            "blood", "gore", "corpse", "wound", "injury", "accident", "murder", "dead_body"
+                        )
+                        if any(bad in low_url for bad in bad_keywords):
                             continue
 
                         w = item.get("width") or 800

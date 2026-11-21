@@ -42,7 +42,11 @@ def main():
     parser.add_argument("--target-duration", "-d", default="30-50s", help="Target duration: 30-50s, 60s, etc.")
     parser.add_argument("--aspect-ratio", "-a", default="9:16", help="Aspect ratio (9:16 for Shorts/Reels, 16:9 for YouTube)")
     parser.add_argument("--upload", action="store_true", help="Auto-upload to YouTube if configured")
+    parser.add_argument("--privacy", default="public", help="YouTube privacy: public, private, or unlisted (default: public)")
+    parser.add_argument("--channel", default=None, help="Target channel: Channel 1 (Primary) or Channel 2 (Secondary)")
     parser.add_argument("--tone", default=None, help="Script tone (roast, dramatic, witty, informative)")
+    parser.add_argument("--script-file", default=None, help="Path to file containing custom script text")
+    parser.add_argument("--script-text", default=None, help="Direct custom script text")
 
     args = parser.parse_args()
 
@@ -51,6 +55,13 @@ def main():
     language_style = args.language_style
     duration = args.target_duration
     aspect = args.aspect_ratio
+
+    # Read script override if provided
+    script_override = None
+    if args.script_text:
+        script_override = args.script_text.strip()
+    elif args.script_file and os.path.exists(args.script_file):
+        script_override = Path(args.script_file).read_text(encoding="utf-8").strip()
 
     # Auto-detect content type if not explicitly passed
     content_type = args.content_type
@@ -61,6 +72,10 @@ def main():
         else:
             content_type = "News"
 
+    # Auto-detect target channel if not specified
+    from agents.youtube_agent import resolve_target_channel
+    channel = args.channel or resolve_target_channel(content_type, topic)
+
     print("=" * 60)
     print("🎬 AUTOTUBE AI - CLI PIPELINE EXECUTION")
     print(f"📌 Topic:          {topic}")
@@ -69,6 +84,9 @@ def main():
     print(f"🌐 Language Style: {language_style}")
     print(f"⏱️ Duration:       {duration}")
     print(f"📐 Aspect Ratio:   {aspect}")
+    print(f"🚀 Upload:         {args.upload} (Privacy: {args.privacy}, Channel: {channel})")
+    if script_override:
+        print(f"📝 Script Override: Provided ({len(script_override.split())} words)")
     print("=" * 60)
 
     from pipeline import generate_multi_media_video
@@ -83,6 +101,9 @@ def main():
         thumbnail=True,
         metadata=True,
         youtube_upload=args.upload,
+        youtube_privacy=args.privacy,
+        youtube_channel=channel,
+        script_override=script_override,
         aspect_ratio=aspect,
         target_duration=duration,
         generation_mode="stock",

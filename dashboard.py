@@ -102,17 +102,17 @@ VOICE_IDS = {
 }
 
 VOICE_TUNING = {
-    "👨 Mohan (Telugu Creator / Anchor) - Natural Spoken Delivery": ("+4%", "+0Hz"),
-    "👩 Shruti (Telugu Creator / Anchor) - Conversational": ("+4%", "+0Hz"),
+    "👨 Mohan (Telugu Creator / Anchor) - Natural Spoken Delivery": ("+18%", "+0Hz"),
+    "👩 Shruti (Telugu Creator / Anchor) - Conversational": ("+18%", "+0Hz"),
     "👨 Adam (Male Creator) - Fast, Crisp & Natural": ("-5%", "+0Hz"),
     "👩 Heart (Female Creator) - Smooth & Conversational": ("-5%", "+0Hz"),
     "👨 Michael (News Anchor) - Professional & Authoritative": ("-5%", "+0Hz"),
     "👩 Bella (Warm Female) - Expressive & Storytelling": ("-5%", "+0Hz"),
     "🎙️ OmniVoice Presenter (Zero-Shot AI Voice Design)": ("+0%", "+0Hz"),
-    "👨 Mohan (Telugu Male Anchor) - Edge-TTS (Fallback)": ("+4%", "+0Hz"),
-    "👩 Shruti (Telugu Female Anchor) - Edge-TTS (Fallback)": ("+4%", "+0Hz"),
-    "👨 Mohan (Telugu Male Anchor) - Edge-TTS": ("+4%", "+0Hz"),
-    "👩 Shruti (Telugu Female Anchor) - Edge-TTS": ("+4%", "+0Hz"),
+    "👨 Mohan (Telugu Male Anchor) - Edge-TTS (Fallback)": ("+18%", "+0Hz"),
+    "👩 Shruti (Telugu Female Anchor) - Edge-TTS (Fallback)": ("+18%", "+0Hz"),
+    "👨 Mohan (Telugu Male Anchor) - Edge-TTS": ("+18%", "+0Hz"),
+    "👩 Shruti (Telugu Female Anchor) - Edge-TTS": ("+18%", "+0Hz"),
     "👨 Adam (Male Creator) - Fast & Crisp": ("-5%", "+0Hz"),
     "👨 Michael (News Anchor) - Professional": ("-5%", "+0Hz"),
     "👩 Heart (Female Creator) - Smooth": ("-5%", "+0Hz"),
@@ -121,15 +121,15 @@ VOICE_TUNING = {
     "👩 Swara (Hindi Female Anchor) - Edge-TTS": ("+0%", "+0Hz"),
     "🎙️ Use My Own Voice Recording (Upload Audio)": ("+0%", "+0Hz"),
     "🤖 Clone My Voice with AI (Local XTTS-v2)": ("+0%", "+0Hz"),
-    "🔥 👩 Shruti (Telugu Female - Sarcastic & Roasting)": ("+14%", "+0Hz"),
-    "te-IN-ShrutiNeural-Roast": ("+14%", "+0Hz"),
-    "shruti-roast": ("+14%", "+0Hz"),
-    "te-IN-MohanNeural": ("+10%", "+0Hz"),
-    "te-IN-ShrutiNeural": ("+12%", "+0Hz"),
+    "🔥 👩 Shruti (Telugu Female - Sarcastic & Roasting)": ("+20%", "+0Hz"),
+    "te-IN-ShrutiNeural-Roast": ("+20%", "+0Hz"),
+    "shruti-roast": ("+20%", "+0Hz"),
+    "te-IN-MohanNeural": ("+18%", "+0Hz"),
+    "te-IN-ShrutiNeural": ("+18%", "+0Hz"),
     "hi-IN-MadhurNeural": ("+0%", "+0Hz"),
     "hi-IN-SwaraNeural": ("+0%", "+0Hz"),
-    "mohan": ("+10%", "+0Hz"),
-    "shruti": ("+12%", "+0Hz"),
+    "mohan": ("+18%", "+0Hz"),
+    "shruti": ("+18%", "+0Hz"),
     "clone": ("+0%", "+0Hz"),
     "xtts": ("+0%", "+0Hz"),
     "own_recording": ("+0%", "+0Hz"),
@@ -2246,10 +2246,9 @@ render_logout_button()
 # GLASS UI CSS
 # ============================================================
 
-from liquid_ui import inject_hud_glass_css, render_provider_audit_card, render_ai_butterfly_companion
+from liquid_ui import inject_hud_glass_css, render_provider_audit_card
 
 inject_hud_glass_css()
-render_ai_butterfly_companion()
 
 
 
@@ -2291,6 +2290,71 @@ if _t_url_p.exists():
                 st.caption("🔒 Secured via PIN Access Guard.")
     except Exception:
         pass
+
+# ============================================================
+# YOUTUBE ALGORITHM & STRATEGY DIRECTOR AI (PAPERCLIP CONTROL PLANE)
+# ============================================================
+try:
+    from analytics.youtube_director import get_youtube_director
+    director = get_youtube_director()
+    ch1_strat = director.get_channel_strategy("Channel 1")
+    ch2_strat = director.get_channel_strategy("Channel 2")
+    ch2_fresh = director.get_fresh_dialogue_directive("Channel 2")
+    ledger_data = director._read_ledger()
+    history_count = len(ledger_data.get("history", []))
+    banned_cliches = ch2_fresh.get("banned_cliches", [])
+
+    with st.expander("👑 YouTube Algorithm Director AI (Paperclip Multi-Agent Control Plane)", expanded=True):
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown(f"""
+            <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 12px; padding: 14px 16px; margin-bottom: 10px;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span style="font-weight:700; color:#38BDF8; font-size:1.0rem;">📡 Channel 1 (Lazy Line - Facts & Tech)</span>
+                    <span style="font-size:0.75rem; color:#94A3B8; background:rgba(56,189,248,0.12); padding:2px 8px; border-radius:4px;">{ch1_strat['ist_time']}</span>
+                </div>
+                <div style="margin-top:8px; font-size:0.88rem; color:#E2E8F0;">
+                    <b>Peak Slot:</b> <span style="color:#FBBF24;">{ch1_strat['time_slot']}</span><br>
+                    <b>Target Format:</b> <span style="color:#34D399;">{ch1_strat['recommended_format']}</span> ({ch1_strat['target_duration']})<br>
+                    <b>Strategic Angle:</b> <span style="color:#CBD5E1;">{ch1_strat['recommended_angle']}</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        with col2:
+            st.markdown(f"""
+            <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(244, 63, 94, 0.3); border-radius: 12px; padding: 14px 16px; margin-bottom: 10px;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span style="font-weight:700; color:#FB7185; font-size:1.0rem;">🔥 Channel 2 (Viral Talks & Roast)</span>
+                    <span style="font-size:0.75rem; color:#94A3B8; background:rgba(244,63,94,0.12); padding:2px 8px; border-radius:4px;">{ch2_strat['ist_time']}</span>
+                </div>
+                <div style="margin-top:8px; font-size:0.88rem; color:#E2E8F0;">
+                    <b>Peak Slot:</b> <span style="color:#FBBF24;">{ch2_strat['time_slot']}</span><br>
+                    <b>Target Format:</b> <span style="color:#34D399;">{ch2_strat['recommended_format']}</span> ({ch2_strat['target_duration']})<br>
+                    <b>Strategic Angle:</b> <span style="color:#CBD5E1;">{ch2_strat['recommended_angle']}</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown(f"""
+        <div style="background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 12px; padding: 12px 16px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                <div>
+                    <span style="font-weight:700; color:#A78BFA; font-size:0.95rem;">🎭 Active Narrative Archetype:</span>
+                    <span style="color:#F1F5F9; font-weight:600; margin-left:6px;">{ch2_fresh['archetype_name']}</span>
+                </div>
+                <div>
+                    <span style="background: rgba(16, 185, 129, 0.15); color: #34D399; font-size: 0.8rem; font-weight:700; padding: 3px 8px; border-radius: 6px;">✨ Freshness: 100% Guaranteed</span>
+                    <span style="background: rgba(99, 102, 241, 0.15); color: #818CF8; font-size: 0.8rem; font-weight:700; padding: 3px 8px; border-radius: 6px; margin-left:6px;">🧠 Memory: {history_count} Scripts Logged</span>
+                </div>
+            </div>
+            <div style="margin-top:8px; font-size:0.8rem; color:#94A3B8;">
+                <b>🛡️ Active Cliché Timeout (Banned from new scripts for 48h):</b>
+                <span style="color:#FB7185;">{', '.join(banned_cliches[:6]) if banned_cliches else 'None (All vocabulary clean)'}</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+except Exception:
+    pass
 
 # ============================================================
 # 24/7 MULTI-CHANNEL DAILY AUTOMATION (10 SLOTS)
@@ -2980,6 +3044,88 @@ with st.container():
             topic_label = "Topic"
             topic_placeholder = "Enter your video topic or edit the selected topic above..."
 
+        if content_type in ("Roasting", "Sarcastic", "Funny"):
+            from tools.trending_roast_topics import fetch_live_trending_roast_topics
+
+            roast_header_col1, roast_header_col2 = st.columns([3, 1])
+            with roast_header_col1:
+                st.markdown(
+                    """
+                    <div style="background: rgba(239, 68, 68, 0.12); border-left: 4px solid #EF4444; padding: 10px 14px; border-radius: 8px; margin: 10px 0 10px 0;">
+                        <div style="font-weight: 700; font-size: 0.9rem; color: #FCA5A5; display: flex; align-items: center; gap: 6px;">
+                            <span>🔥</span> <span>BIGG BOSS TELUGU 10 LIVE VIRAL ROAST TOPICS</span>
+                        </div>
+                        <div style="font-size: 0.8rem; color: #E5E7EB; margin-top: 3px;">
+                            ఈ వారం లేటెస్ట్ ట్రెండింగ్ బిగ్ బాస్ 10 & టాలీవుడ్ రోస్టింగ్ టాపిక్స్‌ని సెలెక్ట్ చేసుకోండి:
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+            with roast_header_col2:
+                st.write("")
+                refresh_roast = st.button("🔄 Fetch Live Topics", key="btn_refresh_roast_topics")
+
+            if "roast_rotation_step" not in st.session_state:
+                st.session_state["roast_rotation_step"] = 0
+
+            if refresh_roast:
+                st.session_state["roast_rotation_step"] += 1
+
+            rot_step = st.session_state["roast_rotation_step"]
+            live_roast_list = fetch_live_trending_roast_topics(force_refresh=bool(refresh_roast), rotation_step=rot_step)
+
+            # 3 Primary Live Quick Buttons
+            bb_c1, bb_c2, bb_c3 = st.columns(3)
+            with bb_c1:
+                t1 = live_roast_list[0] if len(live_roast_list) > 0 else {}
+                lbl1 = t1.get("badge", "🔥 లైవ్ రచ్చ 1")
+                topic1 = t1.get("topic", "బిగ్ బాస్ 10 నామినేషన్ల వార్ రోస్ట్")
+                if st.button(f"{lbl1}", key=f"bb_quick_1_{rot_step}", use_container_width=True, help=topic1):
+                    st.session_state["topic_input"] = topic1
+                    st.session_state["declared_script_tone"] = "roast"
+                    st.session_state["declared_show_context"] = "Bigg Boss Telugu 10"
+                    st.rerun()
+            with bb_c2:
+                t2 = live_roast_list[1] if len(live_roast_list) > 1 else {}
+                lbl2 = t2.get("badge", "⚡ లైవ్ రచ్చ 2")
+                topic2 = t2.get("topic", "బిగ్ బాస్ 10 ఎలిమినేషన్ షాక్ రోస్ట్")
+                if st.button(f"{lbl2}", key=f"bb_quick_2_{rot_step}", use_container_width=True, help=topic2):
+                    st.session_state["topic_input"] = topic2
+                    st.session_state["declared_script_tone"] = "roast"
+                    st.session_state["declared_show_context"] = "Bigg Boss Telugu 10"
+                    st.rerun()
+            with bb_c3:
+                t3 = live_roast_list[2] if len(live_roast_list) > 2 else {}
+                lbl3 = t3.get("badge", "🌪️ లైవ్ రచ్చ 3")
+                topic3 = t3.get("topic", "బిగ్ బాస్ 10 బిగ్ ట్విస్ట్ రోస్ట్")
+                if st.button(f"{lbl3}", key=f"bb_quick_3_{rot_step}", use_container_width=True, help=topic3):
+                    st.session_state["topic_input"] = topic3
+                    st.session_state["declared_script_tone"] = "roast"
+                    st.session_state["declared_show_context"] = "Bigg Boss Telugu 10"
+                    st.rerun()
+
+            # Dynamic Live Feed Selector for additional real-time stories
+            if len(live_roast_list) > 3:
+                extra_options = ["— Select from Live Real-Time Controversies —"] + [
+                    f"[{t.get('badge', 'LIVE')}] {t.get('desc', t['topic'])}" for t in live_roast_list
+                ]
+                def _on_roast_select():
+                    picked_idx = st.session_state.get("live_roast_dropdown_idx")
+                    if picked_idx and picked_idx > 0 and (picked_idx - 1) < len(live_roast_list):
+                        chosen_topic = live_roast_list[picked_idx - 1]["topic"]
+                        st.session_state["topic_input"] = chosen_topic
+                        st.session_state["declared_script_tone"] = "roast"
+                        st.session_state["declared_show_context"] = "Bigg Boss Telugu 10"
+
+                st.selectbox(
+                    "Or choose from real-time live headlines:",
+                    range(len(extra_options)),
+                    format_func=lambda i: extra_options[i],
+                    key="live_roast_dropdown_idx",
+                    on_change=_on_roast_select,
+                )
+
         topic = st.text_area(
             topic_label,
             placeholder=topic_placeholder,
@@ -2998,7 +3144,7 @@ with st.container():
                 "English short-form style",
                 "Hindi - हिंदी (News & Updates)",
             ],
-            index=0,
+            index=1 if content_type in ("Roasting", "Sarcastic", "Funny") else 0,
         )
 
         # ========================================================
@@ -3006,7 +3152,7 @@ with st.container():
         # ========================================================
         from config.settings import get_setting, update_setting
 
-        default_tone_setting = get_setting("TONE_DEFAULT", "roast")
+        default_tone_setting = "roast" if content_type in ("Roasting", "Sarcastic", "Funny") else get_setting("TONE_DEFAULT", "roast")
         tone_option = st.radio(
             "Script Tone & Delivery Style",
             [
@@ -3020,12 +3166,12 @@ with st.container():
         selected_tone = "roast" if "Roast" in tone_option else "neutral"
         st.session_state["declared_script_tone"] = selected_tone
 
-        default_show_context = get_setting("SHOW_CONTEXT", "Bigg Boss Telugu 8")
+        default_show_context = get_setting("SHOW_CONTEXT", "Bigg Boss Telugu 10")
         show_context_input = st.text_input(
             "Show / Season Context Lock (Optional)",
             value=st.session_state.get("declared_show_context", default_show_context),
             key="declared_show_context_widget",
-            help="Locks web visual search and face consensus strictly to this season/show (e.g., 'Bigg Boss Telugu 8') to avoid cross-season confusion.",
+            help="Locks web visual search and face consensus strictly to this season/show (e.g., 'Bigg Boss Telugu 10') to avoid cross-season confusion.",
         )
         if show_context_input and show_context_input.strip():
             st.session_state["declared_show_context"] = show_context_input.strip()
@@ -4012,10 +4158,26 @@ with st.container():
                 try:
                     notifs = json.loads(notif_p.read_text(encoding="utf-8"))
                     for n in notifs:
+                        msg = n.get("message")
+                        if isinstance(msg, dict):
+                            msg = msg.get("issue") or msg.get("detail") or str(msg)
+                        if not msg:
+                            # It's a summary object with an 'issues' list
+                            if "issues" in n and isinstance(n["issues"], list):
+                                for iss in n["issues"]:
+                                    i_msg = iss.get("actual") or iss.get("rule") or str(iss)
+                                    sev = iss.get("severity", "WARNING")
+                                    gate = iss.get("gate", "Pipeline")
+                                    if sev == "CRITICAL":
+                                        st.error(f"🛑 **[{gate}]** {i_msg}")
+                                    else:
+                                        st.warning(f"⚠️ **[{gate}]** {i_msg}")
+                            continue
+                        comp = n.get("component") or "Pipeline"
                         if n.get("severity") == "CRITICAL":
-                            st.error(f"🛑 **[{n.get('component', 'Pipeline')}]** {n.get('message')}")
+                            st.error(f"🛑 **[{comp}]** {msg}")
                         else:
-                            st.warning(f"⚠️ **[{n.get('component', 'Pipeline')}]** {n.get('message')}")
+                            st.warning(f"⚠️ **[{comp}]** {msg}")
                 except Exception:
                     pass
 

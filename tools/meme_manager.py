@@ -193,8 +193,8 @@ def fetch_dynamic_online_meme(
             hit_title = (hit.get("title") or "").lower()
             if not u:
                 continue
-            # Reject collage titles, multi-pack collections, or templates
-            if any(b in hit_title for b in ("template", "templates", "pack", "collection", "stickers", "download free", "wallpaper", "vector")):
+            # Reject collage titles, multi-pack collections, posters, compilations, or templates
+            if any(b in hit_title for b in ("template", "templates", "pack", "collection", "stickers", "download free", "wallpaper", "vector", "poster", "non stop", "nonstop", "compilation", "scenes", "full movie", "episode")):
                 continue
             try:
                 r = requests.get(u, headers=headers, timeout=6)
@@ -215,8 +215,9 @@ def fetch_dynamic_online_meme(
 
                             # Watermark, collage & branding check
                             ocr = scan_images_ocr([out_path])
-                            txt = ocr.get(str(out_path), "").lower()
-                            if any(b in txt for b in ["kulfy", "shutterstock", "getty", "alamy", "watermark", "template", "templates", "meme te", "pack", "stickers"]):
+                            txt = ocr.get(str(out_path), "").lower().strip()
+                            if len(txt) > 3 or any(b in txt for b in ["kulfy", "shutterstock", "getty", "alamy", "watermark", "template", "templates", "meme te", "pack", "stickers", "comedy", "scene", "video", "posani", "non stop"]):
+                                print(f"⚠️ [Meme OCR Guard] Rejected dynamic meme with text/watermark: '{txt}'")
                                 out_path.unlink(missing_ok=True)
                                 continue
 
@@ -282,7 +283,7 @@ def get_reaction_meme(
     # Filter out current run
     run_candidates = [
         fn for fn in candidate_files
-        if used_memes is None or fn not in used_memes
+        if used_memes is None or (fn not in used_memes and Path(fn).stem not in used_memes)
     ]
 
     recent_set = set(recent_history[-cooldown_runs:] if len(recent_history) >= cooldown_runs else recent_history)
@@ -307,6 +308,7 @@ def get_reaction_meme(
         if p.exists() and p.stat().st_size > 5000:
             if used_memes is not None:
                 used_memes.add(selected_fn)
+                used_memes.add(Path(selected_fn).stem)
             record_used_meme(selected_fn)
             return p
 

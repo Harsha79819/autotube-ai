@@ -20,6 +20,7 @@ from requests.adapters import HTTPAdapter
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential, wait_random
 from urllib3.util.retry import Retry
 from supervisor import autonomous_recover
+from providers.image import clean_and_crop_image
 
 load_dotenv()
 
@@ -255,6 +256,46 @@ def is_blacklisted_candidate(
         )):
             return True
 
+    # Strict Season 10 filter for Bigg Boss Telugu: reject old seasons (Season 1 to Season 9) and ad junk
+    is_bb_run = any(b in top_low or b in t_low for b in ("bigg boss", "bb10", "bb 10"))
+    if is_bb_run:
+        # Check for old seasons (1 through 9)
+        old_season_patterns = [
+            r"\bseason\s*[1-9]\b", r"\bseason[1-9]\b",
+            r"\bbb[1-9]\b", r"\bs[1-9]\b",
+            r"\bbigg\s*boss\s*[1-9]\b", r"\bbigg\s*boss\s*telugu\s*[1-9]\b",
+            r"\bott\b", r"\bnon\s*stop\b", r"\bnonstop\b"
+        ]
+        for pat in old_season_patterns:
+            if re.search(pat, c_meta) and not re.search(r"\b(?:season\s*10|season10|bb10|bb\s*10|s10|bigg\s*boss\s*telugu\s*10)\b", c_meta):
+                return True
+
+        # Check all past seasons known personalities and prior year markers
+        try:
+            from data.bb10_contestants import check_prior_seasons
+            is_prior, prior_reason = check_prior_seasons(c_meta)
+            if is_prior and not re.search(r"\b(?:season\s*10|season10|bb10|bb\s*10|s10|bigg\s*boss\s*telugu\s*10)\b", c_meta):
+                return True
+        except Exception:
+            pass
+
+        # Reject personal life events (wedding, marriage, reception) and off-topic media interviews
+        personal_life_tokens = (
+            "wedding", "marriage", "pelli", "pellillu", "reception", "engagement",
+            "bride", "groom", "wife", "spouse", "gulte", "press meet", "interview",
+            "audio launch", "pre release", "pre-release", "success meet"
+        )
+        if any(plt in c_meta for plt in personal_life_tokens):
+            return True
+
+        # Reject ad/clickbait/sponsored spam
+        ad_spam_tokens = (
+            "advertisement", "sponsored", "banner ad", "click here", "affiliate",
+            "bonus", "promo code", "discount", "offer", "shopping", "buy now"
+        )
+        if any(tok in c_meta for tok in ad_spam_tokens):
+            return True
+
     # Universal NSFW / Adult / Dating / Bikini / Lingerie / Inappropriate Ad Rejection
     if any(ad in c_meta for ad in (
         "golove", "hot series", "live chat", "livechat", "dating", "bikini", "lingerie",
@@ -393,13 +434,13 @@ def find_local_contestant_image(
     # Distinct episode stills & action shots (8+ photos per contestant).
     # Rotates through photos and strictly avoids photos used in current or recent runs.
     canonical_slug = cdata.get("slug") or slug
-    nick = cdata.get("nickname", "").lower()
     possible_slugs = [canonical_slug, slug]
-    if "_" in canonical_slug:
+    if "_" in canonical_slug and canonical_slug != "sudheer_reddy":
         possible_slugs.append(canonical_slug.split("_")[0])
-    if "_" in slug:
+    if "_" in slug and slug != "sudheer_reddy":
         possible_slugs.append(slug.split("_")[0])
-    if nick:
+    nick = cdata.get("nickname", "")
+    if nick and nick not in ("sudheer",):
         possible_slugs.append(nick)
     possible_slugs = list(dict.fromkeys([s for s in possible_slugs if s]))
 
@@ -457,6 +498,8 @@ def find_local_contestant_image(
         candidate_names.extend(["thrigun_eswaran.jpg", "thrigun.jpg", "trigun.jpg", "thrigun_adith.jpg"])
     elif "aman" in possible_slugs:
         candidate_names.extend(["aman_masud.jpg", "aman.jpg"])
+    elif any(s in ("nagarjuna", "akkineni_nagarjuna") for s in possible_slugs):
+        candidate_names.extend(["akkineni_nagarjuna.jpg", "nagarjuna.jpg"])
 
     candidate_names = list(dict.fromkeys([c for c in candidate_names if c]))
 
@@ -506,7 +549,7 @@ MIN_PIXEL_Y = 300
 
 MAX_FILE_SIZE = 12 * 1024 * 1024
 
-REQUEST_TIMEOUT = 6
+REQUEST_TIMEOUT = 3
 
 try:
     from agents.env_loader import get_pexels_api_key
@@ -2857,27 +2900,20 @@ def auto_balance_copyright_tier_b(
             )
             success = False
             if is_bb_mode:
-                # Reality/contestants: Never generate AI faces (prevents anime/cartoon). Use Canva-style card with contestant avatar or show interior
+                # Reality/contestants: Never generate giant text cards. Use authentic photos or reaction memes
                 try:
-                    from agents.typography_card import generate_typography_card
                     loc_c = find_local_contestant_image(f"{q_text}")
                     av_p = str(loc_c[1]) if loc_c else None
-                    b_lbl = f"{loc_c[0].upper().replace('_', ' ')} • BIGG BOSS 10" if loc_c else "BIGG BOSS TELUGU 10"
                     if not av_p:
                         bb_house = ROOT / "assets" / "entities" / "bigg_boss_telugu" / "image.jpg"
                         if bb_house.exists():
                             av_p = str(bb_house)
-                    success = generate_typography_card(
-                        headline_text=q_text,
-                        output_path=str(dest),
-                        topic_category="entertainment",
-                        aspect_ratio=aspect_ratio,
-                        badge_label=b_lbl,
-                        avatar_image_path=av_p,
-                        subtext="Bigg Boss Telugu 10 • Star Maa",
-                    )
+                    if av_p and Path(av_p).exists():
+                        shutil.copy2(av_p, dest)
+                        clean_and_crop_image(dest, aspect_ratio=aspect_ratio)
+                        success = dest.exists() and dest.stat().st_size > 1000
                 except Exception as bb_err:
-                    print(f"   Bigg Boss auto-balance card error on beat {b_id}: {bb_err}")
+                    print(f"   Bigg Boss auto-balance visual error on beat {b_id}: {bb_err}")
             else:
                 clean_p = rewrite_query_for_flux(q_text, is_explainer=False, show_context=show_ctx, topic_category=content_type or topic)
                 print(f"🎨 [Auto-Balance FLUX] Replacing Tier B beat {b_id} with FLUX AI visual: '{clean_p[:50]}...'")
@@ -3136,6 +3172,7 @@ def download_images_from_visual_plan(
                 social_assets = select_visuals_for_script(
                     script_text=script_text,
                     overall_context=ctx,
+                    aspect_ratio=aspect_ratio,
                 )
                 if social_assets:
                     try:
@@ -3235,6 +3272,7 @@ def download_images_from_visual_plan(
     topic_person_slug = kwargs.get("topic_person_slug") or (global_entity_name if global_is_entity else "")
 
     def process_single_visual(visual_tuple):
+        from providers.image import clean_and_crop_image
         visual_number, visual_query = visual_tuple
         destination = ASSETS_DIR / f"{visual_number}.jpg"
         video_dest = ASSETS_DIR / f"{visual_number}.mp4"
@@ -3383,28 +3421,12 @@ def download_images_from_visual_plan(
             except Exception:
                 pass
 
-        # Dedicated intro card only if explicitly requested for scene 1 profile
-        is_explicit_intro_card = (
-            visual_number == 1
-            and local_contestant
-            and s_content_type in ("contestant_profile", "intro_card")
-        )
-        if is_explicit_intro_card:
+        # Reference Anchor: Keep verified local reference as guaranteed fallback, but prioritize fresh online search & promo frames!
+        fallback_contestant = None
+        if local_contestant:
             c_slug, c_img_path = local_contestant
-            c_h = image_hash(c_img_path)
-            c_dh = image_dhash(c_img_path)
-            with hash_lock:
-                used_hashes.add(c_h)
-                if c_dh:
-                    used_dhashes.append(c_dh)
-            shutil.copy2(c_img_path, destination)
-            try:
-                from providers.image import clean_and_crop_image
-                clean_and_crop_image(destination, aspect_ratio=aspect_ratio)
-            except Exception:
-                pass
-            print(f"🎯 [Intro Card] Verified profile photo for '{c_slug}': {c_img_path.name} -> {destination.name}")
-            return visual_number, destination
+            fallback_contestant = (c_slug, c_img_path, c_canon if 'c_canon' in locals() else c_slug)
+            print(f"⚓ [Reference Anchor] Contestant identified as '{c_slug}' ({c_canon if 'c_canon' in locals() else c_slug}). Proceeding to search fresh Season 10 promo & online media...")
 
         from utils.season_guard import is_bigg_boss_topic
         is_bb_scene = (
@@ -3423,7 +3445,6 @@ def download_images_from_visual_plan(
         if is_entity and not (is_bb_scene and local_contestant):
             try:
                 from tools.build_entity_library import match_entities_in_text, get_entity_asset
-                from providers.image import clean_and_crop_image
                 el_matches = match_entities_in_text(f"{entity_name} {visual_query} {assigned_narration}")
                 combined_text = f"{entity_name} {visual_query} {assigned_narration}".lower()
                 el_matches = [
@@ -3498,14 +3519,14 @@ def download_images_from_visual_plan(
                     or bool(match_emotion_from_text(assigned_narration))
                 )
                 is_roast_context = any(k in f"{topic} {topic_category}".lower() for k in ("roast", "sarcas", "funny", "troll", "entertainment", "reality"))
-                max_memes = 4 if is_roast_context else 2
+                # Bigg Boss videos must strictly use authentic contestants, host, and house b-roll - ZERO external movie memes!
+                max_memes = 0 if is_bb_scene else (3 if is_roast_context else 2)
                 with hash_lock:
                     can_use_meme = is_meme_worthy and len(used_memes) < max_memes
                     meme_path = get_reaction_meme(f"{s_emotion} {visual_query} {assigned_narration}", used_memes=used_memes) if can_use_meme else None
                 if meme_path and meme_path.exists():
                     shutil.copy2(meme_path, destination)
                     try:
-                        from providers.image import clean_and_crop_image
                         clean_and_crop_image(destination, aspect_ratio=aspect_ratio)
                         m_h = image_hash(destination)
                         m_dh = image_dhash(destination)
@@ -3612,7 +3633,6 @@ def download_images_from_visual_plan(
                     if not already:
                         shutil.copy2(np, destination)
                         try:
-                            from providers.image import clean_and_crop_image
                             clean_and_crop_image(destination, aspect_ratio=aspect_ratio)
                             post_h = image_hash(destination)
                             post_dh = image_dhash(destination)
@@ -3643,91 +3663,17 @@ def download_images_from_visual_plan(
                 print(f"News media harvester notice: {n_err}")
 
         # ------------------------------------------------------------
-        # TIER 1.4: DYNAMIC CONTESTANT GALLERY STILLS (FALLBACK IF ONLINE HARVEST YIELDS NO ASSET)
+        # TIER 1.25: OFFICIAL STAR MAA YOUTUBE PROMO FRAMES (BIGG BOSS TELUGU 10 HD STILLS)
         # ------------------------------------------------------------
-        if is_bb_scene or local_contestant:
-            c_cand = local_contestant or find_local_contestant_image(
-                f"{entity_name} {visual_query} {assigned_narration}",
-                used_hashes=used_hashes,
-                used_dhashes=used_dhashes,
-            )
-            if c_cand:
-                c_slug, c_path = c_cand
-                if c_path.exists() and c_path.stat().st_size > 5000:
-                    c_h = image_hash(c_path)
-                    c_dh = image_dhash(c_path)
-                    with hash_lock:
-                        already_used = (
-                            (c_h and c_h in used_hashes)
-                            or (c_dh and is_perceptual_duplicate(c_dh, used_dhashes))
-                            or (str(c_path) in used_harvested_paths)
-                        )
-                        # OCR check: reject watermarked photos
-                        if not already_used:
-                            try:
-                                from tools.watermark_remover import clean_and_remove_watermarks, has_watermark_text
-                                from tools.ocr_guard import scan_images_ocr
-                                c_ocr = scan_images_ocr([c_path])
-                                c_txt = c_ocr.get(str(c_path), "")
-                                has_wm, wm_word = has_watermark_text(c_txt)
-                                if has_wm:
-                                    is_clean, cleaned_c = clean_and_remove_watermarks(c_path)
-                                    if not is_clean:
-                                        print(f"⚠️ [Contestant Gallery OCR] Disqualified watermarked image: {c_path.name} ({wm_word})")
-                                        already_used = True
-                                    else:
-                                        c_path = cleaned_c
-                            except Exception:
-                                pass
-
-                        if not already_used:
-                            used_harvested_paths.add(str(c_path))
-                            if c_h:
-                                used_hashes.add(c_h)
-                            if c_dh:
-                                used_dhashes.append(c_dh)
-                    if not already_used:
-                        shutil.copy2(c_path, destination)
-                        try:
-                            from providers.image import clean_and_crop_image
-                            clean_and_crop_image(destination, aspect_ratio=aspect_ratio)
-                            post_h = image_hash(destination)
-                            post_dh = image_dhash(destination)
-                            with hash_lock:
-                                if post_h:
-                                    used_hashes.add(post_h)
-                                if post_dh:
-                                    used_dhashes.append(post_dh)
-                        except Exception:
-                            pass
-                        try:
-                            from data.asset_ledger import record_asset
-                            record_asset(
-                                video_id="current",
-                                beat_id=visual_number,
-                                asset_path=str(destination),
-                                source_url=f"contestant_gallery:{c_slug}/{c_path.name}",
-                                tier="TIER_A",
-                                license_name="Editorial Reality Coverage Fair Dealing",
-                                credit_text=f"Bigg Boss 10 Episode Still ({c_slug.title()})",
-                                duration_sec=3.0,
-                            )
-                        except Exception:
-                            pass
-                        print(f"🌟 [Contestant Gallery] Visual {visual_number} assigned episode still for '{c_slug}': {c_path.name}")
-                        return visual_number, destination
-
-        # ------------------------------------------------------------
-        # TIER 1.6: OFFICIAL STAR MAA YOUTUBE PROMO FRAMES (BIGG BOSS ONLY, MAX 3 BEATS)
-        # ------------------------------------------------------------
-        max_promo_allowed = 3
+        max_promo_allowed = target_count
         with hash_lock:
             can_use_promo = len(used_promo_images) < max_promo_allowed
         if is_current_bb and can_use_promo:
             try:
                 from tools.promo_video_harvester import harvest_promo_visuals
-                promo_search_str = f"Star Maa Bigg Boss Telugu 10 {s_primary_ent or entity_name or ''} promo"
-                promo_stills = harvest_promo_visuals(promo_search_str, max_results=8)
+                target_ent = s_primary_ent or entity_name or (c_canon if 'c_canon' in locals() else '')
+                promo_search_str = f"Star Maa Bigg Boss Telugu 10 {target_ent} promo".strip()
+                promo_stills = harvest_promo_visuals(promo_search_str, max_results=6)
                 for ps in promo_stills:
                     if not ps.exists() or ps.stat().st_size < 8000:
                         continue
@@ -3754,7 +3700,6 @@ def download_images_from_visual_plan(
                     if not already:
                         shutil.copy2(ps, destination)
                         try:
-                            from providers.image import clean_and_crop_image
                             clean_and_crop_image(destination, aspect_ratio=aspect_ratio)
                             post_h = image_hash(destination)
                             post_dh = image_dhash(destination)
@@ -3795,7 +3740,6 @@ def download_images_from_visual_plan(
                 search_entertainment_posters,
                 search_twitter_media_images,
                 search_bing_images,
-                clean_and_crop_image,
                 is_tier_c_asset,
             )
             allow_tier_b = bool(get_setting("ALLOW_TIER_B", True))
@@ -4111,7 +4055,6 @@ def download_images_from_visual_plan(
                     return visual_number, asset_p
                 elif destination.exists() and destination.stat().st_size > 3000:
                     try:
-                        from providers.image import clean_and_crop_image
                         clean_and_crop_image(destination, aspect_ratio=aspect_ratio)
                     except Exception:
                         pass
@@ -4141,9 +4084,6 @@ def download_images_from_visual_plan(
         # ============================================================
         loc_c = loc_c_pre
         try:
-            from providers.image import clean_and_crop_image
-            import shutil
-
             av_p = str(loc_c[1]) if loc_c else None
             if not av_p and is_bb_scene:
                 bb_host = ROOT / "reference_assets" / "contestants" / "akkineni_nagarjuna.jpg"
@@ -4177,6 +4117,8 @@ def download_images_from_visual_plan(
                     pass
             elif av_p and Path(av_p).exists():
                 chosen_photo = Path(av_p)
+            elif fallback_contestant and fallback_contestant[1].exists():
+                chosen_photo = fallback_contestant[1]
             elif is_bb_scene:
                 bb_stage = ROOT / "assets" / "entities" / "bigg_boss_telugu" / "image.jpg"
                 if bb_stage.exists():
@@ -4295,8 +4237,6 @@ def download_images_from_visual_plan(
             # 1. Reality Show / Bigg Boss: Zero Giant Text Cards -> Clean authentic photo or Telugu reaction meme
             if is_bb_mode:
                 try:
-                    from providers.image import clean_and_crop_image
-                    import shutil
                     b_main_ent = ""
                     vp_file = OUTPUT_DIR / "visual_plan.json"
                     if vp_file.exists():
@@ -4340,9 +4280,11 @@ def download_images_from_visual_plan(
                         src_photo = Path(loc_c[1])
                     else:
                         swetha_ref = ROOT / "reference_assets" / "contestants" / "swetha.jpg"
+                        sudheer_ref = ROOT / "reference_assets" / "contestants" / "sudheer_reddy.jpg"
                         bb_host = ROOT / "reference_assets" / "contestants" / "akkineni_nagarjuna.jpg"
                         bb_stage = ROOT / "assets" / "entities" / "bigg_boss_telugu" / "image.jpg"
-                        for cand_p in [swetha_ref, bb_host, bb_stage]:
+                        brahmi_ref = ROOT / "assets" / "memes" / "brahmi_shocked.jpg"
+                        for cand_p in [swetha_ref, sudheer_ref, bb_host, bb_stage, brahmi_ref]:
                             if cand_p.exists():
                                 src_photo = cand_p
                                 break
@@ -4361,8 +4303,8 @@ def download_images_from_visual_plan(
                             results_map[num] = dest
                             applied = True
                             print(f"  ✓ Sourced authentic clean visual for Scene {num} -> {src_photo.name}")
-                    else:
-                        # Absolute emergency fallback only
+                    elif aspect_ratio != "9:16":
+                        # Absolute emergency fallback only for 16:9 landscape explainers
                         from agents.typography_card import generate_typography_card
                         headline = section_narrations.get(num, "") or (visuals[num - 1] if num - 1 < len(visuals) else f"Scene {num}")
                         if generate_typography_card(
@@ -4481,38 +4423,54 @@ def download_images_from_visual_plan(
                 except Exception as fb_err:
                     print(f"  Narrative fallback notice: {fb_err}")
 
-            # 3. Phase 5 Typography Card: Guaranteed 100% relevant, 0% copyright risk
+            # 3. Phase 5 Fallback: Never render text-only typography cards in 9:16 Shorts or Roasts!
             if not applied:
-                try:
-                    from agents.typography_card import generate_typography_card
-                    headline = section_narrations.get(num, "") or (visuals[num - 1] if num - 1 < len(visuals) else f"Scene {num}")
-                    print(f"💡 [Phase 5 Ladder] Generating Pillow Typography Card for Scene {num}...")
-                    if generate_typography_card(
-                        headline_text=headline,
-                        output_path=str(dest),
-                        topic_category=topic_category or "general",
-                        aspect_ratio=aspect_ratio,
-                        subtext=f"Scene {num} Breakdown",
-                    ):
-                        results_map[num] = dest
-                        applied = True
-                        try:
-                            from data.asset_ledger import record_asset
-                            record_asset(
-                                video_id="current",
-                                beat_id=num,
-                                asset_path=str(dest),
-                                source_url="pillow_typography_card",
-                                tier="TIER_A",
-                                license_name="AutoTube Generated Graphics",
-                                credit_text="AutoTube Graphic Engine",
-                                duration_sec=3.0,
-                            )
-                        except Exception:
-                            pass
-                        print(f"  ✓ Attached Phase 5 Typography Card -> assets/{num}.jpg")
-                except Exception as card_err:
-                    print(f"  Typography card fallback note: {card_err}")
+                is_shorts_or_roast = (aspect_ratio == "9:16") or is_roast_context or is_reality_context
+                if is_shorts_or_roast:
+                    try:
+                        # Priority A: Authentic Telugu Reaction Meme
+                        from tools.meme_manager import get_reaction_meme
+                        meme_fb = get_reaction_meme("reaction comedy shock", used_memes=used_memes)
+                        if meme_fb and meme_fb.exists():
+                            shutil.copy2(meme_fb, dest)
+                            clean_and_crop_image(dest, aspect_ratio=aspect_ratio)
+                            results_map[num] = dest
+                            applied = True
+                            print(f"  ✓ [Meme Fallback] Attached clean Telugu reaction meme for Scene {num} -> {meme_fb.name}")
+                    except Exception as m_fb_err:
+                        print(f"  Meme fallback notice: {m_fb_err}")
+
+                    if not applied:
+                        # Priority B: Authentic Show Interior / Host
+                        bb_house = ROOT / "assets" / "entities" / "bigg_boss_telugu" / "image.jpg"
+                        bb_host = ROOT / "reference_assets" / "contestants" / "akkineni_nagarjuna.jpg"
+                        for fb_cand in [bb_house, bb_host]:
+                            if fb_cand.exists():
+                                shutil.copy2(fb_cand, dest)
+                                clean_and_crop_image(dest, aspect_ratio=aspect_ratio)
+                                results_map[num] = dest
+                                applied = True
+                                print(f"  ✓ [Visual Fallback] Attached clean show still for Scene {num} -> {fb_cand.name}")
+                                break
+
+                # Only allow typography card for long-form landscape explainers (16:9), never 9:16 Shorts!
+                if not applied and aspect_ratio != "9:16":
+                    try:
+                        from agents.typography_card import generate_typography_card
+                        headline = section_narrations.get(num, "") or (visuals[num - 1] if num - 1 < len(visuals) else f"Scene {num}")
+                        print(f"💡 [Phase 5 Ladder] Generating Pillow Typography Card for Scene {num}...")
+                        if generate_typography_card(
+                            headline_text=headline,
+                            output_path=str(dest),
+                            topic_category=topic_category or "general",
+                            aspect_ratio=aspect_ratio,
+                            subtext=f"Scene {num} Breakdown",
+                        ):
+                            results_map[num] = dest
+                            applied = True
+                            print(f"  ✓ Attached Phase 5 Typography Card -> assets/{num}.jpg")
+                    except Exception as card_err:
+                        print(f"  Typography card fallback note: {card_err}")
 
             if not applied and flyer_path and save_flyer_fallback(flyer_path, dest):
                 results_map[num] = dest
@@ -4581,32 +4539,47 @@ def download_images_from_visual_plan(
             healed = False
             headline = section_narrations.get(m_idx, "") or (visuals[m_idx - 1] if m_idx - 1 < len(visuals) else f"Scene {m_idx}")
 
-            # 1. Reality Show / Bigg Boss: Zero Anime/Cartoon Faces -> Canva Editorial Card with real photo
+            # 1. Reality Show / Bigg Boss: Zero Giant Text Cards -> Clean authentic photo or Telugu reaction meme
             if is_bb_mode:
                 try:
-                    from agents.typography_card import generate_typography_card
                     loc_c = find_local_contestant_image(f"{headline}")
                     if not loc_c and topic_person_slug:
                         loc_c = find_local_contestant_image(topic_person_slug)
-                    av_p = str(loc_c[1]) if loc_c else None
-                    b_lbl = f"{loc_c[0].upper().replace('_', ' ')} • BIGG BOSS 10" if loc_c else "BIGG BOSS TELUGU 10"
-                    if not av_p:
-                        bb_host = ROOT / "reference_assets" / "contestants" / "akkineni_nagarjuna.jpg"
-                        if bb_host.exists():
-                            av_p = str(bb_host)
-                    healed = generate_typography_card(
-                        headline_text=headline,
-                        output_path=str(m_dest),
-                        topic_category="entertainment",
-                        aspect_ratio=aspect_ratio,
-                        badge_label=b_lbl,
-                        avatar_image_path=av_p,
-                        subtext="Bigg Boss Telugu 10 • Star Maa",
+                    
+                    is_comedy_beat = (
+                        m_idx % 3 == 0
+                        or any(w in str(headline).lower() for w in ["comedy", "roast", "funny", "laugh", "shock", "meme", "fan", "reaction", "clip"])
                     )
-                    if healed and m_dest.exists() and m_dest.stat().st_size > 1000:
-                        print(f"  ✓ Emergency Canva-style editorial card synthesized -> assets/{m_idx}.jpg")
+                    meme_chosen = None
+                    if is_comedy_beat:
+                        try:
+                            from tools.meme_manager import get_relevant_reaction_meme
+                            meme_chosen = get_relevant_reaction_meme(headline, tone="roast", scene_idx=m_idx)
+                        except Exception:
+                            pass
+
+                    src_photo = None
+                    if meme_chosen and Path(meme_chosen).exists():
+                        src_photo = Path(meme_chosen)
+                    elif loc_c and Path(loc_c[1]).exists():
+                        src_photo = Path(loc_c[1])
+                    else:
+                        swetha_ref = ROOT / "reference_assets" / "contestants" / "swetha.jpg"
+                        bb_host = ROOT / "reference_assets" / "contestants" / "akkineni_nagarjuna.jpg"
+                        bb_stage = ROOT / "assets" / "entities" / "bigg_boss_telugu" / "image.jpg"
+                        for cand_p in [swetha_ref, bb_host, bb_stage]:
+                            if cand_p.exists():
+                                src_photo = cand_p
+                                break
+
+                    if src_photo and src_photo.exists():
+                        shutil.copy2(src_photo, m_dest)
+                        clean_and_crop_image(m_dest, aspect_ratio=aspect_ratio)
+                        if m_dest.exists() and m_dest.stat().st_size > 1000:
+                            healed = True
+                            print(f"  ✓ Emergency authentic visual synthesized -> assets/{m_idx}.jpg ({src_photo.name})")
                 except Exception as c_err:
-                    print(f"  Emergency editorial card notice: {c_err}")
+                    print(f"  Emergency authentic visual notice: {c_err}")
                     healed = False
             else:
                 # 1b. First attempt fast free text-to-image (Pollinations FLUX/Sana) tailored to scene narration
@@ -4816,7 +4789,6 @@ def download_images_from_visual_plan(
     for img in final_images:
         if img.exists():
             try:
-                from providers.image import clean_and_crop_image
                 clean_and_crop_image(img, aspect_ratio=aspect_ratio)
             except Exception:
                 pass

@@ -620,7 +620,7 @@ async def generate_edge_tts_speech(
     speech_text,
     voice_code="te-IN-MohanNeural",
     output_mp3="output/voice.mp3",
-    rate="+8%",
+    rate="+18%",
     pitch="+0Hz",
 ):
     """Generate high-quality multilingual neural voice using Microsoft Edge-TTS with tuned pacing (+8% / ~1.08x Shorts brisk cadence),

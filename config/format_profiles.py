@@ -90,23 +90,30 @@ def parse_duration_to_seconds(raw_duration: Any) -> Tuple[float, float, float]:
         mid = float(m_min_single.group(1)) * 60.0
         return mid * 0.9, mid, mid * 1.1
 
-    # Range with seconds: "60-90s", "30-50s", "45-55s"
-    m_sec_range = re.search(r"(\d+)\s*-\s*(\d+)\s*(?:s|sec)?", s)
+    # Range with seconds: "60-90s", "60–90", "45-70s", "30-50s"
+    m_sec_range = re.search(r"(\d+)\s*[-–—to]+\s*(\d+)\s*(?:s|sec)?", s)
     if m_sec_range:
         lo = float(m_sec_range.group(1))
         hi = float(m_sec_range.group(2))
+        if lo == 45.0 and hi == 70.0:
+            return 45.0, 60.0, 70.0
         return lo, (lo + hi) / 2.0, hi
 
     # Single seconds: "60s", "90", "45"
     m_sec_single = re.search(r"(\d+)\s*(?:s|sec)?", s)
     if m_sec_single:
         mid = float(m_sec_single.group(1))
+        if mid == 60.0:
+            return 45.0, 60.0, 70.0
         return mid * 0.9, mid, mid * 1.1
 
     # Defaults: 60-90s if explicitly specified or spotlight/full story, 120-150s, 6-9m if long-form
     if "120-150" in s or "120–150" in s or "120 to 150" in s or "2-2.5" in s:
         return 115.0, 135.0, 155.0
-    if "spotlight" in s or "full" in s or "60-90" in s or "60" in s or "90" in s or "extended" in s:
+    if "45-70" in s or "45–70" in s or ("60" in s and "90" not in s and "16:9" not in s):
+        # User requirement: 45s to 70s window, nominal target 60s
+        return 45.0, 60.0, 70.0
+    if "spotlight" in s or "full" in s or "60-90" in s or "60–90" in s or "extended" in s:
         return 60.0, 75.0, 90.0
     if "6-9" in s or "long-form" in s or "history" in s:
         return 360.0, 450.0, 540.0
@@ -132,7 +139,11 @@ def get_format_profile(
 
     # Determine format_type if not explicitly supplied
     if not format_type:
-        if aspect_ratio == "16:9" or target_s >= 300.0 or "long" in str(target_duration).lower():
+        if target_s >= 300.0 or "long" in str(target_duration).lower():
+            format_type = "long-form"
+        elif target_s <= 180.0 or "short" in str(target_duration).lower():
+            format_type = "short"
+        elif aspect_ratio == "16:9":
             format_type = "long-form"
         else:
             format_type = "short"
@@ -204,10 +215,10 @@ def get_format_profile(
             max_words = min(92, int(max_s * wps_max))
             clips = max(8, math.ceil(min(target_s, 42.0) / 2.0))
         elif target_s <= 95.0:
-            # 60-90s Shorts Profile (Strictly 60-88s duration envelope)
-            min_words = max(120, int(min_s * wps_min))
-            max_words = min(160 if is_indic else 185, int(max_s * wps_max))
-            clips = max(12, min(16, math.ceil(target_s / 5.0)))
+            # 45-70s Shorts Profile (Strictly 45-70s duration envelope, nominal 60s)
+            min_words = 115 if is_indic else 125
+            max_words = 145 if is_indic else 165
+            clips = max(9, min(14, math.ceil(target_s / 5.0)))
         elif target_s <= 165.0:
             # 120-150s Extended Shorts (YouTube Shorts now officially supports up to 3 mins / 180s)
             min_words = max(230, int(min_s * wps_min))

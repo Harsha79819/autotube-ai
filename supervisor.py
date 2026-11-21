@@ -256,10 +256,16 @@ def heal_network_or_quota(stage_name, context=None):
 
         # Category Detection
         satire_kw = {"satire", "satirical", "roast", "funny", "humor", "pretend", "lazy", "sarcastic", "joke", "comedy", "prank", "corporate", "office"}
+        bb_telugu_kw = {
+            "బిగ్ బాస్", "బిగ్‌బాస్", "బిగ్బాస్", "నామినేషన్", "ఎలిమినేషన్", "కంటెస్టెంట్",
+            "కంటెస్టెంట్లు", "హౌస్‌మేట్", "హౌస్", "కెప్టెన్సీ", "వైల్డ్ కార్డ్", "నాగార్జున",
+            "ఎపిసోడ్", "ఓటింగ్", "డేంజర్ జోన్", "ముసుగులు"
+        }
         bb_kw = {
             "bigg boss", "bb telugu", "bb10", "star maa", "elimination", "nomination",
-            "contestant", "housemate", "captaincy", "nagarjuna", "bb drama"
-        }
+            "contestant", "contestants", "housemate", "housemates", "captaincy", "nagarjuna",
+            "bb drama", "danger zone", "wild card", "voting"
+        } | bb_telugu_kw
         finance_kw = {"stock", "sensex", "nifty", "market", "finance", "money", "crypto", "bitcoin", "economy", "invest", "trading", "shares", "dividend", "bank", "gold"}
         history_kw = {"history", "ancient", "war", "empire", "king", "dynasty", "mystery", "secrets", "temple", "monument", "mythology", "archaeology", "historical"}
         ent_kw = {
@@ -280,7 +286,13 @@ def heal_network_or_quota(stage_name, context=None):
         def any_kw(kws):
             return any(k in raw_topic_lower for k in kws)
 
-        is_bb = any_kw(bb_kw) or "bigg boss" in raw_topic_lower or bool(re.search(r"\b(bb|bb10|bb\d+)\b", raw_topic_lower))
+        is_bb = (
+            any_kw(bb_kw)
+            or any(k in raw_topic for k in bb_telugu_kw)
+            or any(k in clean_topic for k in bb_telugu_kw)
+            or "bigg boss" in raw_topic_lower
+            or bool(re.search(r"\b(bb|bb10|bb\d+)\b", raw_topic_lower))
+        )
         is_satire = any_kw(satire_kw) or "satir" in content_type_ctx or "sarcas" in content_type_ctx or "humor" in content_type_ctx or "roast" in content_type_ctx or "funny" in content_type_ctx
 
         if is_bb or "reality" in content_type_ctx:
@@ -397,7 +409,14 @@ def heal_network_or_quota(stage_name, context=None):
                 # Extract clean contestant or drama focus without raw English title dump
                 from tools.build_entity_library import match_entities_in_text
                 matched_ents = match_entities_in_text(raw_topic_lower)
-                ent_focus = matched_ents[0]["canonical_name"] if matched_ents else "కంటెస్టెంట్స్"
+                # Filter out show name itself so ent_focus is strictly human housemates
+                housemate_ents = [
+                    e for e in matched_ents 
+                    if not any(k in e.get("canonical_name", "").lower() for k in ("bigg boss", "star maa", "disney", "season"))
+                ]
+                ent_focus = housemate_ents[0]["canonical_name"] if housemate_ents else "కంటెస్టెంట్ల"
+                if any(k in ent_focus.lower() for k in ("bigg boss", "contestant", "housemate")):
+                    ent_focus = "కంటెస్టెంట్ల"
 
                 if tel:
                     base = [
@@ -758,6 +777,28 @@ def heal_network_or_quota(stage_name, context=None):
                          f"like share and subscribe animation youtube studio | modern channel closing call to action"),
                     ]
 
+            tel_elaboration_beats = [
+                ("ఇక ఈ విషయంలో తెరవెనుక జరుగుతున్న పరిణామాలు మరింత ఆసక్తికరంగా ఉన్నాయి.", "unfolding events behind the scenes documentary | intriguing perspective"),
+                ("సోషల్ మీడియాలో నెటిజన్లు దీనిపై వినూత్న రీతిలో స్పందిస్తూ తమ అభిప్రాయాలను పంచుకుంటున్నారు.", "social media community audience comments | viral engagement poll"),
+                ("పరిశీలకుల అంచనాల ప్రకారం, రాబోయే రోజుల్లో ఇది ఎలాంటి కొత్త మలుపులు తిరుగుతుందో చూడాలి.", "analysts discussion desk commentary | unexpected upcoming twist"),
+                ("ప్రతి ఒక్క అంశాన్ని లోతుగా గమనిస్తే ఇందులో ఎన్నో ఆశ్చర్యకరమైన కోణాలు వెలుగు చూస్తున్నాయి.", "detailed analytical breakdown | key elements presentation"),
+                ("ఆడియన్స్ సైతం ఈ సరికొత్త పరిణామాలను అత్యంత ఆసక్తిగా ఫాలో అవుతున్నారు.", "attentive audience watching screen | live reaction scene"),
+                ("మరిన్ని తాజా వివరాలు మరియు సమాచారం త్వరలోనే మరింత స్పష్టతనివ్వనున్నాయి.", "newsroom desk official briefing | factual insights report"),
+                ("సాధారణ ప్రేక్షకుల నుండి నిపుణుల వరకు అందరూ దీనిపై తమ సొంత విశ్లేషణలు చేస్తున్నారు.", "public opinion discussion forum | diverse perspectives panel"),
+                ("ఈ పరిణామం మొత్తం కథనానికే ఒక కీలకమైన హైలైట్ గా మారింది.", "defining moment highlight reel | dramatic turning point"),
+            ]
+            eng_elaboration_beats = [
+                (f"Looking deeper beneath the surface, behind-the-scenes dynamics add even greater intrigue.", f"{clean_topic} behind the scenes exploration | intriguing development"),
+                (f"Social media discussions and online communities are actively sharing diverse viewpoints.", f"{clean_topic} online community debate | viral audience reactions"),
+                (f"Industry observers note that upcoming developments could introduce surprising new twists.", f"{clean_topic} analytical commentary | strategic future outlook"),
+                (f"Examining each core detail reveals unexpected layers that many initially missed.", f"{clean_topic} detailed analytical breakdown | core elements showcase"),
+                (f"Audiences worldwide continue tracking every moment with heightened anticipation.", f"{clean_topic} focused audience engagement | high interest scene"),
+                (f"Emerging updates are expected to shed even clearer light on where things go next.", f"{clean_topic} official newsroom briefing | factual insights report"),
+                (f"Both everyday viewers and specialists are offering thoughtful breakdowns of the matter.", f"{clean_topic} public panel debate | diverse perspective showcase"),
+                (f"Altogether, this stands as one of the defining developments of the entire narrative.", f"{clean_topic} key highlight sequence | dramatic turning point"),
+            ]
+            elabs = tel_elaboration_beats if is_tel else eng_elaboration_beats
+
             if duration_type == "short":
                 short_beats = list(base[:8])
                 short_beats.append(base[-1])
@@ -769,27 +810,19 @@ def heal_network_or_quota(stage_name, context=None):
                 if len(base) >= 22:
                     return base[:22]
                 expanded = list(base[:-2])
-                while len(expanded) < 20:
-                    for item in base[2:-2]:
-                        if len(expanded) >= 20:
-                            break
-                        expanded.append((
-                            f"Delving further into this aspect of {clean_topic}: {item[0]}" if not is_tel else f"{clean_topic} అంశంలో మరింత పరిశీలిస్తే: {item[0]}",
-                            f"{item[1]} | detailed view"
-                        ))
+                for e_item in elabs:
+                    if len(expanded) >= 20:
+                        break
+                    expanded.append(e_item)
                 expanded.extend(base[-2:])
                 return expanded
             else:
                 if len(base) < 32:
                     expanded = list(base[:-2])
-                    while len(expanded) < 30:
-                        for item in base[2:-2]:
-                            if len(expanded) >= 30:
-                                break
-                            expanded.append((
-                                f"Delving deeper into this facet of {clean_topic}: {item[0]}" if not is_tel else f"{clean_topic} అంశంలో మరింత పరిశీలిస్తే: {item[0]}",
-                                f"{item[1]} | detailed perspective"
-                            ))
+                    for e_item in elabs:
+                        if len(expanded) >= 28:
+                            break
+                        expanded.append(e_item)
                     expanded.extend(base[-2:])
                     return expanded
                 return base

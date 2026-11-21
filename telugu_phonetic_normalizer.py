@@ -924,8 +924,68 @@ def normalize_telugu_tech_script(script_text: str) -> str:
         text
     )
 
+    # 5e. Reality TV and Roasting Phonetics (Names, Buzzwords, and Slang)
+    text = normalize_roast_and_reality_phonetics(text)
+
     # 6. Clean extra spaces
     text = re.sub(r"\s+", " ", text).strip()
+
+    return text
+
+
+def normalize_roast_and_reality_phonetics(text: str) -> str:
+    """
+    Normalizes Telugu Reality TV & Roasting phonetic names, loanwords, and slang
+    so Microsoft Edge-TTS (Shruti & Mohan) pronounces them crisp, human, and natural.
+    """
+    if not text:
+        return ""
+
+    # 1. Names and contestant pronunciation fixes
+    name_fixes = [
+        (r"(?<![\u0C00-\u0C7F])అమ్‌న(?![\u0C00-\u0C7F])", "అమన్"),
+        (r"(?<![\u0C00-\u0C7F])అమ్నా(?![\u0C00-\u0C7F])", "అమన్"),
+        (r"(?<![\u0C00-\u0C7F])ట్రిగన్(?![\u0C00-\u0C7F])", "త్రిగుణ్"),
+        (r"(?<![\u0C00-\u0C7F])త్రిగన్(?![\u0C00-\u0C7F])", "త్రిగుణ్"),
+        (r"(?<![\u0C00-\u0C7F])ముకేష్(?![\u0C00-\u0C7F])", "ముకేశ్"),
+        (r"(?<![\u0C00-\u0C7F])ముకేష్ గౌడ(?![\u0C00-\u0C7F])", "ముకేశ్ గౌడ"),
+        (r"(?<![\u0C00-\u0C7F])సుధీర్ రెడ్డి(?![\u0C00-\u0C7F])", "సుధీర్ రెడ్డి"),
+        (r"(?<![\u0C00-\u0C7F])నాగార్జున్(?![\u0C00-\u0C7F])", "నాగార్జున"),
+    ]
+    for pat, rep in name_fixes:
+        text = re.sub(pat, rep, text, flags=re.IGNORECASE)
+
+    # 2. Roast loanwords and reality TV terms (clean spoken Telugu phonetics)
+    reality_fixes = [
+        (r"మైండ్‌గేమ్స్?", "మైండ్ గేమ్స్"),
+        (r"ఓవరాక్షన్", "ఓవర్ యాక్షన్"),
+        (r"ఎలిమినేషన్స్?", "ఎలిమినేషన్"),
+        (r"నామినేషన్స్?", "నామినేషన్లు"),
+        (r"కెప్టెన్సీ", "కెప్టెన్సీ"),
+        (r"వైల్డ్‌కార్డ్", "వైల్డ్ కార్డ్"),
+        (r"సేఫ్‌గేమ్", "సేఫ్ గేమ్"),
+        (r"డేంజర్‌జోన్", "డేంజర్ జోన్"),
+        (r"డబుల్‌స్టాండర్డ్స్?", "డబుల్ స్టాండర్డ్స్"),
+        (r"హాస్య\s*ప్రాగల్భ్యత", "కామెడీ రచ్చ"),
+        (r"సగటు\s*రోజులోనే", "టాస్క్ మొదలవగానే"),
+        (r"ఏ\s*పిచ్చి\s*రాత్రి", "నిన్న రాత్రి జరిగిన రచ్చ"),
+        (r"గందరగోళం\s*ఆవిడలా", "ఫుల్ కన్‌ఫ్యూజన్"),
+        (r"నాయుడు\s*కాదు!?", ""),
+        (r"పుచ్చుకున్నాడు", "నిలదీశాడు"),
+        (r"ఎంబరాస్[^\s]*", "షాకయ్యారు"),
+        (r"సెన్సరల్[^\s]*", "హౌస్ లో"),
+        (r"టికెట్\s*కాపీలు", "ఆధారాలు"),
+        (r"టీకా[^\s]*", "క్లాస్ పీకింది"),
+        (r"సేమా\s*ఉపన్యాసం", "సినిమా ఉపన్యాసం"),
+        (r"మోడ్\s*క్లోజ్\s*అయిపోయింది", "ఫ్యూజులు ఎగిరిపోయాయి"),
+        (r"తాడుతో\s*బైండ్", "తాడుతో కట్టేసి"),
+        (r"బైండ్\s*చేశాడు", "కట్టేశాడు"),
+    ]
+    for pat, rep in reality_fixes:
+        text = re.sub(pat, rep, text, flags=re.IGNORECASE)
+
+    # 3. Clean multiple repeating 'బాస్... బాస్'
+    text = re.sub(r"\b(బాస్\s*){2,}", "బాస్ ", text)
 
     return text
 

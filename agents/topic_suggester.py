@@ -81,7 +81,9 @@ def record_used_topic(topic: str) -> None:
 
 CATEGORY_FEEDS = {
     "Bigg Boss Telugu": [
-        "https://news.google.com/rss/search?q=Bigg+Boss+Telugu+when:1d&hl=en-IN&gl=IN&ceid=IN:en",
+        "https://news.google.com/rss/search?q=Bigg+Boss+Telugu+10+Week+11+when:2d&hl=en-IN&gl=IN&ceid=IN:en",
+        "https://news.google.com/rss/search?q=Bigg+Boss+Telugu+Day+75+OR+Day+76+when:2d&hl=en-IN&gl=IN&ceid=IN:en",
+        "https://news.google.com/rss/search?q=Bigg+Boss+Telugu+nominations+voting+when:1d&hl=en-IN&gl=IN&ceid=IN:en",
         "https://news.google.com/rss/search?q=Star+Maa+Bigg+Boss+Telugu+when:1d&hl=en-IN&gl=IN&ceid=IN:en",
         "https://news.google.com/rss/search?q=Sakshi+Bigg+Boss+Telugu+when:1d&hl=en-IN&gl=IN&ceid=IN:en",
         "https://tv9telugu.com/entertainment/feed",
@@ -313,6 +315,18 @@ def fetch_live_feed_items(category_key: str, limit: int = 15, max_age_hours: flo
                     has_telugu = "telugu" in clean_lower or any(c in clean_lower for c in TELUGU_CONTESTANTS)
                     if not has_telugu:
                         continue
+                    # Reject outdated prior weeks (Weeks 1 through 10)
+                    if re.search(r"\bweek\s*(?:[1-9]|10)\b", clean_lower) or any(w in clean_lower for w in ["10th week", "9th week", "8th week", "7th week", "6th week", "5th week"]):
+                        continue
+                    # Reject eliminated housemates in headlines
+                    try:
+                        from data.bb10_contestants import is_eliminated_contestant
+                        if is_eliminated_contestant(clean_lower):
+                            continue
+                    except Exception:
+                        pass
+                    if any(evicted in clean_lower for evicted in ("jhansi", "rohit", "shalini", "charan", "chaithra", "srishti", "krishnudu", "mithilesh", "ఝాన్సీ", "రోహిత్", "శాలిని", "చరణ్")):
+                        continue
 
                 candidates.append(clean_title)
             return candidates
@@ -432,16 +446,16 @@ def _reshape_headline_deterministically(headline: str, category_key: str) -> str
 
 CURATED_TOPICS = {
     "Bigg Boss Telugu": [
-        "Bigg Boss Telugu 10: Shocking Mid-Week Eviction Danger Zone Unfiltered",
-        "Bigg Boss Telugu 10 Nominations: Who Got Targeted in Savage Clan War?",
-        "Bigg Boss Telugu 10: Host Nagarjuna's Weekend Class - Who Got Busted?",
-        "Bigg Boss Telugu 10 Secret Room Twist: Will the Evicted Contestant Return?",
-        "Bigg Boss Telugu 10 Voting Trends: Shocking Underdog Surge Exposed!",
-        "Bigg Boss Telugu 10 Immunity Shield Task: Physical Chaos in the House",
-        "Bigg Boss Telugu 10 Wildcard Shock: Old Contestants vs New House War",
-        "Bigg Boss Telugu 10 Captaincy Race: Betrayals and Broken Alliances Tonight",
-        "Bigg Boss Telugu 10 Sunday Funday Drama: Fake Smiles and Real Rivalries",
-        "Bigg Boss Telugu 10 Mega Eviction Shock: The Unofficial Voting Leaks Analyzed",
+        "Bigg Boss Telugu 10 Week 11: Shocking Mid-Week Eviction Danger Zone Unfiltered",
+        "Bigg Boss Telugu 10 Week 11 Nominations: Who Got Targeted in Savage Clan War?",
+        "Bigg Boss Telugu 10 Day 75: Host Nagarjuna's Weekend Class - Who Got Busted?",
+        "Bigg Boss Telugu 10 Ticket to Finale Race: Active Housemates Clash in High-Voltage Drama",
+        "Bigg Boss Telugu 10 Week 11 Voting Trends: Shocking Underdog Surge Exposed!",
+        "Bigg Boss Telugu 10 Immunity Shield Task: Physical Chaos Between Thrigun and Mukesh",
+        "Bigg Boss Telugu 10 Week 11 Captaincy Race: Betrayals and Broken Alliances Tonight",
+        "Bigg Boss Telugu 10 Sunday Funday Drama: Fake Smiles and Real Rivalries Exposed",
+        "Bigg Boss Telugu 10 Day 75 Shock: Unofficial Voting Leaks Analyzed for Active Housemates",
+        "Bigg Boss Telugu 10 Week 11: Sudden Nomination Twist Shakes the Entire House",
     ],
     "Tech News": [
         "OpenAI Unveils Next-Gen AI Reasoning Model: What It Means for Developers",
@@ -627,7 +641,7 @@ def fetch_ai_topic_suggestions(
             from providers.llm import generate_text_cascade
             
             tone_rules = {
-                "Bigg Boss Telugu": "shocking nomination twists, voting leaks, GOAT tasks, wildcard drama, and housemate clashes in Bigg Boss Telugu 10",
+                "Bigg Boss Telugu": "shocking Week 11 nomination twists, Day 75+ voting leaks, Ticket to Finale race, and high-voltage clashes between active housemates (Temper Vamsi, Thrigun, Mukesh Gowda, Aman, Sudheer, Varshini) in Bigg Boss Telugu 10",
                 "Roasting": "hilarious, savage roasts of recent drama, overacting, and viral controversies",
                 "Cinema & Entertainment": "high-energy Tollywood box office buzz, teaser breakdowns, and superstar announcements",
                 "Movie Reviews": "honest movie verdicts, OTT releases this week, and plot twist analysis",
@@ -640,6 +654,14 @@ def fetch_ai_topic_suggestions(
             headlines_block = "\n".join(f"- {h}" for h in live_headlines[:8])
             today_date_str = datetime.now().strftime("%B %d, %Y")
             
+            bb_prompt_grounding = ""
+            if key == "Bigg Boss Telugu":
+                bb_prompt_grounding = """
+6. BIGG BOSS TELUGU 10 REALITY (CRITICAL):
+   - Current Timeline: DAY 75+ (WEEK 11). NEVER refer to Week 10, Week 9, Week 8 or older weeks.
+   - Active Housemates ONLY: Temper Vamsi, Thrigun (త్రిగుణ్), Aman Masud, Sudheer Reddy, Auto Ram Prasad, Potti Naresh, Debjani Modak, Shiv, Mukesh Gowda, Varshini Sounderajan, Rama Krishna, Swetha, Neethu Natraj.
+   - Strictly Evicted Blacklist: DO NOT use Rohit Patnam, Shalini Patel, Gundeboina Jhansi, Charan Mahadev, Chaithra Rai, Krishna Alluri, Srishti Vyakaranam in any topic!"""
+
             prompt = f"""You are an elite YouTube content strategist for Telugu entertainment & Pop culture.
 Current Date: {today_date_str}
 Given these REAL BREAKING STORIES from TODAY ({today_date_str}, strictly past 24 hours):
@@ -653,7 +675,7 @@ CRITICAL RULES:
 2. Ground them strictly in today's real stories (e.g. latest episode tasks, voting leaks, teaser reactions).
 3. Do NOT invent fake celebrity names or confuse Telugu with Hindi, Malayalam, Tamil, or Kannada shows. All topics MUST be strictly focused on Telugu entertainment, Tollywood Telugu cinema, or Bigg Boss Telugu (Star Maa / Hotstar).
 4. Return ONLY a valid JSON array of strings: ["Title 1", "Title 2", ...]
-5. Do NOT output markdown code blocks or explanations."""
+5. Do NOT output markdown code blocks or explanations.{bb_prompt_grounding}"""
 
             res = generate_text_cascade(prompt, step_name=f"daily_topics_{key.lower().replace(' ', '_')}")
             if res:
@@ -664,6 +686,16 @@ CRITICAL RULES:
                     for t in parsed:
                         t_str = str(t).strip().strip('"\'')
                         if len(t_str) >= 15 and t_str.lower() not in used_set and t_str not in synthesized_titles:
+                            # Strict check against eliminated contestants in Bigg Boss topics
+                            if key == "Bigg Boss Telugu":
+                                try:
+                                    from data.bb10_contestants import is_eliminated_contestant
+                                    if is_eliminated_contestant(t_str):
+                                        continue
+                                except Exception:
+                                    pass
+                                if any(ev in t_str.lower() for ev in ("jhansi", "rohit", "shalini", "charan", "chaithra", "ఝాన్సీ", "రోహిత్", "శాలిని", "చరణ్")):
+                                    continue
                             synthesized_titles.append(t_str)
         except Exception as e:
             print(f"Notice: LLM topic synthesis fell back to deterministic re-shaper: {e}")
@@ -685,10 +717,10 @@ CRITICAL RULES:
     # 7. Ultimate safety fallback (dynamically generated for today's date)
     today_disp = datetime.now(timezone.utc).strftime("%A Special")
     today_fallbacks = [
-        f"Bigg Boss Telugu 10 {today_disp}: Unfiltered House Drama and Shocking Elimination Update!",
-        f"Bigg Boss Telugu 10 Voting Trends: Popular Contestants in Unexpected Danger Zone!",
+        f"Bigg Boss Telugu 10 Week 11 {today_disp}: Unfiltered House Drama and Shocking Eviction Danger Zone!",
+        f"Bigg Boss Telugu 10 Day 75 Voting Trends: Active Housemates Clash in Unexpected Danger Zone!",
         f"Tollywood Buzz: Mega Updates, Box Office Record Predictions & New Releases Breakdown!",
-        f"Roasting the Drama: Bigg Boss Telugu 10 Clashing Housemates and Clan Wars Analyzed!",
+        f"Roasting the Drama: Bigg Boss Telugu 10 Week 11 Ticket to Finale Clashes Analyzed!",
         f"OTT Releases This Week: Top Telugu Movies and Series You Cannot Miss!",
     ]
     safe_out = rank_topics_by_ovs([t for t in today_fallbacks if t.lower() not in used_set], key)[:count]

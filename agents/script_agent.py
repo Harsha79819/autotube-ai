@@ -98,19 +98,20 @@ def _call_gemini_with_retry(contents, model, max_retries=2):
             return fut.result(timeout=15.0)
         except Exception as error:
             err_str = str(error)
-            if "402" in err_str or "RESOURCE_EXHAUSTED" in err_str:
-                print(f"⚠️ Gemini quota/credits exhausted ({err_str[:60]}), failing over immediately...")
-                raise error
-            is_quota_err = "429" in err_str or "503" in err_str or "UNAVAILABLE" in err_str
+            is_quota_err = "429" in err_str or "402" in err_str or "RESOURCE_EXHAUSTED" in err_str or "503" in err_str or "UNAVAILABLE" in err_str
             if is_quota_err:
                 try:
                     from agents.env_loader import get_all_gemini_api_keys
-                    if len(get_all_gemini_api_keys()) > 1:
-                        print(f"🔄 [Key Rotation] Quota reached on active Gemini key. Rotating to next key in pool...")
+                    keys = get_all_gemini_api_keys()
+                    if len(keys) > 1:
+                        print(f"🔄 [Key Rotation] Quota/Limit hit ({err_str[:40]}). Rotating to next key in pool ({len(keys)} available)...")
                         active_client = get_client(rotate=True)
                         continue
-                except Exception:
-                    pass
+                except Exception as rot_e:
+                    print(f"Key rotation notice: {rot_e}")
+                if "402" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                    print(f"⚠️ All Gemini keys in pool exhausted ({err_str[:60]}), failing over...")
+                    raise error
                 if attempt < max_retries:
                     backoff = 2.0 * attempt
                     print(f"⚠️ Model {model} rate limited or overloaded (attempt {attempt}/{max_retries}). Backing off {backoff:.1f}s...")
@@ -936,8 +937,8 @@ def synthesize_beat_visual_plan(delivery_plan: List[Dict[str, Any]], topic: str 
         if not is_bb
         else (
             "- MANDATORY REALITY SHOW FORMAT: Format search_query strictly as '[Contestant Name] [Season Name]' (e.g. 'Thrigun Bigg Boss Telugu 10', 'Temper Vamsi Bigg Boss 10', 'Aman Masud Bigg Boss Telugu 10').\n"
-            "- STRICT GROUND TRUTH: Active Season 10 housemates: Temper Vamsi (CAPTAIN THIS WEEK), Thrigun Eswaran (Trigun), Aman Masud, Sudheer Reddy (Sudheer), Auto Ram Prasad, Potti Naresh, Debjani Modak, Shiv, Mukesh Gowda, Varshini Sounderajan, Rama Krishna, Swetha, Neethu Natraj, Host Akkineni Nagarjuna.\n"
-            "- THIS WEEK GROUND TRUTH: NO ELIMINATION THIS WEEK! Temper Vamsi is the current Captain.\n"
+            "- STRICT GROUND TRUTH: Active Season 10 housemates: Potti Naresh (CURRENT WEEK 11 CAPTAIN), Temper Vamsi, Thrigun (Trigun / త్రిగుణ్), Aman Masud, Sudheer Reddy (Sudheer), Auto Ram Prasad, Debjani Modak, Shiv, Mukesh Gowda, Varshini Sounderajan, Rama Krishna, Swetha, Neethu Natraj, Host Akkineni Nagarjuna.\n"
+            "- CURRENT WEEK 11 CAPTAIN: Potti Naresh (పొట్టి నరేష్). Note: Temper Vamsi is NOT captain; Potti Naresh is the sole current Captain.\n"
             "- ELIMINATED CONTESTANTS: Rohit Patnam, Shalini Patel, Gundeboina Jhansi (Singer Jhansi), Chaithra Rai, Krishna Alluri (Krishnudu), Srishti Vyakaranam, Charan Mahadev, Mithilesh Reddy. STRICT: DO NOT feature eliminated contestants in active house tasks, immunity, captaincy, or nominations unless the topic specifically covers their eviction episode!\n"
             "- STRICT PROHIBITION: NEVER use past contestants or unrelated stars: NO Rohit Sahni, NO Anchor Jhansi, NO Ram Charan.\n"
             "- FORBIDDEN GENERIC QUERIES: NEVER output generic search queries like 'Bigg Boss Telugu drama', 'Bigg Boss emotional scene', 'Bigg Boss Telugu stage', or 'Bigg Boss housemates'."
@@ -952,13 +953,13 @@ CRITICAL RULES:
    {{
      "beat_id": <number>,
      "narration": "<Telugu narration sentence>",
-     "main_entity": "<Exact Name of Celebrity/Person, Company, or Product (e.g. Thrigun Eswaran / Shiv / Dil Raju)>",
+     "main_entity": "<Exact Name of Celebrity/Person, Company, or Product (e.g. Thrigun / Akkineni Nagarjuna / Mukesh Gowda)>",
      "emotion": "<shocked / angry / aggressive / smiling / serious / deadpan>",
-     "search_query": "<Clean 2-4 word keyword query (e.g., 'Thrigun Eswaran bigg boss' or 'Shiv Anchor bigg boss')>"
+     "search_query": "<Clean 2-4 word keyword query (e.g., 'Thrigun bigg boss' or 'Akkineni Nagarjuna bigg boss 10')>"
    }}
 3. STRICT RULE: The LLM must NEVER use the entire narration sentence as the search query! You must explicitly extract the target person's name and the context keyword (2 to 4 words max).
 4. EVERY beat MUST have a completely UNIQUE search_query. Never repeat queries across beats.
-5. STRICT ENTITY FIDELITY: The 'main_entity' for each beat MUST strictly reflect the person or subject being discussed in that beat's narration. Extract ONLY the person, celebrity, or entity actively referenced in that specific sentence. Do NOT invent or substitute other individuals who are not being talked about in that beat!
+5. STRICT ENTITY FIDELITY: The 'main_entity' for each beat MUST strictly reflect the person or subject being discussed in that beat's narration. If the beat discusses Host Nagarjuna (నాగ్ / నాగ్‌గారు / నాగార్జున), the main_entity MUST be 'Akkineni Nagarjuna' (NEVER substitute another contestant!). Extract ONLY the person, celebrity, or entity actively referenced in that specific sentence.
 {bb_negative_rule}
 
 BEATS:
@@ -1055,6 +1056,8 @@ Output valid JSON only:
 
     result_lines = []
     used_queries: set = set()
+    used_meme_combinations: set = set()
+    used_contestant_counts: dict = {}
     meme_count = 0
 
     for idx, b in enumerate(delivery_plan, 1):
@@ -1065,11 +1068,14 @@ Output valid JSON only:
         raw_emo = str(b.get("emotion", "")).lower()
 
         # Check if this beat is an emotional reaction / roast payoff moment for a Telugu reaction meme
-        max_script_memes = 4 if (is_roast or any(k in topic.lower() for k in ["roast", "sarcas", "funny", "troll"])) else 2
+        max_script_memes = 0 if is_bb else 3
+        matched_contestants = match_entities_in_text(spoken) if is_bb else []
         is_meme_beat = (
-            meme_count < max_script_memes
+            max_script_memes > 0
+            and meme_count < max_script_memes
             and idx > 1
             and idx < total_beats
+            and not (is_bb and len(matched_contestants) >= 1 and "?" not in spoken)
             and (
                 raw_emo in ("shocked", "fake_shock", "mock", "roast", "overacting", "crying", "headache", "laughing", "confused")
                 or any(k in spoken_lower for k in [
@@ -1082,21 +1088,42 @@ Output valid JSON only:
         if is_meme_beat:
             meme_count += 1
             main_entity = "Telugu Reaction Meme"
+            available_comedians = ["Brahmanandam", "Ali", "Sunil", "Babu Mohan", "MS Narayana", "Venkatesh"]
             if "షాక్" in spoken_lower or "మైండ్" in spoken_lower:
                 emotion = "shocked"
-                comedian = "Brahmanandam" if meme_count % 2 == 1 else "Sunil"
+                preferred = ["Brahmanandam", "Babu Mohan", "Sunil"]
             elif "డౌట్" in spoken_lower or "అర్థం" in spoken_lower or "బ్రెయిన్" in spoken_lower:
                 emotion = "confused"
-                comedian = "Brahmanandam"
+                preferred = ["Brahmanandam", "Sunil", "Ali"]
             elif "నవ్వు" in spoken_lower or "హాస్యం" in spoken_lower:
-                emotion = "comedy"
-                comedian = "Ali" if meme_count % 2 == 0 else "Sunil"
-            elif "సోది" in spoken_lower or "చెత్త" in spoken_lower or "రోస్ట్" in spoken_lower:
-                emotion = "roast"
-                comedian = "Dharmavarapu" if meme_count % 2 == 1 else "Posani"
+                emotion = "laughing"
+                preferred = ["Ali", "Sunil", "Brahmanandam"]
+            elif any(w in spoken_lower for w in ["సోది", "చెత్త", "రోస్ట్", "ఓవర్", "డ్రామా"]):
+                emotion = "frustrated"
+                preferred = ["Venkatesh", "MS Narayana", "Sunil"]
             else:
                 emotion = "comedy"
-                comedian = "Brahmanandam"
+                preferred = ["Ali", "Brahmanandam", "Sunil"]
+
+            # Select distinct comedian to guarantee ZERO duplicate meme cutaways in video
+            chosen_comedian = None
+            for cand_c in preferred + available_comedians:
+                combo = f"{cand_c}_{emotion}"
+                if combo not in used_meme_combinations and cand_c not in [c.split("_")[0] for c in used_meme_combinations]:
+                    chosen_comedian = cand_c
+                    used_meme_combinations.add(combo)
+                    break
+            if not chosen_comedian:
+                for cand_c in available_comedians:
+                    combo = f"{cand_c}_{emotion}"
+                    if combo not in used_meme_combinations:
+                        chosen_comedian = cand_c
+                        used_meme_combinations.add(combo)
+                        break
+            if not chosen_comedian:
+                chosen_comedian = available_comedians[meme_count % len(available_comedians)]
+
+            comedian = chosen_comedian
 
             search_query = f"telugu reaction meme: {comedian} {emotion} | iconic comedy reaction"
             candidate = f"telugu_meme: {comedian} {emotion} | Telugu comedy reaction meme cutaway | iconic reaction"
@@ -1112,10 +1139,24 @@ Output valid JSON only:
         b_ents = [e for e in match_entities_in_text(spoken) if e.get("id") != "bigg_boss_telugu"]
         topic_ents = [e for e in match_entities_in_text(topic) if e.get("id") != "bigg_boss_telugu"]
         explicit_entity = ""
-        if b_ents:
-            explicit_entity = b_ents[0]["canonical_name"]
+        nag_in_spoken = any(k in spoken_lower for k in ["నాగ్", "నాగ్‌గారు", "నాగ్‌గారి", "నాగన్న", "నాగార్జున", "nagarjuna", "nag sir", "host"])
+        if nag_in_spoken:
+            explicit_entity = "Akkineni Nagarjuna"
+        elif b_ents:
+            b_ents_sorted = sorted(b_ents, key=lambda e: used_contestant_counts.get(e.get("canonical_name", ""), 0))
+            explicit_entity = b_ents_sorted[0]["canonical_name"]
+        elif idx == total_beats and is_bb and any(k in spoken_lower for k in ["ఎవరు", "కామెంట్", "ఎలిమినేట్", "ఓటు", "బయట", "comment"]):
+            explicit_entity = "Bigg Boss Telugu 10 Housemates"
         elif topic_ents:
             explicit_entity = topic_ents[(idx - 1) % len(topic_ents)]["canonical_name"]
+
+        # Prevent any single contestant from appearing more than twice in the short
+        if explicit_entity and explicit_entity != "Akkineni Nagarjuna" and used_contestant_counts.get(explicit_entity, 0) >= 2:
+            alt_cands = [t["canonical_name"] for t in topic_ents if used_contestant_counts.get(t["canonical_name"], 0) < 2]
+            if alt_cands:
+                explicit_entity = alt_cands[0]
+            elif is_bb:
+                explicit_entity = "Bigg Boss Telugu 10 Housemates"
 
         if use_llm:
             llm_item = parsed_structured_beats[idx - 1]
@@ -1143,6 +1184,7 @@ Output valid JSON only:
             elif any(k in spoken_lower for k in ["ఆక్రోశం", "దాడి", "aggressive"]):
                 emotion = "aggressive"
 
+            main_entity = ""
             if explicit_entity:
                 main_entity = explicit_entity
             else:
@@ -1186,6 +1228,7 @@ Output valid JSON only:
         b["main_entity"] = main_entity
         b["emotion"] = emotion
         b["search_query"] = search_query
+        used_contestant_counts[main_entity] = used_contestant_counts.get(main_entity, 0) + 1
 
         # Hard Deduplication & Variance Guard
         clean_candidate = candidate.strip()
@@ -1259,50 +1302,54 @@ def _parse_and_save_package(text, default_title=None):
     )
 
     if not script_match:
-        print("Could not parse SCRIPT.")
-        return None
-
-    if not visual_match:
-        print("Could not parse VISUAL_PLAN.")
-        return None
-
-    if not sections_match:
-        print("Could not parse SECTIONS.")
-        return None
-
-    script = script_match.group(1).strip()
-
-    # Gemini can occasionally return the SCRIPT section
-    # in subtitle/SRT format. Never allow that into
-    # script.txt or TTS.
-    script = clean_script_narration(script)
+        # Check if the text itself is a clean narration
+        cand_script = clean_script_narration(text)
+        if len(cand_script) >= 150:
+            script = cand_script
+        else:
+            print("Could not parse SCRIPT.")
+            return None
+    else:
+        script = clean_script_narration(script_match.group(1).strip())
 
     if not script:
         print("SCRIPT became empty after narration cleanup.")
         return None
 
-    # --------------------------------------------------------
-    # VISUAL PLAN
-    # --------------------------------------------------------
+    # Synthesize VISUAL_PLAN and SECTIONS if missing from provider response
+    if not visual_match or not sections_match:
+        print("⚠️ VISUAL_PLAN or SECTIONS missing from LLM package. Synthesizing from script narration...")
+        sentences = [s.strip() for s in re.split(r"[.!?।\n]+", script) if len(s.strip()) > 15]
+        if len(sentences) < 4:
+            words = script.split()
+            chunk_size = max(10, len(words) // 5)
+            sentences = [" ".join(words[i:i+chunk_size]) for i in range(0, len(words), chunk_size) if len(words[i:i+chunk_size]) >= 5]
+        if not sentences:
+            sentences = [script]
+        visual_plan = [f"Scene illustrating: {s[:80]} | dynamic cinematic visual" for s in sentences]
+        sections = [{"section": i + 1, "visual": i + 1, "narration": s} for i, s in enumerate(sentences)]
+        paired_visuals_from_sections = []
+        section_text = ""
+    else:
+        # --------------------------------------------------------
+        # VISUAL PLAN
+        # --------------------------------------------------------
+        visual_plan = []
+        for line in visual_match.group(1).splitlines():
+            line = line.strip()
+            line = re.sub(r"^(?:\d+[\.\)]|\*|\-)\s*", "", line).strip()
+            if line and len(line) > 2:
+                visual_plan.append(line)
 
-    visual_plan = []
+        print(f"Parsed AI Visual Plan ({len(visual_plan)} visual concepts):")
+        for idx, v_item in enumerate(visual_plan, start=1):
+            print(f"  Visual {idx}: {v_item}")
 
-    for line in visual_match.group(1).splitlines():
-        line = line.strip()
-        line = re.sub(r"^(?:\d+[\.\)]|\*|\-)\s*", "", line).strip()
-        if line and len(line) > 2:
-            visual_plan.append(line)
-
-    print(f"Parsed AI Visual Plan ({len(visual_plan)} visual concepts):")
-    for idx, v_item in enumerate(visual_plan, start=1):
-        print(f"  Visual {idx}: {v_item}")
-
-    # --------------------------------------------------------
-    # SECTIONS
-    # --------------------------------------------------------
-
-    sections = []
-    section_text = sections_match.group(1).strip()
+        # --------------------------------------------------------
+        # SECTIONS
+        # --------------------------------------------------------
+        sections = []
+        section_text = sections_match.group(1).strip()
 
     pattern = re.compile(
         r"(?:\*{1,2}|#{1,3}\s*)?SECTION\s+(\d+)\s*[:\|]\s*VISUAL\s+(\d+)(?:\*{1,2})?:?\s*\n"
@@ -1824,6 +1871,25 @@ Return ONLY the complete expanded spoken narration:"""
                         "Documented physics principles reaffirm that planetary momentum is the quiet guardian of environmental harmony.",
                         "These extraordinary simulations encourage thoughtful contemplation of our planet's timeless cosmic rhythm.",
                     ]
+                elif any(k in f"{topic} {content_type}".lower() for k in ("bigg boss", "biggboss", "bb10", "బిగ్ బాస్", "బిగ్‌బాస్")):
+                    telugu_blocks = [
+                        "హౌస్‌లో జరుగుతున్న ఈ నామినేషన్స్ మరియు టాస్క్ డ్రామా చూస్తుంటే ఎవరి గేమ్ ఏంటో స్పష్టంగా అర్థమైపోతోంది బాస్.",
+                        "వీక్ 11 లో ఉన్నాం కాబట్టి ప్రతి ఒక్కరూ తమ ఒరిజినల్ గేమ్ బయటపెట్టాల్సిందే తప్ప సేఫ్ గేమ్ ఇక కుదరదు.",
+                        "టికెట్ టు ఫినాలే రేస్ దగ్గరపడుతుండటంతో కంటెస్టెంట్స్ మధ్య కాంపిటీషన్ పీక్స్‌కి చేరింది.",
+                        "గ్రూపిజం ఆడుతూ మైండ్ గేమ్‌లు వేస్తున్న వాళ్లకి ఆడియన్స్ ఓటింగ్ ద్వారానే అసలైన సమాధానం చెబుతారు.",
+                        "కెమెరాల ముందు డ్రామాలు వేసి తప్పించుకోవాలని చూస్తే మాత్రం ఈసారి ఎలిమినేషన్ గండం తప్పదు బాస్.",
+                        "నామినేషన్లలో సేఫ్ ప్లేయర్లు బయటపడటంతో హౌస్‌లో సరికొత్త గ్రూపులు మరియు వైరి వర్గాలు తయారవుతున్నాయి.",
+                        "టాస్కుల్లో గెలవడానికి చేసే ఈ ఓవరాక్షన్ ప్లాన్స్ చూస్తుంటే ఆడియన్స్‌కి ఫుల్ ఎంటర్‌టైన్‌మెంట్ లభిస్తోంది.",
+                        "నాగ్‌గారి వీకెండ్ వార్నింగ్స్ గుర్తున్నా కూడా కొందరు హౌస్‌మేట్స్ ఇంకా తమ పాత అలవాట్లను మార్చుకోలేదు.",
+                        "ప్రతి రోజూ మారుతున్న ఓటింగ్ సమీకరణాలు టాప్ కంటెస్టెంట్లలో కూడా తీవ్ర భయాన్ని నింపుతున్నాయి.",
+                        "మిత్రులుగా ఉన్న వాళ్లే ఇప్పుడు ఓట్ల కోసం శత్రువులుగా మారి నామినేషన్లలో పాయింట్లు లాగుతున్నారు.",
+                        "ఆడియన్స్ పల్స్ చాలా క్లియర్‌గా ఉంది, ఎవరు జెన్యూన్‌గా ఆడుతున్నారో అందరికీ స్పష్టంగా తెలుస్తోంది.",
+                        "హౌస్‌లో జరిగే ప్రతి చిన్న గొడవ కూడా ఇప్పుడు బిగ్ బాస్ టైటిల్ రేస్‌పై తీవ్ర ప్రభావాన్ని చూపిస్తోంది.",
+                        "ఓటింగ్ ట్రెండ్స్ చూస్తుంటే చివరి నిమిషంలో ఎవరు సేఫ్ అవుతారో ఎవరూ ఊహించలేకపోతున్నారు.",
+                        "ఫేక్ రిలేషన్స్ మరియు డ్రామాలు పక్కన పెట్టి రియల్ గేమ్‌తో ముందుకెళ్లిన వాళ్లే ఫినాలేకి చేరుకుంటారు.",
+                        "ఈ వారం జరిగే ఎలిమినేషన్ మొత్తం సీజన్ ఫలితాన్నే తలకిందులు చేసేలా ఉంది బాస్.",
+                        "హౌస్‌మేట్స్ వేసే ప్రతి ఎత్తుగడను బిగ్ బాస్ ప్రేక్షకులు అత్యంత నిశితంగా గమనిస్తున్నారు.",
+                    ]
                 else:
                     telugu_blocks = [
                         "ఈ విషయంపై సోషల్ మీడియాలో భారీ చర్చ నడుస్తోంది.",
@@ -1851,41 +1917,50 @@ Return ONLY the complete expanded spoken narration:"""
                         "వేగంగా మారుతున్న పరిస్థితులు మరింత ఉత్కంఠను రేకెత్తిస్తున్నాయి.",
                         "మొత్తానికి ఈ అప్‌డేట్ అందరినీ విపరీతంగా ఆకట్టుకుంటూ సరికొత్త చర్చలకు కారణమైంది.",
                     ]
-                    english_blocks = [
-                        "This has triggered an extensive wave of discussions across social media channels.",
-                        "When analyzing community reactions and feedback, the broader picture becomes increasingly compelling.",
-                        "While many followers are offering strong support, industry observers are carefully dissecting the strategic decisions at play.",
-                        "New developments are emerging continuously, making this narrative exceptionally engaging to track.",
-                        "Few anticipated that events would unfold in such an unexpected and dynamic manner.",
-                        "A critical takeaway to emphasize is the far-reaching influence this is likely to create moving forward.",
-                        "Subject-matter experts are keeping a close watch on how each moving piece develops in real time.",
-                        "Public reception across forums reflects a wide spectrum of perspectives and debate.",
-                        "Official clarifications are anticipated in the near future to address lingering questions.",
-                        "Breakthrough moments like this demonstrate how rapidly momentum can build.",
-                        "Market observers view this transition as a defining milestone with lasting implications.",
-                        "Watching how the next phase materializes will be particularly insightful.",
-                        "Global industry analysts are evaluating what this means for current market expectations.",
-                        "Feedback from everyday audiences showcases genuine curiosity and heightened anticipation.",
-                        "Competitive dynamics will almost certainly shift as more concrete announcements emerge.",
-                        "Every technical layer and presentation detail has been scrutinized with high precision.",
-                        "The pacing of these reveals indicates a much deeper and calculated multi-stage rollout.",
-                        "Communities across the ecosystem continue sharing varied theories regarding the final outcome.",
-                        "A closer look at consumer sentiment highlights an unmistakably enthusiastic reception.",
-                        "Key stakeholders are weighing trade-offs carefully behind closed doors.",
-                        "Whatever unfolds next will set fresh benchmarks for performance and engagement.",
-                        "The sheer curiosity surrounding these developments proves how much resonance it carries.",
-                        "Subsequent updates from reliable insiders are bound to shine further light on the roadmap.",
-                        "All signs suggest this conversation will continue gaining serious momentum over coming days.",
-                    ]
+                english_blocks = [
+                    "This has triggered an extensive wave of discussions across social media channels.",
+                    "When analyzing community reactions and feedback, the broader picture becomes increasingly compelling.",
+                    "While many followers are offering strong support, industry observers are carefully dissecting the strategic decisions at play.",
+                    "New developments are emerging continuously, making this narrative exceptionally engaging to track.",
+                    "Few anticipated that events would unfold in such an unexpected and dynamic manner.",
+                    "A critical takeaway to emphasize is the far-reaching influence this is likely to create moving forward.",
+                    "Subject-matter experts are keeping a close watch on how each moving piece develops in real time.",
+                    "Public reception across forums reflects a wide spectrum of perspectives and debate.",
+                    "Official clarifications are anticipated in the near future to address lingering questions.",
+                    "Breakthrough moments like this demonstrate how rapidly momentum can build.",
+                    "Market observers view this transition as a defining milestone with lasting implications.",
+                    "Watching how the next phase materializes will be particularly insightful.",
+                    "Global industry analysts are evaluating what this means for current market expectations.",
+                    "Feedback from everyday audiences showcases genuine curiosity and heightened anticipation.",
+                    "Competitive dynamics will almost certainly shift as more concrete announcements emerge.",
+                    "Every technical layer and presentation detail has been scrutinized with high precision.",
+                    "The pacing of these reveals indicates a much deeper and calculated multi-stage rollout.",
+                    "Communities across the ecosystem continue sharing varied theories regarding the final outcome.",
+                    "A closer look at consumer sentiment highlights an unmistakably enthusiastic reception.",
+                    "Key stakeholders are weighing trade-offs carefully behind closed doors.",
+                    "Whatever unfolds next will set fresh benchmarks for performance and engagement.",
+                    "The sheer curiosity surrounding these developments proves how much resonance it carries.",
+                    "Subsequent updates from reliable insiders are bound to shine further light on the roadmap.",
+                    "All signs suggest this conversation will continue gaining serious momentum over coming days.",
+                ]
                 blocks = telugu_blocks if is_indic else english_blocks
+                # Check if curr_text already ends with a CTA sentence
+                sents = [s.strip() for s in re.split(r"(?<=[.!?।\n])\s+", curr_text) if s.strip()]
+                cta_sent = ""
+                if sents and any(k in sents[-1].lower() for k in ["లైక్", "సబ్‌స్క్రైబ్", "కామెంట్", "subscribe", "like", "share"]):
+                    cta_sent = sents[-1]
+                    curr_body = " ".join(sents[:-1])
+                else:
+                    curr_body = curr_text
+
                 cycle = 0
-                while len(curr_text.split()) < effective_min_words and cycle < 10:
+                while len((f"{curr_body} {cta_sent}").split()) < effective_min_words and cycle < 10:
                     cycle += 1
                     for b in blocks:
-                        if len(curr_text.split()) >= effective_min_words:
+                        if len((f"{curr_body} {cta_sent}").split()) >= effective_min_words:
                             break
-                        curr_text = f"{curr_text.rstrip()} {b}"
-                expanded_text = curr_text
+                        curr_body = f"{curr_body.rstrip()} {b}"
+                expanded_text = f"{curr_body.rstrip()} {cta_sent}".strip() if cta_sent else curr_body.strip()
                 print(f"✅ Deterministic elaboration applied: Now {len(expanded_text.split())} words.")
 
         if expanded_text:
@@ -1897,6 +1972,26 @@ Return ONLY the complete expanded spoken narration:"""
     # Attach dynamic 2-3s like/share/subscribe CTA
     script = ensure_dynamic_outro_cta(script, topic=topic, is_indic=is_indic)
     script = deduplicate_script_narration(script)
+
+    # Clean awkward loanwords, honorifics, and evicted contestants
+    try:
+        from agents.roast_engine import validate_and_heal_script
+        script = validate_and_heal_script(script, topic=topic)
+    except Exception:
+        pass
+
+    try:
+        from analytics.youtube_director import get_youtube_director
+        director = get_youtube_director()
+        script = director.sanitize_script_cliches(script)
+        director.record_script_dialogues(
+            script=script,
+            topic=topic,
+            channel="Channel 1",
+            archetype_id="tech_science_wonder" if any(k in str(topic).lower() for k in ["tech", "fact", "phone", "science"]) else "skeptical_truth_teller",
+        )
+    except Exception:
+        pass
 
     # Save to output files gracefully
     try:
@@ -2019,9 +2114,13 @@ SCRIPT_PERSONAS = [
             "PERSONA: SARCASTIC ROAST (సార్కాస్టిక్ రోస్ట్)\n"
             "- Tone: Savage, high-energy sarcasm, mock praise, brutal comedic reality checks, and sharp punchlines.\n"
             "- Telugu Slang & Expressions: Use authentic, punchy Telugu slang (e.g. రచ్చ రంబోలా, సీన్ లేదు బాస్, ఓవర్ యాక్షన్ పీక్స్, తుస్సుమంది, మైండ్ బ్లాక్, డ్రామా లెవెల్స్ వేరే, తుక్కు రేగింది).\n"
+            "- FORMAT & FLOW: Write a continuous, flowing spoken monologue (ఒకే ప్రవాహంలా సాగే ప్యూర్ తెలుగు సంభాషణ). DO NOT write line-by-line fragments or bullet points. Tell ONE cohesive story from start to finish (120-150 words).\n"
             "- Catchphrase Variety: STRICTLY DO NOT repeat the same slang word or catchphrase across multiple beats. Vary the burns and punchlines in every beat!\n"
             "- STRICT ANTI-HALLUCINATION & FACTUAL INTEGRITY:\n"
             "  * ZERO FABRICATED NUMBERS: DO NOT invent fake voting numbers, percentages, arbitrary tallies (e.g. NEVER write '5-4', '12 to 38', '30 to 15'), fake margins, or unverified dates.\n"
+            "  * ZERO INVENTED GIBBERISH: NEVER invent literal word-by-word machine translations of English idioms (STRICTLY FORBID: 'షాపింగ్ లిస్ట్', 'క్లబ్‌బింగ్ చేస్తూ', 'హాస్యం చోటు చేసుకుంది', 'ఇక్కడా భారతదేశమేనా', 'క్షేత్రం', 'నోరు మళ్ళించాడు', 'హోమ్‌వర్క్ హెడ్‌ఫోన్లు', 'హ్యూమన్ స్నూ', 'ఐబర్ప్పింగ్', 'సెగాబ్రేక్', 'స్పష్టీకరణ కెమ్', 'హేయాజము'). Write 100% fluent, natural spoken Telugu.\n"
+            "  * HOST NAGARJUNA HONORIFIC RULE: ALWAYS refer to Host Akkineni Nagarjuna with respectful plural honorifics: 'నాగ్‌గారు అన్నారు', 'నాగ్‌గారు కౌంటర్ వేశారు', 'నాగ్‌గారు క్లాస్ పీకారు' (NEVER singular 'ఇచ్చాడు', 'జోక్ చేశాడు').\n"
+            "  * CONTESTANT NAMES RULE: Use clean, authentic names: 'త్రిగుణ్' (NEVER 'ట్రైగన్' or 'ఎస్వరన్'), 'ముకేష్ గౌడ', 'సుధీర్ రెడ్డి', 'అమన్', 'టెంపర్ వంశీ', 'పొట్టి నరేష్' (Week 11 Captain).\n"
             "  * If official voting stats are NOT in the verified news context, DO NOT fabricate numbers! Focus purely on contestant behavior, clashes, nominations, body language, facial reactions, alliance betrayals, and public buzz without fabricating numerical statistics.\n"
             "  * NO BIZARRE / IMPOSSIBLE CLAIMS: Ground all statements in reality show dynamics. Do NOT invent supernatural claims (e.g. 'Ladoo has power').\n"
             "  * NO SELF-CONTRADICTIONS: Keep logic consistent throughout."
@@ -2034,9 +2133,13 @@ SCRIPT_PERSONAS = [
             "PERSONA: DRAMATIC NARRATOR (డ్రమాటిక్ నరేటర్)\n"
             "- Tone: High-stakes theatrical tension, intense suspense, dramatic pauses, escalating stakes, cinematic reveals.\n"
             "- Telugu Slang & Expressions: Use intense dramatic Telugu expressions (e.g. ఊహించని మలుపు, అసలు రంజు మొదలైంది, ఊపిరి బిగబట్టే క్షణాలు, షాకింగ్ ట్విస్ట్, తెరవెనుక అసలు కథ, ప్రకంపనలు సృష్టిస్తోంది).\n"
+            "- FORMAT & FLOW: Write a continuous, flowing spoken monologue (ఒకే ప్రవాహంలా సాగే ప్యూర్ తెలుగు సంభాషణ). DO NOT write line-by-line fragments or bullet points. Tell ONE cohesive story from start to finish (120-150 words).\n"
             "- Catchphrase Variety: STRICTLY DO NOT repeat the same dramatic phrase across multiple beats. Build narrative momentum with fresh vocabulary in each beat!\n"
             "- STRICT ANTI-HALLUCINATION & FACTUAL INTEGRITY:\n"
             "  * ZERO FABRICATED NUMBERS: DO NOT invent fake voting numbers, percentages, arbitrary tallies (e.g. NEVER write '5-4', '12 to 38', '30 to 15'), fake margins, or unverified dates.\n"
+            "  * ZERO INVENTED GIBBERISH: NEVER invent literal word-by-word machine translations of English idioms (STRICTLY FORBID: 'షాపింగ్ లిస్ట్', 'క్లబ్‌బింగ్ చేస్తూ', 'హాస్యం చోటు చేసుకుంది', 'ఇక్కడా భారతదేశమేనా', 'క్షేత్రం', 'నోరు మళ్ళించాడు', 'హోమ్‌వర్క్ హెడ్‌ఫోన్లు', 'హ్యూమన్ స్నూ', 'ఐబర్ప్పింగ్', 'సెగాబ్రేక్', 'స్పష్టీకరణ కెమ్', 'హేయాజము'). Write 100% fluent, natural spoken Telugu.\n"
+            "  * HOST NAGARJUNA HONORIFIC RULE: ALWAYS refer to Host Akkineni Nagarjuna with respectful plural honorifics: 'నాగ్‌గారు అన్నారు', 'నాగ్‌గారు కౌంటర్ వేశారు', 'నాగ్‌గారు క్లాస్ పీకారు' (NEVER singular 'ఇచ్చాడు', 'జోక్ చేశాడు').\n"
+            "  * CONTESTANT NAMES RULE: Use clean, authentic names: 'త్రిగుణ్' (NEVER 'ట్రైగన్' or 'ఎస్వరన్'), 'ముకేష్ గౌడ', 'సుధీర్ రెడ్డి', 'అమన్', 'టెంపర్ వంశీ', 'పొట్టి నరేష్' (Week 11 Captain).\n"
             "  * If official voting stats are NOT in the verified news context, DO NOT fabricate numbers! Focus purely on contestant behavior, clashes, nominations, body language, facial reactions, alliance betrayals, and public buzz without fabricating numerical statistics.\n"
             "  * NO BIZARRE / IMPOSSIBLE CLAIMS: Ground all statements in reality show dynamics. Do NOT invent supernatural claims (e.g. 'Ladoo has power').\n"
             "  * NO SELF-CONTRADICTIONS: Keep logic consistent throughout."
@@ -2049,9 +2152,13 @@ SCRIPT_PERSONAS = [
             "PERSONA: WITTY FRIEND-STYLE (ఫన్నీ ఫ్రెండ్ స్టైల్)\n"
             "- Tone: Conversational chai-time hangout with your best buddy, witty banter, relatable everyday humor, funny reality checks.\n"
             "- Telugu Slang & Expressions: Use casual, conversational Telugu/Tanglish (e.g. ఏంటి గురూ ఇది, అసలు మ్యాటర్ ఏంటంటే, నవ్వులాట కాదు బాస్, ఫుల్ ఫన్, మనోడు వేసిన స్కెచ్, లైట్ తీస్కో, కథ వేరే ఉంది).\n"
+            "- FORMAT & FLOW: Write a continuous, flowing spoken monologue (ఒకే ప్రవాహంలా సాగే ప్యూర్ తెలుగు సంభాషణ). DO NOT write line-by-line fragments or bullet points. Tell ONE cohesive story from start to finish (120-150 words).\n"
             "- Catchphrase Variety: STRICTLY DO NOT repeat the same phrase across multiple beats. Keep the dialogue fresh and natural throughout!\n"
             "- STRICT ANTI-HALLUCINATION & FACTUAL INTEGRITY:\n"
             "  * ZERO FABRICATED NUMBERS: DO NOT invent fake voting numbers, percentages, arbitrary tallies (e.g. NEVER write '5-4', '12 to 38', '30 to 15'), fake margins, or unverified dates.\n"
+            "  * ZERO INVENTED GIBBERISH: NEVER invent literal word-by-word machine translations of English idioms (STRICTLY FORBID: 'షాపింగ్ లిస్ట్', 'క్లబ్‌బింగ్ చేస్తూ', 'హాస్యం చోటు చేసుకుంది', 'ఇక్కడా భారతదేశమేనా', 'క్షేత్రం', 'నోరు మళ్ళించాడు', 'హోమ్‌వర్క్ హెడ్‌ఫోన్లు', 'హ్యూమన్ స్నూ', 'ఐబర్ప్పింగ్', 'సెగాబ్రేక్', 'స్పష్టీకరణ కెమ్', 'హేయాజము'). Write 100% fluent, natural spoken Telugu.\n"
+            "  * HOST NAGARJUNA HONORIFIC RULE: ALWAYS refer to Host Akkineni Nagarjuna with respectful plural honorifics: 'నాగ్‌గారు అన్నారు', 'నాగ్‌గారు కౌంటర్ వేశారు', 'నాగ్‌గారు క్లాస్ పీకారు' (NEVER singular 'ఇచ్చాడు', 'జోక్ చేశాడు').\n"
+            "  * CONTESTANT NAMES RULE: Use clean, authentic names: 'త్రిగుణ్' (NEVER 'ట్రైగన్' or 'ఎస్వరన్'), 'ముకేష్ గౌడ', 'సుధీర్ రెడ్డి', 'అమన్', 'టెంపర్ వంశీ', 'పొట్టి నరేష్' (Week 11 Captain).\n"
             "  * If official voting stats are NOT in the verified news context, DO NOT fabricate numbers! Focus purely on contestant behavior, clashes, nominations, body language, facial reactions, alliance betrayals, and public buzz without fabricating numerical statistics.\n"
             "  * NO BIZARRE / IMPOSSIBLE CLAIMS: Ground all statements in reality show dynamics. Do NOT invent supernatural claims (e.g. 'Ladoo has power').\n"
             "  * NO SELF-CONTRADICTIONS: Keep logic consistent throughout."
@@ -2439,8 +2546,11 @@ def generate_script(
 
     from config.settings import get_setting
     tone_arg = tone or kwargs.get("tone")
-    if tone_arg is not None:
+    topic_has_roast_intent = any(k in topic_str for k in ["roast", "రోస్ట్", "కామెడీ", "funny", "sarcastic", "బిగ్ బాస్", "bigg boss"])
+    if tone_arg is not None and str(tone_arg).strip().lower() not in ("", "none", "auto"):
         raw_tone = str(tone_arg).lower().strip()
+    elif topic_has_roast_intent:
+        raw_tone = "roast"
     elif is_news or is_facts or is_history:
         raw_tone = "informative"
     else:
@@ -2461,12 +2571,9 @@ def generate_script(
     )
 
     should_roast = (
-        (raw_tone == "roast" or is_roast or is_sarcastic or is_funny or "bigg boss" in topic_str)
-        and not is_neutral_tone
+        (raw_tone == "roast" or is_roast or is_sarcastic or is_funny or topic_has_roast_intent)
         and not is_longform
-        and not (is_news and raw_tone != "roast")
-        and not (is_facts and raw_tone != "roast")
-        and not (is_history and raw_tone != "roast")
+        and not (is_neutral_tone and not topic_has_roast_intent)
     )
 
     if is_telugu and should_roast and not ("\n" in str(topic).strip() or len(str(topic)) > 200):
@@ -2861,40 +2968,16 @@ CRITICAL VIRALITY RULES:
     try:
         from utils.season_guard import is_bigg_boss_topic
         if is_bigg_boss_topic(topic or "") or "bigg boss" in str(topic).lower():
-            bb_roster_directive = """
+            from data.bb10_contestants import get_active_contestants_prompt_context
+            bb_roster_directive = f"""
 ============================================================
 🚨 MANDATORY GROUND TRUTH: BIGG BOSS TELUGU 10 OFFICIAL ROSTER
 ============================================================
-Host: Akkineni Nagarjuna
-Official Season 10 Active Housemates:
-- Vamsi Krishna (Temper Vamsi) [CURRENT CAPTAIN THIS WEEK!]
-- Thrigun Eswaran (Actor Thrigun / Adith Arun)
-- Aman Masud (Actor)
-- Sudheer Reddy (Sudheer Talks YouTuber / Sudheer)
-- Auto Ram Prasad (Jabardasth Ram Prasad)
-- Potti Naresh (Jabardasth Naresh)
-- Debjani Modak
-- Shiv (Anchor Shiv)
-- Mukesh Gowda
-- Varshini Sounderajan
-- Rama Krishna
-- Swetha
-- Neethu Natraj
-CRITICAL GROUND TRUTH: THIS WEEK NO ELIMINATION! Temper Vamsi is the current Captain.
-
-Eliminated Contestants:
-- Rohit Patnam (Rohit Naidu Patnam) [ELIMINATED / EVICTED - NO LONGER IN HOUSE!]
-- Shalini Patel [ELIMINATED / EVICTED - NO LONGER IN HOUSE!]
-- Gundeboina Jhansi (Singer Jhansi) [ELIMINATED / EVICTED]
-- Chaithra Rai [ELIMINATED / EVICTED (WEEK 1)]
-- Krishna Alluri (Krishnudu) [ELIMINATED / EVICTED (WEEK 2)]
-- Srishti Vyakaranam [ELIMINATED / EVICTED]
-- Charan Mahadev [ELIMINATED / EVICTED]
-- Mithilesh Reddy [WALKED OUT]
+{get_active_contestants_prompt_context()}
 
 STRICT ACCURACY RULES:
-1. ONLY write active in-house scenes, captaincy, task battles, nominations, and immunity for ACTIVE housemates!
-2. NEVER describe eliminated contestants (Rohit Patnam, Shalini Patel, Jhansi, Chaithra, Krishnudu, Srishti, Charan) as staying in the house, competing in tasks, or receiving immunity! Only mention them in past-tense eviction context if the episode topic directly discusses their elimination.
+1. ONLY write active in-house scenes, captaincy, task battles, nominations, and immunity for ACTIVE housemates! Current Week 11 Captain is Potti Naresh (పొట్టి నరేష్). Temper Vamsi is NOT captain.
+2. NEVER describe eliminated contestants (Rohit Patnam, Shalini Patel, Jhansi, Chaithra, Krishnudu, Srishti, Charan) as staying in the house, competing in tasks, or receiving immunity!
 3. NEVER mention or write scenes for Sudigali Sudheer (use Sudheer Reddy / Sudheer Talks), Rohit Sahni, Anchor Jhansi (use Singer Gundeboina Jhansi), or Mega Power Star Ram Charan (use Charan Mahadev).
 4. In VISUAL_PLAN: ALWAYS include the contestant's full name and context (e.g. 'Aman Masud bigg boss telugu 10 | Aman Masud actor still', 'Temper Vamsi bigg boss 10 | Temper Vamsi photo').
 ============================================================
@@ -3115,12 +3198,14 @@ CRITICAL VISUAL RELEVANCE & AUTHENTIC REAL-WORLD MEDIA:
    - When a section discusses a specific physical phenomenon, scientific principle, contestant, or device, the corresponding visual MUST depict that exact subject!
 6. STRICT PROHIBITION ON ABSTRACT STOCK & CLIPART (FOR ROASTING & ENTERTAINMENT):
    - NEVER output abstract or literal metaphors: ABSOLUTELY NO "Brain illustration", "Computer glitch", "Money burning in flames", "Musical notes floating", "Puzzle piece", "Silhouette", "Generic action movie poster", "Stock business handshake", or "Bored actor".
-   - When narration makes a comedic roast, sarcasm, calls out bad acting/direction, or expresses confusion, use TELUGU REACTION MEMES or REAL TELUGU STARS:
-     * Comedic confusion / doubt -> "telugu_meme: Brahmanandam confused reaction | Sunil shocked comedy meme"
-     * Laughing / savage roast -> "telugu_meme: Ali laughing reaction meme | Dharmavarapu sarcasm meme"
-     * Overacting / frustration -> "telugu_meme: Posani shouting meme | Venky frustrated reaction"
+   - FOR BIGG BOSS & REALITY SHOWS:
+     * ABSOLUTELY NO external comedy movie memes or Posani posters!
+     * ALWAYS depict the actual Bigg Boss housemates (Thrigun, Rohit, Aman, Sanjana, etc.), host Nagarjuna, house interior, or live voting poll cards!
+   - FOR GENERAL ROASTING & COMEDY (Non-Bigg Boss):
+     * Comedic confusion / doubt -> "Brahmanandam confused reaction clean still | Sunil shocked comedy face"
+     * Laughing / savage roast -> "Ali laughing reaction clean photo | Dharmavarapu sarcastic reaction"
+     * Overacting / frustration -> "Venkatesh frustrated face still | Sunil dramatic expression"
      * Tollywood discussions -> Name the real Telugu star, director, or poster (e.g. "Prabhas Telugu movie still | Rajamouli press meet | Tollywood theater crowd | Allu Arjun Pushpa look")
-   - For every video, at least 2 to 4 comedic or reaction beats MUST use "telugu_meme: <comedian> <emotion>" cutaways so the visual pacing feels authentic to Telugu YouTube culture!
 
 SECTION MAPPING:
 
@@ -3833,6 +3918,14 @@ def ensure_script_artifacts(
     sm_file = out_dir / "section_map.txt"
     dp_file = out_dir / "delivery_plan.json"
 
+    if force_refresh:
+        for old_f in [sm_file, vp_file, dp_file]:
+            if old_f.exists():
+                try:
+                    old_f.unlink()
+                except Exception:
+                    pass
+
     # 3. Segment script into scene beats
     try:
         from agents.social_visual_selector import split_script_into_scenes
@@ -3845,7 +3938,7 @@ def ensure_script_artifacts(
         scenes = [s.strip() for s in re.split(r"(?<=[.!?])\s+", clean_text) if s.strip()] or [clean_text]
 
     delivery_plan = []
-    is_roast = ("roast" in str(topic).lower())
+    is_roast = any(k in str(topic).lower() for k in ["roast", "రోస్ట్", "troll", "ట్రోల్", "comedy", "కామెడీ", "sarcas", "ఫన్నీ"])
     emotions_cycle = ["fake_shock", "mock", "hype", "deadpan", "dramatic_question", "smug"]
     for idx, sc in enumerate(scenes, 1):
         if idx == 1:
@@ -3869,6 +3962,12 @@ def ensure_script_artifacts(
             "sfx": None,
             "on_screen_text": "",
         })
+    if is_roast:
+        try:
+            from agents.roast_engine import markup_roast_delivery
+            delivery_plan = markup_roast_delivery(delivery_plan, topic=topic)
+        except Exception as mk_err:
+            print(f"Notice during markup_roast_delivery: {mk_err}")
     dp_file.write_text(json.dumps(delivery_plan, indent=2, ensure_ascii=False), encoding="utf-8")
 
     # Export teleprompter script for creator voiceover matching current beats

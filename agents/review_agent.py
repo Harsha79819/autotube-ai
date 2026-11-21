@@ -391,6 +391,7 @@ Your ONLY role is to catch:
 
 IMPORTANT CONTEXT:
 - This is YouTube entertainment, commentary, comedy, satire, and roasting.
+- For Reality TV (e.g. Bigg Boss Telugu): Akkineni Nagarjuna is the official host. Hyperbolic comedic satire, contestant roast commentary, and dramatic expressions are 100% expected, intentional, and valid satire, NOT factual errors.
 - Rhetorical hooks (e.g., '60 cameras rotating', 'are we in season 8 or 2030?', 'how is this possible?'), jokes, punchlines, hyperbole, slang, opinions, and fan-made edit commentary are 100% INTENTIONAL, CREATIVE and VALID.
 - Do NOT flag rhetorical questions, comedic exaggerations, opinions, or satire.
 - Only set passed: false if there is a severe, blatant internal numerical contradiction.
@@ -533,6 +534,9 @@ IMPORTANT CAPTION RULE:
 
 IMPORTANT AUDIO RULE:
 - Voice audio must be natural, audible, match the script words, and have a realistic duration (not stuck in repeating loops or cut off).
+
+IMPORTANT ROAST & COMEDY VISUAL RULE:
+- For Roasting and Comedy content: Reaction meme cutaways (e.g. 'telugu_meme: Venkatesh frustrated', 'Ali comedy', 'Brahmanandam', etc.) are INTENTIONAL, STANDARD YouTube comedy reaction tropes used by top creators to punctuate jokes, irony, and drama. They are 100% valid, expected, and must NEVER be penalized as "visual mismatches" or "critical issues".
 
 Approve only if the project is genuinely ready.
 
@@ -947,6 +951,87 @@ Use this exact format:
             except Exception as r_audit_err:
                 print(f"Roast audit notice: {r_audit_err}")
 
+        # Gate 10: Visual Pacing & Rapid Cuts Gate (Anti-Static Video / 8-14 Cuts Guarantee)
+        if is_shorts and final_v_dur >= 40.0:
+            cuts_detected = 0
+            # Check section_map.txt or visual_plan.txt or run_report.json
+            sec_f = Path("output/section_map.txt")
+            if sec_f.exists():
+                try:
+                    s_txt = sec_f.read_text(encoding="utf-8")
+                    cuts_detected = len(re.findall(r"SECTION\s*\d+", s_txt, re.IGNORECASE))
+                except Exception:
+                    pass
+            if not cuts_detected:
+                vp_f = Path("output/visual_plan.txt")
+                if vp_f.exists():
+                    cuts_detected = len([l for l in vp_f.read_text(encoding="utf-8").splitlines() if l.strip() and l[0].isdigit()])
+
+            if 0 < cuts_detected < 7:
+                cut_issue = (
+                    f"CRITICAL VISUAL RETENTION DEFECT: Video has only {cuts_detected} visual cuts for a {final_v_dur:.1f}s Short "
+                    f"({final_v_dur/max(1,cuts_detected):.1f}s per slide!). Visuals freeze on screen. "
+                    "Minimum 8-14 dynamic cuts (one cut every 4-6s) strictly required for YouTube Shorts retention."
+                )
+                if "critical_issues" not in result:
+                    result["critical_issues"] = []
+                result["critical_issues"].append(cut_issue)
+                result["status"] = "IMPROVE"
+                result["failing_component"] = "image_agent"
+
+        # Gate 11: Telugu Machine-Translation & Hallucination Guard
+        script_text = script or ""
+        sc_f = Path("output/script.txt")
+        if not script_text and sc_f.exists():
+            script_text = sc_f.read_text(encoding="utf-8")
+        if script_text:
+            hallucination_flags = [
+                "నాన్‌ఆఫ్", "నాన్ ఆఫ్", "జాతి గుండెలు", "సటోర్ రూమ్", "సటోర్ రూం",
+                "అసహాయకారపూర్వకతకు", "అసహాయకారపూర్వక", "డ్రామాట్టెక్‌గా", "ఐఫోల్",
+                "హాట్ డాగ్", "కాల్డ్ వెపన్", "పాఠశాల బ్యాటరీ", "ముచ్చుడు", "సైలింగ్", "అక్టోర్"
+            ]
+            detected_h = [f for f in hallucination_flags if f in script_text]
+            if detected_h:
+                lang_issue = (
+                    f"CRITICAL SCRIPT LANGUAGE DEFECT: Detected unnatural machine-translation hallucination(s): {detected_h}. "
+                    "Script must be healed into 100% natural, colloquial spoken Telugu."
+                )
+                if "critical_issues" not in result:
+                    result["critical_issues"] = []
+                result["critical_issues"].append(lang_issue)
+                result["status"] = "IMPROVE"
+                result["failing_component"] = "script_agent"
+
+        # Gate 12: Anti-Wedding & Off-Topic Personal Photo Guard
+        from utils.season_guard import is_bigg_boss_topic
+        topic_str = str(kwargs.get("topic", ""))
+        if is_bigg_boss_topic(topic_str):
+            audit_f = Path("output/visual_selection_audit.json")
+            if audit_f.exists():
+                try:
+                    audit_items = json.loads(audit_f.read_text(encoding="utf-8"))
+                    off_topic_hits = []
+                    personal_bad_tokens = ("wedding", "marriage", "pelli", "pellillu", "reception", "engagement", "gulte", "press meet")
+                    for a_idx, item in enumerate(audit_items, start=1):
+                        chosen_cap = (item.get("caption") or "").lower()
+                        chosen_u = (item.get("url") or "").lower()
+                        meta_combined = f"{chosen_cap} {chosen_u}"
+                        bad_hits = [b for b in personal_bad_tokens if b in meta_combined]
+                        if bad_hits:
+                            off_topic_hits.append(f"Scene {a_idx} ({bad_hits[0]})")
+                    if off_topic_hits:
+                        vis_noise_issue = (
+                            f"CRITICAL VISUAL RELEVANCE DEFECT: Detected off-topic personal/wedding photo on: {', '.join(off_topic_hits[:2])}. "
+                            "Bigg Boss videos must strictly use verified Season 10 broadcast/promo visuals."
+                        )
+                        if "critical_issues" not in result:
+                            result["critical_issues"] = []
+                        result["critical_issues"].append(vis_noise_issue)
+                        result["status"] = "IMPROVE"
+                        result["failing_component"] = "image_agent"
+                except Exception:
+                    pass
+
     except Exception as gate_err:
         print(f"⚠️ Phase 7 quality gate audit notice: {gate_err}")
 
@@ -967,11 +1052,12 @@ Use this exact format:
         notif_file = Path("output/validation_notifications.json")
         notifications = []
         for c_iss in result.get("critical_issues", []):
+            msg_str = c_iss.get("issue", c_iss.get("detail", str(c_iss))) if isinstance(c_iss, dict) else str(c_iss)
             notifications.append({
                 "type": "DEFECT",
                 "severity": "CRITICAL",
                 "component": result.get("failing_component", "general"),
-                "message": c_iss,
+                "message": msg_str,
                 "timestamp": time.time(),
             })
         notif_file.write_text(json.dumps(notifications, indent=2, ensure_ascii=False), encoding="utf-8")

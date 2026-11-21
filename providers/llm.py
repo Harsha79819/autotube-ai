@@ -47,9 +47,9 @@ OPENAI_MODELS = [
 ]
 
 GROQ_MODELS = [
-    "openai/gpt-oss-120b",
-    "openai/gpt-oss-20b",
     "qwen/qwen3.8-27b",
+    "openai/gpt-oss-20b",
+    "openai/gpt-oss-120b",
 ]
 
 OPENROUTER_MODELS = [
@@ -62,6 +62,8 @@ OPENROUTER_MODELS = [
 
 
 _GEMINI_EXHAUSTED_UNTIL = 0.0
+_OPENAI_EXHAUSTED_UNTIL = 0.0
+_OLLAMA_EXHAUSTED_UNTIL = 0.0
 
 
 def call_gemini(prompt: str, api_key: str = None) -> tuple[str, str]:
@@ -261,6 +263,11 @@ def call_openai(prompt: str, api_key: str = None) -> tuple[str, str]:
         except Exception as err:
             dur_ms = (time.time() - t0) * 1000
             last_err = err
+            err_str = str(err)
+            if "429" in err_str or "quota" in err_str or "credits" in err_str:
+                global _OPENAI_EXHAUSTED_UNTIL
+                _OPENAI_EXHAUSTED_UNTIL = time.time() + 3600
+                break
             continue
 
     record_call("openai", False, error=str(last_err))
@@ -323,17 +330,21 @@ def call_ollama(prompt: str, model: str = None) -> tuple[str, str]:
     except Exception as err:
         dur_ms = (time.time() - t0) * 1000
         record_call("ollama", False, error=str(err), duration_ms=dur_ms)
+        err_str = str(err).lower()
+        if "connection refused" in err_str or "failed to establish a new connection" in err_str:
+            global _OLLAMA_EXHAUSTED_UNTIL
+            _OLLAMA_EXHAUSTED_UNTIL = time.time() + 900
         raise RuntimeError(f"Ollama local connection failed: {err}")
 
 
 def generate_text_cascade(prompt: str, api_key: str = None, step_name: str = "script", per_provider_timeout: float = 35.0) -> str:
     """
     Executes free LLM provider chain based on LLM_PROVIDER_ORDER.
-    Default order: gemini -> groq -> ollama -> pollinations -> openrouter.
-    Enforces per-provider timeout (~35s) so a stalled provider fails over quickly
+    Default order: groq -> gemini -> openrouter.
+    Enforces per-provider timeout (~15s) so a stalled provider fails over quickly
     rather than consuming the entire stage budget.
     """
-    configured_order = os.getenv("LLM_PROVIDER_ORDER", "groq,gemini,openai,ollama,pollinations,openrouter")
+    configured_order = os.getenv("LLM_PROVIDER_ORDER", "groq,gemini,openrouter")
     providers = [p.strip().lower() for p in configured_order.split(",") if p.strip()]
 
     provider_map = {
@@ -348,17 +359,21 @@ def generate_text_cascade(prompt: str, api_key: str = None, step_name: str = "sc
     errors = []
     attempt = 0
 
-    effective_timeout = min(float(per_provider_timeout), 25.0)
+    effective_timeout = min(float(per_provider_timeout), 15.0)
 
     for prov in providers:
         if prov not in provider_map:
             continue
-        # Fast skip if credentials are not configured
-        if prov == "gemini" and not (api_key or get_gemini_api_key()):
-            continue
+        # Fast skip if credentials are not configured or provider is in active cooldown
+        if prov == "gemini":
+            if not (api_key or get_gemini_api_key()) or (time.time() < _GEMINI_EXHAUSTED_UNTIL and not api_key):
+                continue
         if prov == "groq" and not os.getenv("GROQ_API_KEY", "").strip():
             continue
-        if prov == "openai" and not os.getenv("OPENAI_API_KEY", "").strip():
+        if prov == "openai":
+            if not os.getenv("OPENAI_API_KEY", "").strip() or time.time() < _OPENAI_EXHAUSTED_UNTIL:
+                continue
+        if prov == "ollama" and time.time() < _OLLAMA_EXHAUSTED_UNTIL:
             continue
         if prov == "openrouter" and not os.getenv("OPENROUTER_API_KEY", "").strip():
             continue

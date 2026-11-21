@@ -441,15 +441,18 @@ def resolve_tunnel_manager(mode: str = "auto", port: int = 8501, host: str = "lo
     elif mode == "cloudflare-quick":
         return CloudflareQuickTunnelManager(port=port, host=host)
 
-    # AUTO MODE RESOLUTION: Default to Cloudflare Quick Tunnel (No warning pages, 100% free)
-    if cf_bin:
-        return CloudflareQuickTunnelManager(port=port, host=host)
-
+    # AUTO MODE RESOLUTION:
+    # 1. Prioritize permanent Ngrok static domain if configured (guarantees fixed permanent URL)
     if ngrok_domain and ngrok_token and ngrok_bin:
         return NgrokTunnelManager(port=port, host=host, authtoken=ngrok_token, domain=ngrok_domain)
 
+    # 2. Cloudflare Named Tunnel if token configured
     if cf_token and cf_bin:
         return CloudflareNamedTunnelManager(port=port, host=host, token=cf_token, static_domain=cf_domain)
+
+    # 3. Cloudflare Quick Tunnel (Free dynamic fallback)
+    if cf_bin:
+        return CloudflareQuickTunnelManager(port=port, host=host)
 
     return CloudflareQuickTunnelManager(port=port, host=host)
 

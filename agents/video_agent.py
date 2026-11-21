@@ -450,9 +450,9 @@ def render_smart_canvas_image(image_path, target_width=720, target_height=720, o
                 canvas.save(out_p, "JPEG", quality=95)
                 return out_p
 
-            # Full-Bleed Cinema Framing for 9:16 Shorts/Reels:
-            # Scale and center-crop standard photos (0.55 <= aspect <= 1.95) to fill screen cleanly
-            if target_width < target_height and 0.55 <= orig_aspect <= 1.95:
+            # Full-Bleed Cinema Framing for 9:16 Shorts/Reels & 16:9 Landscape:
+            # Scale and center-crop standard photos (0.45 <= aspect <= 2.25) to fill screen cleanly without black margins
+            if 0.45 <= orig_aspect <= 2.25:
                 scale = max(target_width / orig_w, target_height / orig_h)
                 new_w, new_h = int(orig_w * scale), int(orig_h * scale)
                 im_scaled = im.resize((new_w, new_h), Image.Resampling.LANCZOS)
@@ -1755,8 +1755,21 @@ def create_video(aspect_ratio="9:16"):
         scene_durations = []
 
         # Long-Form Chapter Bumpers Integration (16:9)
+        # Bumper cards ("అధ్యాయం 1") are STRICTLY disabled for videos < 300s, roasts, comedy, entertainment, and Bigg Boss
         chapter_bumpers_map = {}
-        if aspect_ratio == "16:9" and (OUTPUT_DIR / "chapters.json").exists():
+        script_low = str(script or "").lower()
+        is_roast_or_entertainment = any(
+            k in script_low for k in ("roast", "funny", "comedy", "bigg boss", "biggboss", "sarcastic", "రోస్ట్", "కామెడీ", "బిగ్ బాస్")
+        )
+        should_render_bumpers = (
+            aspect_ratio == "16:9"
+            and (OUTPUT_DIR / "chapters.json").exists()
+            and (audio_duration >= 300.0)
+            and not is_roast_or_entertainment
+            and os.getenv("ENABLE_CHAPTER_BUMPERS", "false").lower() in ("true", "1", "yes")
+        )
+
+        if should_render_bumpers:
             try:
                 import json
                 from agents.chapter_engine import render_chapter_bumper
@@ -1775,6 +1788,8 @@ def create_video(aspect_ratio="9:16"):
                 print(f"🎬 [16:9 Director] Prepared {len(chapter_bumpers_map)} chapter title slates.")
             except Exception as ch_bmp_err:
                 print(f"⚠️ Chapter bumper preparation notice: {ch_bmp_err}")
+        else:
+            print("🎬 [16:9 Director] Skipping chapter bumper title cards (clean authentic visuals preserved).")
 
         # Flatten timed_sections into calibrated shots
         scene_jobs = []

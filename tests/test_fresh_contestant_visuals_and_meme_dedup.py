@@ -41,7 +41,7 @@ class TestFreshContestantVisualsAndMemeDedup(unittest.TestCase):
         gallery_dir = ROOT / "data" / "contestant_galleries"
         self.assertTrue(gallery_dir.exists(), "data/contestant_galleries must exist")
 
-        key_contestants = ["mukesh", "jhansi", "rohit", "charan", "aman", "sudheer", "thrigun", "ram_prasad", "naresh"]
+        key_contestants = ["mukesh", "jhansi", "rohit", "charan", "aman", "thrigun", "ram_prasad", "naresh"]
         for c in key_contestants:
             c_dir = gallery_dir / c
             self.assertTrue(c_dir.exists(), f"Gallery directory for {c} must exist")

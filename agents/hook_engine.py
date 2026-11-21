@@ -223,6 +223,8 @@ STRICT HOOK RULES (YOUTUBE RETENTION BENCHMARK):
 - LENGTH: Maximum 10-12 words strictly! Short, punchy, high-impact (first 2-3 seconds).
 - ZERO GREETING / ZERO DEAD AIR: Spoken audio hook MUST start delivering at 0.0s! BANNED: NO greetings ("హాయ్ ఫ్రెండ్స్", "Namaskaram", "Hi guys"), NO channel intros.
 - SPOKEN LANGUAGE: {"Write in authentic natural conversational spoken Telugu (తెలుగు లిపి)" if is_telugu else "Write in punchy spoken English"}.
+- FACTUAL INTEGRITY: NEVER invent fake numbers or contradictory claims (e.g. DO NOT say '3 people eliminated in 1 minute' when no such thing happened). If topic is Bigg Boss, Season 10 Week 11 captain is Potti Naresh (NOT Temper Vamsi).
+- FOR REALITY TV / BIGG BOSS: In 'shocking_number', use season/week timeline or contestant counts (e.g. "వారం 11 నామినేషన్లలో", "డేంజర్ జోన్ లో ఉన్న 4గురు కంటెస్టెంట్లలో"). NEVER invent impossible rapid elimination numbers like 'X eliminated in Y minutes' or fake voting percentages!
 - PROVEN HIGH-RETENTION STYLES:
   * Burning question / Disbelief: "హౌస్ లో ఉన్న వాళ్లకే దిక్కు లేదు, అసలు ఈ ట్విస్ట్ ఏంటి?!"
   * Shock revelation: "నాగార్జున ఇచ్చిన ఈ వార్నింగ్ తో హౌస్ మొత్తం షేక్!"
@@ -287,7 +289,12 @@ Output strictly valid JSON in this exact structure:
     if parsed and isinstance(parsed.get("candidates"), list) and len(parsed["candidates"]) > 0:
         candidates = parsed["candidates"]
         for c in candidates:
-            c["hook_text"] = _clean_banned_openings(c.get("hook_text", ""))
+            ht = _clean_banned_openings(c.get("hook_text", ""))
+            # Sanitize hallucinated rapid elimination numbers in reality TV hooks
+            if re.search(r"\d+\s*(?:నిమిషంలో|నిమిషాల్లో|సెకన్లలో|రోజుల్లో)\s*\d+\s*(?:లేడీలు|మంది|కంటెస్టెంట్లు)?\s*ఎలిమినేట్", ht):
+                ht = "ఈ వారం ఎలిమినేషన్ రచ్చతో బిగ్ బాస్ హౌస్ మొత్తం షేక్ అయింది!"
+                c["total_score"] = 40
+            c["hook_text"] = ht
             if "total_score" not in c:
                 c["total_score"] = (
                     c.get("curiosity_gap", 8)

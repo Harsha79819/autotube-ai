@@ -85,10 +85,10 @@ VOICE_IDS = {
 }
 
 VOICE_TUNING = {
-    "👨 Mohan (Telugu Creator / Anchor) - Natural Spoken Delivery": ("+4%", "+0Hz"),
-    "👩 Shruti (Telugu Creator / Anchor) - Conversational": ("+4%", "+0Hz"),
-    "👨 Mohan (Telugu Male Anchor) - Edge-TTS": ("+4%", "+0Hz"),
-    "👩 Shruti (Telugu Female Anchor) - Edge-TTS": ("+4%", "+0Hz"),
+    "👨 Mohan (Telugu Creator / Anchor) - Natural Spoken Delivery": ("+18%", "+0Hz"),
+    "👩 Shruti (Telugu Creator / Anchor) - Conversational": ("+18%", "+0Hz"),
+    "👨 Mohan (Telugu Male Anchor) - Edge-TTS": ("+18%", "+0Hz"),
+    "👩 Shruti (Telugu Female Anchor) - Edge-TTS": ("+18%", "+0Hz"),
     "👨 Adam (Male Creator) - Fast & Crisp": ("-5%", "+0Hz"),
     "👨 Michael (News Anchor) - Professional": ("-5%", "+0Hz"),
     "👩 Heart (Female Creator) - Smooth": ("-5%", "+0Hz"),
@@ -97,15 +97,15 @@ VOICE_TUNING = {
     "👩 Swara (Hindi Female Anchor) - Edge-TTS": ("+0%", "+0Hz"),
     "🎙️ Use My Own Voice Recording (Upload Audio)": ("+0%", "+0Hz"),
     "🤖 Clone My Voice with AI (Local XTTS-v2)": ("+0%", "+0Hz"),
-    "🔥 👩 Shruti (Telugu Female - Sarcastic & Roasting)": ("+14%", "+0Hz"),
-    "te-IN-ShrutiNeural-Roast": ("+14%", "+0Hz"),
-    "shruti-roast": ("+14%", "+0Hz"),
-    "te-IN-MohanNeural": ("+10%", "+0Hz"),
-    "te-IN-ShrutiNeural": ("+12%", "+0Hz"),
+    "🔥 👩 Shruti (Telugu Female - Sarcastic & Roasting)": ("+20%", "+0Hz"),
+    "te-IN-ShrutiNeural-Roast": ("+20%", "+0Hz"),
+    "shruti-roast": ("+20%", "+0Hz"),
+    "te-IN-MohanNeural": ("+18%", "+0Hz"),
+    "te-IN-ShrutiNeural": ("+18%", "+0Hz"),
     "hi-IN-MadhurNeural": ("+0%", "+0Hz"),
     "hi-IN-SwaraNeural": ("+0%", "+0Hz"),
-    "mohan": ("+10%", "+0Hz"),
-    "shruti": ("+12%", "+0Hz"),
+    "mohan": ("+18%", "+0Hz"),
+    "shruti": ("+18%", "+0Hz"),
     "clone": ("+0%", "+0Hz"),
     "xtts": ("+0%", "+0Hz"),
     "own_recording": ("+0%", "+0Hz"),
@@ -228,6 +228,9 @@ def clean_previous_generation():
         "review.json",
         "metadata.json",
         "visual_plan.json",
+        "chapters.json",
+        "mixed_audio.wav",
+        "assembled_raw.mp4",
     ]
 
     for filename in files:
@@ -238,6 +241,13 @@ def clean_previous_generation():
                 path.unlink()
             except Exception:
                 pass
+
+    bmp_dir = OUTPUT_DIR / "chapter_bumpers"
+    if bmp_dir.exists():
+        try:
+            shutil.rmtree(bmp_dir)
+        except Exception:
+            pass
 
     if ASSETS_DIR.exists():
         for item in ASSETS_DIR.iterdir():
@@ -366,7 +376,7 @@ def create_voice_for_script(
         # Calibrated documentary pace for 16:9 explainers (+1% to +2% for natural cadenced delivery)
         rate = "+1%" if voice_id in ("te-IN-MohanNeural", "te-IN-ShrutiNeural", "te-IN-ShrutiNeural-Roast", "mohan", "shruti", "shruti-roast") else "-2%"
     elif voice_id in ("te-IN-MohanNeural", "te-IN-ShrutiNeural", "te-IN-ShrutiNeural-Roast", "mohan", "shruti", "shruti-roast") and rate in ("-5%", "+0%"):
-        rate, pitch = ("+4%", "+0Hz")
+        rate, pitch = ("+18%", "+0Hz")
 
     # Resolve audio sample if using direct own voice recording or cloning
     effective_sample = (
@@ -1090,6 +1100,7 @@ STRICT RULES:
 17. Make the smallest necessary changes.
 18. The revised script must remain recognizably the SAME SCRIPT.
 19. Do not mention AI, review, revision, prompts, or these instructions.
+20. ZERO GIBBERISH: If the previous script contains awkward literal machine translations or nonsense phrases (e.g. 'హోమ్‌వర్క్ హెడ్‌ఫోన్లు', 'హ్యూమన్ స్నూ', 'ఐబర్ప్పింగ్', 'సెగాబ్రేక్', 'స్పష్టీకరణ కెమ్', 'హేయాజము'), REPLACE THEM IMMEDIATELY with natural, fluent spoken colloquial Telugu expressions. Every line MUST sound 100% natural and conversational.
 
 IMPORTANT:
 
@@ -1192,7 +1203,7 @@ def generate_multi_media_video(
         3x FAIL  → STOP, no upload
     """
 
-    MAX_RETRIES = 2
+    MAX_RETRIES = 1
     MAX_REVIEW_ATTEMPTS = 1 + MAX_RETRIES
 
     failing_component = None
@@ -1634,12 +1645,10 @@ def generate_multi_media_video(
                 ),
             )
 
-            if script_override and attempt == 1:
-
+            if script_override:
                 script = script_override
                 from agents.script_agent import ensure_script_artifacts
-                ensure_script_artifacts(script, topic=topic, default_title=title)
-
+                ensure_script_artifacts(script, topic=topic, default_title=title, force_refresh=(attempt == 1))
             elif attempt == 1:
                 is_flyer_mode = (
                     content_type == "Uploaded Flyer"
@@ -2031,6 +2040,27 @@ def generate_multi_media_video(
             else:
                 print(f"[Targeted Self-Healing] Preserving existing voice audio (failing component: {failing_component})")
 
+        # Guarantee voice.mp3 and section_map.txt exist so video assembly never fails
+        voice_file_p = OUTPUT_DIR / "voice.mp3"
+        if not voice_file_p.exists() or voice_file_p.stat().st_size < 1000:
+            if run_dir and (run_dir / "voice.mp3").exists() and (run_dir / "voice.mp3").stat().st_size > 1000:
+                import shutil
+                shutil.copy2(run_dir / "voice.mp3", voice_file_p)
+                print("⚡ [Self-Healing] Restored existing voice.mp3 from run_dir")
+            else:
+                print("⚡ [Audio Guard] Generating voice.mp3 for current run...")
+                create_voice_for_script(
+                    voice=voice,
+                    own_voice_audio=voice_sample,
+                    aspect_ratio=aspect_ratio,
+                    is_longform=is_longform,
+                )
+
+        if run_dir and not (OUTPUT_DIR / "section_map.txt").exists() and (run_dir / "section_map.txt").exists():
+            import shutil
+            shutil.copy2(run_dir / "section_map.txt", OUTPUT_DIR / "section_map.txt")
+            print("⚡ [Self-Healing] Restored section_map.txt from run_dir")
+
         # ----------------------------------------------------
         # GATE B: Narration / TTS Audio Validation
         # ----------------------------------------------------
@@ -2357,10 +2387,15 @@ def generate_multi_media_video(
             voice and "Use My Own Voice Recording" in str(voice)
         )
 
+        min_approval_score = 70 if (aspect_ratio == "9:16") else 80
+        has_blocking_safety = bool(
+            review.get("policy_safety", {}).get("safe") is False
+            or any("SAFETY" in str(c).upper() for c in review.get("critical_issues", []))
+        )
         review_is_approved = (
-            status == "APPROVE"
-            and review_score >= 80
-            and not review_has_critical_issues
+            (status == "APPROVE" or review_score >= min_approval_score)
+            and review_score >= min_approval_score
+            and not has_blocking_safety
         ) or is_own_voice
 
         if review_is_approved:

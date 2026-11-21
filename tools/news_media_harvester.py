@@ -119,7 +119,10 @@ DISALLOWED_IMAGE_TOKENS = [
     "logo", "icon", "banner", "author", "advertisement", "header", "footer",
     "whatsapp", "telegram", "facebook", "twitter", "share", "profile", "avatar",
     "scorecardresearch", "google-analytics", "favicon", "girlfriend", "dating",
-    "companion", "character", "anime", "casino", "betting", "slot", "promo", "ad_"
+    "companion", "character", "anime", "casino", "betting", "slot", "promo", "ad_",
+    "taboola", "outbrain", "mgid", "colombia", "criteo", "adnxs", "doubleclick",
+    "sponsored", "commercial", "popunder", "clickbait", "posani", "comedy_nonstop",
+    "telugu_comedy", "reaction_meme"
 ]
 
 def record_discovered_article(url: str, title: str = "", query: str = "", image_count: int = 0):
@@ -188,7 +191,9 @@ def extract_images_from_article_url(
     try:
         resp = requests.get(url, headers=HEADERS, timeout=9)
         if resp.status_code != 200 or not resp.content:
-            return []
+            from tools.browser_harvester import harvest_clean_article_media_with_brave
+            brave_images = harvest_clean_article_media_with_brave(url, max_images=max_images)
+            return [Path(p) for p in brave_images]
 
         soup = BeautifulSoup(resp.content, "html.parser")
 
@@ -198,11 +203,14 @@ def extract_images_from_article_url(
         if not ok_title:
             return []
 
-        # Anti-sidebar / trending widget strip (eliminates political thumbnail leakage)
-        for bad_elem in soup.find_all(attrs={"class": re.compile(r"sidebar|trending|widget|related|footer|popular|recommend|promo|ads|commercial|comment", re.I)}):
+        # Anti-sidebar / trending / ad widget strip (eliminates ads and irrelevant comedy/political leakage)
+        ad_filter_regex = re.compile(r"sidebar|trending|widget|related|footer|popular|recommend|promo|ads|commercial|comment|sponsored|taboola|outbrain|mgid|colombia|partner|affiliate", re.I)
+        for bad_elem in soup.find_all(attrs={"class": ad_filter_regex}):
             bad_elem.decompose()
-        for bad_elem in soup.find_all(attrs={"id": re.compile(r"sidebar|trending|widget|related|footer|popular|recommend|promo|ads|commercial|comment", re.I)}):
+        for bad_elem in soup.find_all(attrs={"id": ad_filter_regex}):
             bad_elem.decompose()
+        for bad_tag in soup.find_all(["aside", "footer", "iframe"]):
+            bad_tag.decompose()
 
         candidate_urls = []
 

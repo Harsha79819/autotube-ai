@@ -320,7 +320,7 @@
   },
   "thrigun": {
     "slug": "thrigun",
-    "full_name": "Thrigun Eswaran",
+    "full_name": "Thrigun",
     "nickname": "Thrigun",
     "telugu_name": "త్రిగుణ్",
     "role": "Film actor",
@@ -338,9 +338,8 @@
       "thrigun",
       "త్రిగుణ్",
       "trigun",
-      "త్రిగన్",
-      "adith arun",
-      "adith eswaran"
+      "thrigun eswaran",
+      "adith arun"
     ],
     "clash_terms": [
       "anime",
@@ -719,6 +718,84 @@
       "shiva rajkumar",
       "temple",
       "pooja",
+      "cartoon",
+      "anime"
+    ]
+  },
+  "swetha": {
+    "slug": "swetha",
+    "full_name": "Swetha Naidu",
+    "nickname": "Swetha",
+    "telugu_name": "శ్వేత నాయుడు",
+    "role": "Dancer, actress, social media star and YouTuber",
+    "origin": "Hyderabad, Telangana",
+    "type": "CELEBRITY",
+    "status": "CONTESTANT",
+    "is_active": true,
+    "instagram_handle": "@swethanaidu_official",
+    "show_hashtag": "#BiggBossTelugu10",
+    "show_hashtags": [
+      "#BiggBossTelugu10",
+      "#BBTelugu10",
+      "#BiggBoss10"
+    ],
+    "aliases": [
+      "swetha",
+      "swetha naidu",
+      "sweatha",
+      "swethanaidu",
+      "శ్వేత",
+      "శ్వేతా",
+      "శ్వేత నాయుడు",
+      "శ్వేతా నాయుడు",
+      "స్వేత",
+      "స్వేతా",
+      "స్వేతా నాయుడు",
+      "స్వేత నాయుడు"
+    ],
+    "clash_terms": [
+      "swetha tiwari",
+      "shweta tiwari",
+      "shweta basu",
+      "cartoon",
+      "anime"
+    ]
+  },
+  "swetha_naidu": {
+    "slug": "swetha",
+    "full_name": "Swetha Naidu",
+    "nickname": "Swetha",
+    "telugu_name": "శ్వేత నాయుడు",
+    "role": "Dancer, actress, social media star and YouTuber",
+    "origin": "Hyderabad, Telangana",
+    "type": "CELEBRITY",
+    "status": "CONTESTANT",
+    "is_active": true,
+    "instagram_handle": "@swethanaidu_official",
+    "show_hashtag": "#BiggBossTelugu10",
+    "show_hashtags": [
+      "#BiggBossTelugu10",
+      "#BBTelugu10",
+      "#BiggBoss10"
+    ],
+    "aliases": [
+      "swetha",
+      "swetha naidu",
+      "sweatha",
+      "swethanaidu",
+      "శ్వేత",
+      "శ్వేతా",
+      "శ్వేత నాయుడు",
+      "శ్వేతా నాయుడు",
+      "స్వేత",
+      "స్వేతా",
+      "స్వేతా నాయుడు",
+      "స్వేత నాయుడు"
+    ],
+    "clash_terms": [
+      "swetha tiwari",
+      "shweta tiwari",
+      "shweta basu",
       "cartoon",
       "anime"
     ]

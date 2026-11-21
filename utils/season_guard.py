@@ -18,7 +18,16 @@ KNOWN_TELUGU_SHOW_PERSONS: Dict[str, Dict[str, Any]] = {
     "nagarjuna": {
         "canonical": "Nagarjuna",
         "search_name": "Nagarjuna Akkineni",
-        "aliases": ["nagarjuna", "king nagarjuna", "నాగార్జున", "akkineni nagarjuna", "nag sir", "host nagarjuna"],
+        "aliases": ["nagarjuna", "king nagarjuna", "నాగార్జున", "నాగన్న", "naganna", "నాగ్", "akkineni nagarjuna", "nag sir", "host nagarjuna"],
+    },
+    "swetha": {
+        "canonical": "Swetha Naidu",
+        "search_name": "Swetha Naidu Telugu dancer",
+        "aliases": ["swetha naidu", "శ్వేతా నాయుడు", "స్వేతా నాయుడు", "swetha", "శ్వేత", "స్వేత", "స్వేతా", "dhee swetha"],
+        "disallow_terms": [
+            "shweta tiwari", "swetha tiwari", "shweta basu", "swetha basu prasad",
+            "shweta bachchan", "cartoon", "anime", "blood", "gore"
+        ],
     },
     "sudheer": {
         "canonical": "Sudheer Reddy",
@@ -143,6 +152,12 @@ KNOWN_TELUGU_SHOW_PERSONS: Dict[str, Dict[str, Any]] = {
         "canonical": "Temper Vamsi",
         "search_name": "Temper Vamsi actor",
         "aliases": ["temper vamsi", "టెంపర్ వంశీ", "vamsi"],
+        "disallow_terms": ["cartoon", "anime"],
+    },
+    "neethu": {
+        "canonical": "Neethu Natraj",
+        "search_name": "Neethu Natraj Bigg Boss Telugu 10",
+        "aliases": ["neethu", "నీతు", "neethu natraj", "నీతు నటరాజ్", "నీతూ", "నీతూ నటరాజ్"],
         "disallow_terms": ["cartoon", "anime"],
     },
     "rajinikanth": {

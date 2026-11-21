@@ -497,22 +497,30 @@ async def synthesize_chunk_to_file(text: str, voice: str, rate: str, pitch: str,
 
     # Synthesize directly
     temp_mp3 = output_path.with_suffix(".temp.mp3")
-    try:
-        _, words = await asyncio.wait_for(
-            generate_with_word_boundaries(
-                text=text,
-                output_path=str(temp_mp3),
-                voice=voice,
-                rate=rate,
-                pitch=pitch,
-                timeout=18.0,
-            ),
-            timeout=22.0,
-        )
-    except Exception as chunk_err:
-        print(f"⚠️ [Chunk Synthesis Notice] {chunk_err}. Using gTTS fallback...")
-        lang = "te" if any(k in str(voice or "").lower() for k in ("te-", "telugu", "mohan", "shruti")) else "en"
-        _, words, _ = generate_gtts_speech_sync(text, str(temp_mp3), lang=lang)
+    words = []
+    for chunk_att in range(1, 3):
+        try:
+            _, words = await asyncio.wait_for(
+                generate_with_word_boundaries(
+                    text=text,
+                    output_path=str(temp_mp3),
+                    voice=voice,
+                    rate=rate,
+                    pitch=pitch,
+                    timeout=20.0,
+                ),
+                timeout=24.0,
+            )
+            if words or (temp_mp3.exists() and temp_mp3.stat().st_size > 1000):
+                break
+        except Exception as chunk_err:
+            if chunk_att < 2:
+                print(f"⚠️ [Chunk Synthesis] Notice ({chunk_err}). Retrying Edge-TTS...")
+                await asyncio.sleep(1.0)
+            else:
+                print(f"⚠️ [Chunk Synthesis Notice] {chunk_err}. Using gTTS fallback...")
+                lang = "te" if any(k in str(voice or "").lower() for k in ("te-", "telugu", "mohan", "shruti")) else "en"
+                _, words, _ = generate_gtts_speech_sync(text, str(temp_mp3), lang=lang)
 
     dur = _probe_audio_duration(temp_mp3)
 
@@ -758,14 +766,14 @@ async def generate_modulated_telugu_speech(
 
 
 EMOTION_PRESETS = {
-    "deadpan": {"rate": "+2%", "pitch": "-1Hz", "volume": "+0%"},
-    "fake_shock": {"rate": "+5%", "pitch": "+2Hz", "volume": "+2%"},
-    "smug": {"rate": "+3%", "pitch": "-1Hz", "volume": "+0%"},
-    "mock": {"rate": "+4%", "pitch": "+1Hz", "volume": "+1%"},
-    "hype": {"rate": "+6%", "pitch": "+2Hz", "volume": "+2%"},
-    "neutral": {"rate": "+2%", "pitch": "+0Hz", "volume": "+0%"},
-    "neutral setup": {"rate": "+2%", "pitch": "+0Hz", "volume": "+0%"},
-    "dramatic_question": {"rate": "-1%", "pitch": "+1Hz", "volume": "+1%"},  # Deliberate cadence for dramatic punchline impact
+    "deadpan": {"rate": "+4%", "pitch": "+0Hz", "volume": "+0%"},
+    "fake_shock": {"rate": "+6%", "pitch": "+0Hz", "volume": "+0%"},
+    "smug": {"rate": "+4%", "pitch": "+0Hz", "volume": "+0%"},
+    "mock": {"rate": "+6%", "pitch": "+0Hz", "volume": "+0%"},
+    "hype": {"rate": "+8%", "pitch": "+0Hz", "volume": "+0%"},
+    "neutral": {"rate": "+6%", "pitch": "+0Hz", "volume": "+0%"},
+    "neutral setup": {"rate": "+6%", "pitch": "+0Hz", "volume": "+0%"},
+    "dramatic_question": {"rate": "+2%", "pitch": "+0Hz", "volume": "+0%"},  # Deliberate cadence for punchline impact
 }
 
 
@@ -839,50 +847,63 @@ async def generate_roast_speech_with_emotions(
             # 2. Synthesize speech chunk
             chunk_mp3 = temp_dir / f"chunk_{idx}.mp3"
             safe_text = prepare_script_for_tts(text)
-            comm = edge_tts.Communicate(
-                text=safe_text,
-                voice=clean_voice,
-                rate=preset["rate"],
-                pitch=preset["pitch"],
-                volume=preset["volume"],
-            )
-
-            async def _stream_roast_chunk():
-                c_words = []
-                c_sentences = []
-                with open(chunk_mp3, "wb") as f_out:
-                    async for chunk_ev in comm.stream():
-                        if chunk_ev["type"] == "audio":
-                            f_out.write(chunk_ev["data"])
-                        elif chunk_ev["type"] == "WordBoundary":
-                            w_t = str(chunk_ev.get("text", "")).strip()
-                            if not w_t:
-                                continue
-                            w_start = round(float(chunk_ev["offset"]) / 10_000_000.0, 3)
-                            w_dur = round(float(chunk_ev["duration"]) / 10_000_000.0, 3)
-                            norm_w = re.sub(r"[^\w\s]", "", w_t).strip()
-                            c_words.append({
-                                "word": w_t,
-                                "text": w_t,
-                                "normalized": norm_w or w_t,
-                                "start": round(current_offset_sec + w_start, 3),
-                                "end": round(current_offset_sec + w_start + w_dur, 3),
-                            })
-                        elif chunk_ev["type"] == "SentenceBoundary":
-                            s_t = str(chunk_ev.get("text", "")).strip()
-                            if s_t:
-                                s_start = round(float(chunk_ev["offset"]) / 10_000_000.0, 3)
-                                s_dur = round(float(chunk_ev["duration"]) / 10_000_000.0, 3)
-                                c_sentences.append((s_t, s_start, s_dur))
-                return c_words, c_sentences
-
             chunk_words = []
             chunk_sentences = []
-            try:
-                chunk_words, chunk_sentences = await asyncio.wait_for(_stream_roast_chunk(), timeout=15.0)
-            except Exception as r_chunk_err:
-                print(f"⚠️ [Roast Beat {idx}] Edge-TTS stream notice ({r_chunk_err}). Falling back to gTTS...")
-                _, chunk_words, _ = generate_gtts_speech_sync(safe_text, str(chunk_mp3), lang="te")
+            for stream_attempt in range(1, 4):
+                try:
+                    comm = edge_tts.Communicate(
+                        text=safe_text,
+                        voice=clean_voice,
+                        rate=preset["rate"],
+                        pitch=preset["pitch"],
+                        volume=preset["volume"],
+                    )
+
+                    async def _stream_roast_chunk():
+                        c_words = []
+                        c_sentences = []
+                        with open(chunk_mp3, "wb") as f_out:
+                            async for chunk_ev in comm.stream():
+                                if chunk_ev["type"] == "audio":
+                                    f_out.write(chunk_ev["data"])
+                                elif chunk_ev["type"] == "WordBoundary":
+                                    w_t = str(chunk_ev.get("text", "")).strip()
+                                    if not w_t:
+                                        continue
+                                    w_start = round(float(chunk_ev["offset"]) / 10_000_000.0, 3)
+                                    w_dur = round(float(chunk_ev["duration"]) / 10_000_000.0, 3)
+                                    norm_w = re.sub(r"[^\w\s]", "", w_t).strip()
+                                    c_words.append({
+                                        "word": w_t,
+                                        "text": w_t,
+                                        "normalized": norm_w or w_t,
+                                        "start": round(current_offset_sec + w_start, 3),
+                                        "end": round(current_offset_sec + w_start + w_dur, 3),
+                                    })
+                                elif chunk_ev["type"] == "SentenceBoundary":
+                                    s_t = str(chunk_ev.get("text", "")).strip()
+                                    if s_t:
+                                        s_start = round(float(chunk_ev["offset"]) / 10_000_000.0, 3)
+                                        s_dur = round(float(chunk_ev["duration"]) / 10_000_000.0, 3)
+                                        c_sentences.append((s_t, s_start, s_dur))
+                        return c_words, c_sentences
+
+                    chunk_words, chunk_sentences = await asyncio.wait_for(_stream_roast_chunk(), timeout=25.0)
+                    if chunk_mp3.exists() and chunk_mp3.stat().st_size > 500:
+                        break
+                except Exception as r_chunk_err:
+                    if stream_attempt < 3:
+                        print(f"⚠️ [Roast Beat {idx}] Edge-TTS stream notice ({r_chunk_err}). Retrying attempt {stream_attempt + 1}/3...")
+                        await asyncio.sleep(1.0)
+                    else:
+                        print(f"⚠️ [Roast Beat {idx}] Edge-TTS stream failed after 3 attempts ({r_chunk_err}). Attempting clean Edge-TTS fallback...")
+                        try:
+                            clean_comm = edge_tts.Communicate(text=safe_text, voice=clean_voice, rate="+6%", pitch="+0Hz")
+                            await clean_comm.save(str(chunk_mp3))
+                            chunk_words = []
+                        except Exception as fb_err:
+                            print(f"⚠️ [Roast Beat {idx}] Final fallback to gTTS: {fb_err}")
+                            _, chunk_words, _ = generate_gtts_speech_sync(safe_text, str(chunk_mp3), lang="te")
 
             # Measure duration of chunk audio
             probe_cmd = [

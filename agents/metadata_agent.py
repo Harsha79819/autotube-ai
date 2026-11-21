@@ -380,17 +380,32 @@ def _post_process_metadata(title: str, description: str, tags: list, topic: str,
     if "bigg boss" in topic.lower() or "bigg boss" in script.lower():
         description = re.sub(r"\bBigg Boss [1-9]\b", "Bigg Boss Telugu 10", description, flags=re.IGNORECASE)
         description = description.replace("Rohit Patnaik", "Rohit Patnam").replace("Shalini Damera", "Shalini Patel")
+        # Sanitize Vamsi captaincy hallucination -> Potti Naresh
+        description = re.sub(r"(?:వాంశీ|వంశీ)\s*(?:ఈ\s*వారం\s*)?(?:క్యాప్టెన్సీ|కెప్టెన్సీ)", "పొట్టి నరేష్ క్యాప్టెన్సీ", description)
+        description = re.sub(r"(?:వాంశీ|వంశీ)\s*(?:ఈ\s*వారం\s*)?(?:క్యాప్టెన్|కెప్టెన్)(?!సీ)", "పొట్టి నరేష్ ఈ వారం క్యాప్టెన్", description)
+        description = re.sub(r"(?<![\u0C00-\u0C7F])వాంశీ(?![\u0C00-\u0C7F])", "వంశీ", description)
 
-    # Clean tags: eliminate stop words
+        title = re.sub(r"(?:వాంశీ|వంశీ)\s*(?:ఈ\s*వారం\s*)?(?:క్యాప్టెన్సీ|కెప్టెన్సీ)", "పొట్టి నరేష్ క్యాప్టెన్సీ", title)
+        title = re.sub(r"(?:వాంశీ|వంశీ)\s*(?:ఈ\s*వారం\s*)?(?:క్యాప్టెన్|కెప్టెన్)(?!సీ)", "పొట్టి నరేష్", title)
+        title = re.sub(r"(?<![\u0C00-\u0C7F])వాంశీ(?![\u0C00-\u0C7F])", "వంశీ", title)
+
+    # Clean tags: eliminate stop words and irrelevant celebrity leakage
     clean_tags = []
     if is_shorts:
         clean_tags.append("Shorts")
+
+    disallowed_bb_tags = {
+        "mansi captain", "naga chaitanya", "naga_chaitanya", "mansi", "chaitanya",
+        "allu arjun", "prabhas", "ram charan", "mahesh babu", "pawan kalyan"
+    }
 
     for t in tags:
         t_clean = t.strip()
         if "bigg boss" in topic.lower() or "bigg boss" in script.lower():
             t_clean = re.sub(r"\bBigg Boss [1-9]\b", "Bigg Boss Telugu 10", t_clean, flags=re.IGNORECASE)
             t_clean = t_clean.replace("Rohit Patnaik", "Rohit Patnam").replace("Shalini Damera", "Shalini Patel")
+            if t_clean.lower() in disallowed_bb_tags:
+                continue
         if t_clean.lower() not in STOP_WORDS and len(t_clean) >= 2 and t_clean not in clean_tags:
             clean_tags.append(t_clean)
 
@@ -401,6 +416,19 @@ def _post_process_metadata(title: str, description: str, tags: list, topic: str,
 
 
 def generate_metadata(topic, script, aspect_ratio="9:16", channel="Channel 1 (Primary)"):
+    bb_context = ""
+    try:
+        from utils.season_guard import is_bigg_boss_topic
+        if is_bigg_boss_topic(topic) or is_bigg_boss_topic(script):
+            from data.bb10_contestants import get_active_contestants_prompt_context
+            bb_context = f"""
+BIGG BOSS TELUGU 10 REALITY (WEEK 11 / DAY 75+):
+{get_active_contestants_prompt_context()}
+- CURRENT WEEK 11 CAPTAIN: Potti Naresh (పొట్టి నరేష్). CRITICAL: Potti Naresh is the captain. Temper Vamsi is NOT captain. NEVER describe Vamsi as captain!
+- TAGS GUARD: Strictly DO NOT include unrelated stars (NO 'naga chaitanya', NO 'mansi captain'). Include only real entities from the topic.
+"""
+    except Exception:
+        pass
 
     prompt = f"""
 You are a professional YouTube SEO expert.
@@ -412,7 +440,7 @@ TOPIC:
 
 SCRIPT:
 {script}
-
+{bb_context}
 Return ONLY this exact format:
 
 TITLE:
@@ -426,14 +454,14 @@ TAGS:
 
 Rules:
 - HIGH-CTR TITLE FORMULAS (PROVEN TOP PERFORMERS):
-  * Burning Question (Demands an immediate click): e.g. "NAGARJUNA ROHIT NI TARGET CHESARA?", "Did Prabhas Just Shatter All Records?!"
+  * Burning Question (Demands an immediate click): e.g. "Did Thrigun Just Expose House Politics?!", "Week 11 Shocking Twist!"
   * Bold Provocative Statement (Shock/Curiosity): e.g. "House Lo Unna Vallake Dikku Ledu!", "Bigg Boss 10 Biggest Blunder Exposed!"
   * For Telugu Entertainment/Bigg Boss/Cinema: Craft punchy titles in Telugu/Tanglish or English featuring emotional tension and curiosity.
 - BIGG BOSS SEASON 10 GROUND TRUTH: If the topic/script discusses Bigg Boss Telugu, the current show is STRICTLY Bigg Boss Telugu 10 (Season 10). NEVER output tags or descriptions for older seasons like Bigg Boss 7, 8, etc. (NEVER write 'Bigg Boss 7 Telugu').
-- OFFICIAL CONTESTANT SPELLINGS: Use exact verified contestant names: Rohit Patnam (NOT Rohit Patnaik), Shalini Patel (NOT Shalini Damera), Aman Masud, Sudheer Reddy (Sudheer Talks), Gundeboina Jhansi (Singer Jhansi), Charan Mahadev.
+- CURRENT WEEK 11 CAPTAIN: Potti Naresh (పొట్టి నరేష్). NEVER describe Temper Vamsi as captain.
 - Keep the title punchy and strictly under 80 characters so it never truncates on mobile screens.
 - Be factual to the script, do not invent fake claims, but make the angle irresistible to click.
-- Tags: Include core entities, contestant names, movie titles, and high-volume search tags. No stop words like 'are', 'for', 'how', 'this'.
+- Tags: Include core entities, contestant names, movie titles, and high-volume search tags. No stop words like 'are', 'for', 'how', 'this'. NEVER add unrelated actors or corrupted names.
 - Return ONLY TITLE, DESCRIPTION and TAGS.
 """
 
