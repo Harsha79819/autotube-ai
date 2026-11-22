@@ -2,14 +2,28 @@ name: AutoTube AI 24/7 Daily Multi-Channel Publisher
 
 on:
   schedule:
-    # 24/7 Cloud Automated Publishing for Channel 1 (Primary - Imaginary_facts)
-    # Target Publish Times (IST): 08:00 AM, 12:30 PM, 04:00 PM, 07:45 PM, 10:00 PM
-    # Production triggers in cloud 25m (Shorts) and 35m (Long) in advance so videos are uploaded BY publish time:
-    - cron: '5 2 * * *'    # 07:35 AM IST (Trigger for CH1-S1 Short -> Target Upload: 08:00 AM IST)
-    - cron: '25 6 * * *'   # 11:55 AM IST (Trigger for CH1-L1 Long  -> Target Upload: 12:30 PM IST)
-    - cron: '5 10 * * *'   # 03:35 PM IST (Trigger for CH1-S2 Short -> Target Upload: 04:00 PM IST)
-    - cron: '50 13 * * *'  # 07:20 PM IST (Trigger for CH1-S3 Short -> Target Upload: 07:45 PM IST)
-    - cron: '55 15 * * *'  # 09:25 PM IST (Trigger for CH1-L2 Long  -> Target Upload: 10:00 PM IST)
+    # 24/7 Cloud Automated Publishing for Channel 1 & Channel 2 (10 Daily Slots)
+    # Target Publish Times (IST):
+    # CH1-S1 (08:00 IST) -> Trigger 07:35 IST (02:05 UTC)
+    - cron: '5 2 * * *'
+    # CH2-S1 (08:45 IST) -> Trigger 08:20 IST (02:50 UTC)
+    - cron: '50 2 * * *'
+    # CH1-L1 (12:30 IST) -> Trigger 11:55 IST (06:25 UTC)
+    - cron: '25 6 * * *'
+    # CH2-L1 (13:30 IST) -> Trigger 12:55 IST (07:25 UTC)
+    - cron: '25 7 * * *'
+    # CH1-S2 (16:00 IST) -> Trigger 15:35 IST (10:05 UTC)
+    - cron: '5 10 * * *'
+    # CH2-S2 (17:00 IST) -> Trigger 16:35 IST (11:05 UTC)
+    - cron: '5 11 * * *'
+    # CH2-S3 (19:00 IST) -> Trigger 18:35 IST (13:05 UTC)
+    - cron: '5 13 * * *'
+    # CH1-S3 (19:45 IST) -> Trigger 19:20 IST (13:50 UTC)
+    - cron: '50 13 * * *'
+    # CH2-L2 (21:00 IST) -> Trigger 20:25 IST (14:55 UTC)
+    - cron: '55 14 * * *'
+    # CH1-L2 (22:00 IST) -> Trigger 21:25 IST (15:55 UTC)
+    - cron: '55 15 * * *'
 
   workflow_dispatch:
     inputs:
@@ -117,7 +131,7 @@ jobs:
           DAILY_UPLOAD_PRIVACY: "public"
           ENABLE_AUTO_UPLOAD: "1"
           DAILY_AUTO_GENERATE: "true"
-          SCHEDULED_CHANNELS: "Channel 1"
+          SCHEDULED_CHANNELS: "both"
           CUSTOM_TOPIC: ${{ github.event.inputs.custom_topic }}
           CUSTOM_CHANNEL: ${{ github.event.inputs.custom_channel }}
           CUSTOM_DURATION: ${{ github.event.inputs.custom_duration }}
