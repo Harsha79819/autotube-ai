@@ -417,7 +417,7 @@ def _fetch_article_content(url, max_chars=6000):
             )
             if (
                 isinstance(decoded, dict)
-                and decoded.get("status")
+                and (decoded.get("status") or decoded.get("success") or decoded.get("decoded_url"))
                 and decoded.get("decoded_url")
             ):
                 article_url = decoded["decoded_url"]

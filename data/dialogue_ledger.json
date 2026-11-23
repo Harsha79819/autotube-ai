@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "last_updated": "2026-11-23T10:42:01.601780+00:00",
+  "last_updated": "2026-11-23T11:41:22.895186+00:00",
   "history": [
     {
       "timestamp": "2026-11-21T15:23:00.692856+00:00",
@@ -225,13 +225,47 @@
       "detected_cliches": [],
       "cta_sample": "నెక్స్ట్ ఎవరి ఎలిమినేషన్ జరుగుతుందో కామెంట్ చేయండి! మరిన్ని క్రేజీ అప్‌డేట్స్ కో",
       "word_count": 150
+    },
+    {
+      "timestamp": "2026-11-23T11:40:32.420661+00:00",
+      "channel": "Channel 2",
+      "topic": "Bigg Boss 10 Mukesh Clashes",
+      "archetype_id": "witty_observational",
+      "hook_lead": "బిగ్ బాస్ హౌస్‌లో ముకేష్ గౌడ",
+      "detected_cliches": [
+        "సీన్ కట్ చేస్తే",
+        "వాతావరణం భగ్గుమంది బాస్",
+        "ఫ్యూజులు ఎగిరిపోయాయి బాస్"
+      ],
+      "cta_sample": "బిగ్ బాస్ హౌస్‌లో ముకేష్ గౌడ చేసిన రచ్చతో వాతావరణం భగ్గుమంది బాస్! సీన్ కట్ చేస్",
+      "word_count": 26
+    },
+    {
+      "timestamp": "2026-11-23T11:40:35.980012+00:00",
+      "channel": "Channel 1",
+      "topic": "Bigg Boss Telugu 10 Exposed",
+      "archetype_id": "skeptical_truth_teller",
+      "hook_lead": "60 కెమెరాలు తిరుగుతున్నా ఒక్క ఫ్రేమ్",
+      "detected_cliches": [],
+      "cta_sample": "హౌస్‌లో ఎవరి గేమ్ మీకు నచ్చిందో కింద కామెంట్ చేసి, లైక్, షేర్, సబ్‌స్క్రైబ్‌తో మ",
+      "word_count": 151
+    },
+    {
+      "timestamp": "2026-11-23T11:41:22.895167+00:00",
+      "channel": "Channel 1",
+      "topic": "Email warns of 26/11-type attacks in Hyderabad",
+      "archetype_id": "skeptical_truth_teller",
+      "hook_lead": "హైదరాబాద్‌లో **26/11** శైలి దాడుల హెచ్చరిక",
+      "detected_cliches": [],
+      "cta_sample": "బాస్, మీ ఒపీనియన్ ఏంటో కింద కామెంట్ చేసి, లైక్ గుద్ది, ఫ్రెండ్స్‌కి షేర్ కొట్టి,",
+      "word_count": 161
     }
   ],
   "active_banned_cliches": [],
   "archetype_usage_counts": {
-    "skeptical_truth_teller": 14,
+    "skeptical_truth_teller": 16,
     "high_voltage_alert": 0,
-    "witty_observational": 6,
+    "witty_observational": 7,
     "dramatic_suspense": 0,
     "tech_science_wonder": 0,
     "direct_provocative": 0

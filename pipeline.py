@@ -1922,6 +1922,7 @@ def generate_multi_media_video(
                             content_type=content_type,
                             topic=topic,
                             topic_category=content_type,
+                            news_media=news_verification,
                             progress_callback=None,
                         )
                     print("✅ [Parallel Stage] Visual Sourcing Complete.")
@@ -2022,6 +2023,7 @@ def generate_multi_media_video(
                         content_type=content_type,
                         topic=topic,
                         topic_category=content_type,
+                        news_media=news_verification,
                         progress_callback=progress.progress,
                     )
                 except Exception as error:

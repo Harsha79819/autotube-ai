@@ -3244,6 +3244,30 @@ def download_images_from_visual_plan(
             except Exception as ph_err:
                 print(f"Pre-harvest notice: {ph_err}")
 
+    # Load extracted news media (from verified publisher articles)
+    news_extracted_media = []
+    provided_news = kwargs.get("news_media")
+    if provided_news and isinstance(provided_news, dict):
+        news_extracted_media = provided_news.get("extracted_media", [])
+    if not news_extracted_media:
+        log_media_file = ROOT / "logs" / "extracted_news_media.json"
+        if log_media_file.exists():
+            try:
+                nm_data = json.loads(log_media_file.read_text(encoding="utf-8"))
+                news_extracted_media = nm_data.get("extracted_media", [])
+            except Exception:
+                pass
+    if not news_extracted_media:
+        verif_file = OUTPUT_DIR / "news_verification.json"
+        if verif_file.exists():
+            try:
+                v_data = json.loads(verif_file.read_text(encoding="utf-8"))
+                news_extracted_media = v_data.get("extracted_media", [])
+            except Exception:
+                pass
+    if news_extracted_media:
+        print(f"📰 [Image Agent] Loaded {len(news_extracted_media)} authentic verified news media items for scene mapping.")
+
     # --------------------------------------------------------
     # GLOBAL VIDEO TOPIC ENTITY DETECTION & INHERITANCE
     # --------------------------------------------------------
@@ -3497,6 +3521,93 @@ def download_images_from_visual_plan(
                             return visual_number, destination
             except Exception as el_err:
                 print(f"Entity library lookup notice: {el_err}")
+
+        # ------------------------------------------------------------
+        # TIER 1.25: AUTHENTIC VERIFIED NEWS MEDIA (PUBLISHER ARTICLES & TV PORTALS)
+        # ------------------------------------------------------------
+        is_news_content = (
+            topic_category == "news"
+            or "news" in str(topic_category).lower()
+            or any(k in visual_query.lower() for k in ("news", "police", "court", "govt", "minister", "hyderabad", "threat", "attack", "election", "bjp", "congress", "brs", "ysrcp", "tdp"))
+            or bool(news_extracted_media)
+        )
+        if is_news_content:
+            # 1. First priority: Check extracted media from verified news articles
+            matched_news_media = None
+            with hash_lock:
+                for cand_media in news_extracted_media:
+                    m_url = cand_media.get("url") if isinstance(cand_media, dict) else str(cand_media)
+                    if m_url and m_url not in claimed_urls and m_url not in used_news_images:
+                        claimed_urls.add(m_url)
+                        used_news_images.add(m_url)
+                        matched_news_media = cand_media
+                        break
+            if matched_news_media:
+                m_url = matched_news_media.get("url") if isinstance(matched_news_media, dict) else str(matched_news_media)
+                try:
+                    headers = {
+                        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+                    }
+                    resp = requests.get(m_url, headers=headers, timeout=8)
+                    if resp.status_code == 200 and len(resp.content) > 3000:
+                        destination.write_bytes(resp.content)
+                        clean_and_crop_image(destination, aspect_ratio=aspect_ratio)
+                        n_h = image_hash(destination)
+                        n_dh = image_dhash(destination)
+                        with hash_lock:
+                            if n_h:
+                                used_hashes.add(n_h)
+                            if n_dh:
+                                used_dhashes.append(n_dh)
+                        from data.asset_ledger import record_asset
+                        record_asset(
+                            video_id="current",
+                            beat_id=visual_number,
+                            asset_path=str(destination),
+                            source_url=m_url,
+                            tier="TIER_A",
+                            license_name="Fair Dealing / News Reporting",
+                            credit_text=matched_news_media.get("source", "Verified News Media") if isinstance(matched_news_media, dict) else "News Media",
+                        )
+                        src_name = matched_news_media.get("source", "News Publisher") if isinstance(matched_news_media, dict) else "News"
+                        print(f"📰 [News Media] Visual {visual_number} attached authentic publisher photo ({src_name})!")
+                        return visual_number, destination
+                except Exception as n_err:
+                    print(f"Notice: Failed to download news media {m_url[:50]}: {n_err}")
+
+            # 2. Second priority: If more news visuals needed, harvest directly via harvest_news_images
+            try:
+                from tools.news_media_harvester import harvest_news_images
+                clean_target = f"{topic} {visual_query}".strip()
+                h_imgs = harvest_news_images(clean_target, max_images=2, is_bb=False)
+                for h_path in h_imgs:
+                    if h_path and h_path.exists():
+                        h_str = str(h_path)
+                        with hash_lock:
+                            if h_str not in used_harvested_paths:
+                                used_harvested_paths.add(h_str)
+                                shutil.copy2(h_path, destination)
+                                clean_and_crop_image(destination, aspect_ratio=aspect_ratio)
+                                n_h = image_hash(destination)
+                                n_dh = image_dhash(destination)
+                                if n_h:
+                                    used_hashes.add(n_h)
+                                if n_dh:
+                                    used_dhashes.append(n_dh)
+                                from data.asset_ledger import record_asset
+                                record_asset(
+                                    video_id="current",
+                                    beat_id=visual_number,
+                                    asset_path=str(destination),
+                                    source_url=f"harvested_news:{h_path.name}",
+                                    tier="TIER_A",
+                                    license_name="Fair Dealing / News Reporting",
+                                    credit_text="Verified Telugu News Media",
+                                )
+                                print(f"📰 [News Harvester] Visual {visual_number} attached authentic Telugu news portal photo ({h_path.name})!")
+                                return visual_number, destination
+            except Exception as h_err:
+                print(f"News harvester lookup notice: {h_err}")
 
         # ------------------------------------------------------------
         # TIER 1.2: ICONIC TELUGU REACTION MEME (FOR COMEDY / ROAST / OVERACTING)

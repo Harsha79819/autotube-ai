@@ -75,10 +75,13 @@ def get_client(rotate=False):
 
 
 MODELS = [
+    "gemini-3.1-flash-lite",
+    "gemini-3.5-flash-lite",
+    "gemini-flash-lite-latest",
+    "gemini-3.8-flash",
+    "gemini-flash-latest",
     "gemini-2.0-flash",
     "gemini-1.5-flash",
-    "gemini-2.0-flash-lite",
-    "gemini-1.5-pro",
 ]
 
 
@@ -3008,9 +3011,13 @@ SOURCE GROUNDING RULES:
 CONTENT-TYPE BEHAVIOR:
 
 If Content type is NEWS:
-- When verified sources are supplied in NEWS SOURCE CONTEXT, treat them as the primary factual basis.
-- If verified news sources are provided, every important factual claim must be grounded in the supplied material.
+- STRICT ZERO-HALLUCINATION / NO ILLUSION RULE:
+  When verified sources are supplied in NEWS SOURCE CONTEXT, treat them as the exclusive factual basis.
+  Every single sentence of the spoken Telugu narration MUST report real, verified facts from the supplied news articles (names of organizations, police, locations, dates, and official statements).
+  NEVER write generic ancient history filler, fictional stories, philosophical musings, or unrelated generic text.
+- If verified news sources are provided, every important factual claim must be directly grounded in the supplied material.
 - If no verified news source context is available, explain the topic objectively, factually, and educationally using established industry knowledge without inventing false quotes or fake announcements.
+- In VISUAL_PLAN: write clear search queries for the real entities mentioned in the news (e.g. 'Hyderabad police security check', 'Telangana DGP press meet', 'high alert security') rather than ancient ruins or abstract artwork.
 - Do not invent facts, quotes, dates, statistics, names, events, partnerships or announcements.
 
 If Content type is HISTORY:
