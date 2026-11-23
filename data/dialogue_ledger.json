@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "last_updated": "2026-11-21T15:23:09.972854+00:00",
+  "last_updated": "2026-11-23T10:42:01.601780+00:00",
   "history": [
     {
       "timestamp": "2026-11-21T15:23:00.692856+00:00",
@@ -25,13 +25,213 @@
       "detected_cliches": [],
       "cta_sample": "60 కెమెరాలు తిరుగుతున్నా ఒక్క ఫ్రేమ్ కూడా దొరకలేదంటే నమ్ముతారా? అసలు మనం సీజన్ ఎ",
       "word_count": 156
+    },
+    {
+      "timestamp": "2026-11-22T04:45:47.208428+00:00",
+      "channel": "Channel 1",
+      "topic": "‘Grand Theft Auto 6’ Is Being Review Bombed On Metacritic",
+      "archetype_id": "skeptical_truth_teller",
+      "hook_lead": "GTA6 రివ్యూ స్కోర్ 10 లో",
+      "detected_cliches": [],
+      "cta_sample": "GTA6 రివ్యూ స్కోర్ 10 లో 1కి పడిపోయింది! ఇది మెటాక్రిటిక్‌లో అద్భుతమైన పడిపోవు. ",
+      "word_count": 141
+    },
+    {
+      "timestamp": "2026-11-22T04:45:48.168661+00:00",
+      "channel": "Channel 1",
+      "topic": "‘Grand Theft Auto 6’ Is Being Review Bombed On Metacritic",
+      "archetype_id": "skeptical_truth_teller",
+      "hook_lead": "GTA6 రివ్యూ స్కోర్ 10 లో",
+      "detected_cliches": [],
+      "cta_sample": "GTA6 రివ్యూ స్కోర్ 10 లో 1కి పడిపోయింది! ఇది మెటాక్రిటిక్‌లో అద్భుతమైన పడిపోవు. ",
+      "word_count": 141
+    },
+    {
+      "timestamp": "2026-11-22T04:51:02.975916+00:00",
+      "channel": "Channel 1",
+      "topic": "‘Grand Theft Auto 6’ Is Being Review Bombed On Metacritic",
+      "archetype_id": "skeptical_truth_teller",
+      "hook_lead": "మెటాక్రిటిక్‌లో వందలాది నెగటివ్ రివ్యూలు 24",
+      "detected_cliches": [],
+      "cta_sample": "మెటాక్రిటిక్‌లో వందలాది నెగటివ్ రివ్యూలు 24 గంటల్లో! GTA 6 లాంచ్ జరిగినప్పటికీ ఫ",
+      "word_count": 142
+    },
+    {
+      "timestamp": "2026-11-22T04:51:03.838132+00:00",
+      "channel": "Channel 1",
+      "topic": "‘Grand Theft Auto 6’ Is Being Review Bombed On Metacritic",
+      "archetype_id": "skeptical_truth_teller",
+      "hook_lead": "మెటాక్రిటిక్‌లో వందలాది నెగటివ్ రివ్యూలు 24",
+      "detected_cliches": [],
+      "cta_sample": "మెటాక్రిటిక్‌లో వందలాది నెగటివ్ రివ్యూలు 24 గంటల్లో! GTA 6 లాంచ్ జరిగినప్పటికీ ఫ",
+      "word_count": 142
+    },
+    {
+      "timestamp": "2026-11-22T05:04:22.852064+00:00",
+      "channel": "Channel 2",
+      "topic": "Bigg Boss 10 Mukesh Clashes",
+      "archetype_id": "witty_observational",
+      "hook_lead": "బిగ్ బాస్ హౌస్‌లో ముకేష్ గౌడ",
+      "detected_cliches": [
+        "ఫ్యూజులు ఎగిరిపోయాయి బాస్",
+        "వాతావరణం భగ్గుమంది బాస్",
+        "సీన్ కట్ చేస్తే"
+      ],
+      "cta_sample": "బిగ్ బాస్ హౌస్‌లో ముకేష్ గౌడ చేసిన రచ్చతో వాతావరణం భగ్గుమంది బాస్! సీన్ కట్ చేస్",
+      "word_count": 26
+    },
+    {
+      "timestamp": "2026-11-22T05:05:22.908102+00:00",
+      "channel": "Channel 1",
+      "topic": "Bigg Boss Telugu 10 Exposed",
+      "archetype_id": "skeptical_truth_teller",
+      "hook_lead": "60 కెమెరాలు తిరుగుతున్నా ఒక్క ఫ్రేమ్",
+      "detected_cliches": [],
+      "cta_sample": "నెక్స్ట్ ఎవరి ఎలిమినేషన్ జరుగుతుందో కామెంట్ చేయండి! మరిన్ని క్రేజీ అప్‌డేట్స్ కో",
+      "word_count": 150
+    },
+    {
+      "timestamp": "2026-11-22T07:35:10.503165+00:00",
+      "channel": "Channel 1",
+      "topic": "బిగ్ బాస్ 10 ఎలిమినేషన్ షాక్ రోస్ట్: బిగ్‌ బాస్‌ 11 వారం ఎలిమినేషన్‌.. నీతూ నటరాజ్‌ ఎలిమినేట్‌.. మరో కంటెస్టెంట్‌ కూడా?",
+      "archetype_id": "skeptical_truth_teller",
+      "hook_lead": "బిగ్ బాస్ హౌస్‌లో తాజా పరిణామాలతో",
+      "detected_cliches": [],
+      "cta_sample": "కింద కామెంట్స్‌లో మీ ఫేవరెట్ కంటెస్టెంట్ ఎవరో చెప్పండి, మరిన్ని బిగ్ బాస్ అప్‌డే",
+      "word_count": 158
+    },
+    {
+      "timestamp": "2026-11-23T08:04:36.289033+00:00",
+      "channel": "Channel 1",
+      "topic": "బిగ్ బాస్ 10 నాగార్జున వీకెండ్ వారింగ్ క్లాస్ రోస్ట్: కంటెస్టెంట్ల ముఖాల్లో షాకింగ్ ఎక్స్‌ప్రెషన్స్!",
+      "archetype_id": "skeptical_truth_teller",
+      "hook_lead": "బిగ్ బాస్ హౌస్‌లో తాజా పరిణామాలతో",
+      "detected_cliches": [],
+      "cta_sample": "కింద కామెంట్స్‌లో మీ ఫేవరెట్ కంటెస్టెంట్ ఎవరో చెప్పండి, మరిన్ని బిగ్ బాస్ అప్‌డే",
+      "word_count": 159
+    },
+    {
+      "timestamp": "2026-11-23T08:13:23.781959+00:00",
+      "channel": "Channel 1",
+      "topic": "Email warns of 26/11-type attacks in Hyderabad",
+      "archetype_id": "skeptical_truth_teller",
+      "hook_lead": "చరిత్ర పుటల్లో ఎంతో ఆసక్తికరమైన Email",
+      "detected_cliches": [],
+      "cta_sample": "చరిత్ర పుటల్లో ఎంతో ఆసక్తికరమైన Email warns of 26/11-type attacks in Hyderabad గ",
+      "word_count": 130
+    },
+    {
+      "timestamp": "2026-11-23T08:17:30.871062+00:00",
+      "channel": "Channel 1",
+      "topic": "Email warns of 26/11-type attacks in Hyderabad",
+      "archetype_id": "skeptical_truth_teller",
+      "hook_lead": "చరిత్ర పుటల్లో ఎంతో ఆసక్తికరమైన Email",
+      "detected_cliches": [],
+      "cta_sample": "చరిత్ర పుటల్లో ఎంతో ఆసక్తికరమైన Email warns of 26/11-type attacks in Hyderabad గ",
+      "word_count": 135
+    },
+    {
+      "timestamp": "2026-11-23T10:38:41.638240+00:00",
+      "channel": "Channel 2",
+      "topic": "Bigg Boss 10 Mukesh Clashes",
+      "archetype_id": "witty_observational",
+      "hook_lead": "బిగ్ బాస్ హౌస్‌లో ముకేష్ గౌడ",
+      "detected_cliches": [
+        "వాతావరణం భగ్గుమంది బాస్",
+        "సీన్ కట్ చేస్తే",
+        "ఫ్యూజులు ఎగిరిపోయాయి బాస్"
+      ],
+      "cta_sample": "బిగ్ బాస్ హౌస్‌లో ముకేష్ గౌడ చేసిన రచ్చతో వాతావరణం భగ్గుమంది బాస్! సీన్ కట్ చేస్",
+      "word_count": 26
+    },
+    {
+      "timestamp": "2026-11-23T10:38:50.810048+00:00",
+      "channel": "Channel 1",
+      "topic": "Bigg Boss Telugu 10 Exposed",
+      "archetype_id": "skeptical_truth_teller",
+      "hook_lead": "60 కెమెరాలు తిరుగుతున్నా ఒక్క ఫ్రేమ్",
+      "detected_cliches": [],
+      "cta_sample": "హౌస్‌లో ఎవరి గేమ్ మీకు నచ్చిందో కింద కామెంట్ చేసి, లైక్, షేర్, సబ్‌స్క్రైబ్‌తో మ",
+      "word_count": 152
+    },
+    {
+      "timestamp": "2026-11-23T10:39:46.836054+00:00",
+      "channel": "Channel 2",
+      "topic": "Bigg Boss 10 Mukesh Clashes",
+      "archetype_id": "witty_observational",
+      "hook_lead": "బిగ్ బాస్ హౌస్‌లో ముకేష్ గౌడ",
+      "detected_cliches": [
+        "సీన్ కట్ చేస్తే",
+        "ఫ్యూజులు ఎగిరిపోయాయి బాస్",
+        "వాతావరణం భగ్గుమంది బాస్"
+      ],
+      "cta_sample": "బిగ్ బాస్ హౌస్‌లో ముకేష్ గౌడ చేసిన రచ్చతో వాతావరణం భగ్గుమంది బాస్! సీన్ కట్ చేస్",
+      "word_count": 26
+    },
+    {
+      "timestamp": "2026-11-23T10:39:55.821386+00:00",
+      "channel": "Channel 1",
+      "topic": "Bigg Boss Telugu 10 Exposed",
+      "archetype_id": "skeptical_truth_teller",
+      "hook_lead": "60 కెమెరాలు తిరుగుతున్నా ఒక్క ఫ్రేమ్",
+      "detected_cliches": [],
+      "cta_sample": "మీరు ఈ వారం ఎవరికి ఓట్ వేస్తున్నారో కామెంట్లో చెప్పండి! లేటెస్ట్ వైరల్ అప్‌డేట్స",
+      "word_count": 152
+    },
+    {
+      "timestamp": "2026-11-23T10:40:57.411065+00:00",
+      "channel": "Channel 2",
+      "topic": "Bigg Boss 10 Mukesh Clashes",
+      "archetype_id": "witty_observational",
+      "hook_lead": "బిగ్ బాస్ హౌస్‌లో ముకేష్ గౌడ",
+      "detected_cliches": [
+        "ఫ్యూజులు ఎగిరిపోయాయి బాస్",
+        "సీన్ కట్ చేస్తే",
+        "వాతావరణం భగ్గుమంది బాస్"
+      ],
+      "cta_sample": "బిగ్ బాస్ హౌస్‌లో ముకేష్ గౌడ చేసిన రచ్చతో వాతావరణం భగ్గుమంది బాస్! సీన్ కట్ చేస్",
+      "word_count": 26
+    },
+    {
+      "timestamp": "2026-11-23T10:41:05.749400+00:00",
+      "channel": "Channel 1",
+      "topic": "Bigg Boss Telugu 10 Exposed",
+      "archetype_id": "skeptical_truth_teller",
+      "hook_lead": "60 కెమెరాలు తిరుగుతున్నా ఒక్క ఫ్రేమ్",
+      "detected_cliches": [],
+      "cta_sample": "నెక్స్ట్ ఎవరి ఎలిమినేషన్ జరుగుతుందో కామెంట్ చేయండి! మరిన్ని క్రేజీ అప్‌డేట్స్ కో",
+      "word_count": 150
+    },
+    {
+      "timestamp": "2026-11-23T10:41:53.000692+00:00",
+      "channel": "Channel 2",
+      "topic": "Bigg Boss 10 Mukesh Clashes",
+      "archetype_id": "witty_observational",
+      "hook_lead": "బిగ్ బాస్ హౌస్‌లో ముకేష్ గౌడ",
+      "detected_cliches": [
+        "ఫ్యూజులు ఎగిరిపోయాయి బాస్",
+        "వాతావరణం భగ్గుమంది బాస్",
+        "సీన్ కట్ చేస్తే"
+      ],
+      "cta_sample": "బిగ్ బాస్ హౌస్‌లో ముకేష్ గౌడ చేసిన రచ్చతో వాతావరణం భగ్గుమంది బాస్! సీన్ కట్ చేస్",
+      "word_count": 26
+    },
+    {
+      "timestamp": "2026-11-23T10:42:01.601741+00:00",
+      "channel": "Channel 1",
+      "topic": "Bigg Boss Telugu 10 Exposed",
+      "archetype_id": "skeptical_truth_teller",
+      "hook_lead": "60 కెమెరాలు తిరుగుతున్నా ఒక్క ఫ్రేమ్",
+      "detected_cliches": [],
+      "cta_sample": "నెక్స్ట్ ఎవరి ఎలిమినేషన్ జరుగుతుందో కామెంట్ చేయండి! మరిన్ని క్రేజీ అప్‌డేట్స్ కో",
+      "word_count": 150
     }
   ],
   "active_banned_cliches": [],
   "archetype_usage_counts": {
-    "skeptical_truth_teller": 1,
+    "skeptical_truth_teller": 14,
     "high_voltage_alert": 0,
-    "witty_observational": 1,
+    "witty_observational": 6,
     "dramatic_suspense": 0,
     "tech_science_wonder": 0,
     "direct_provocative": 0
