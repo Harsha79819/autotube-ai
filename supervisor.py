@@ -266,13 +266,19 @@ def heal_network_or_quota(stage_name, context=None):
             "contestant", "contestants", "housemate", "housemates", "captaincy", "nagarjuna",
             "bb drama", "danger zone", "wild card", "voting"
         } | bb_telugu_kw
+        news_kw = {
+            "news", "breaking", "alert", "threat", "police", "attack", "attacks", "security",
+            "warning", "warns", "arrest", "arrested", "investigation", "court", "government",
+            "advisory", "fir", "scam", "cyber", "hyderabad", "telangana", "delhi", "mumbai",
+            "minister", "incident", "bomb", "blast", "traffic", "law", "order"
+        }
         finance_kw = {"stock", "sensex", "nifty", "market", "finance", "money", "crypto", "bitcoin", "economy", "invest", "trading", "shares", "dividend", "bank", "gold"}
-        history_kw = {"history", "ancient", "war", "empire", "king", "dynasty", "mystery", "secrets", "temple", "monument", "mythology", "archaeology", "historical"}
+        history_kw = {"history", "ancient", "dynasty", "empire", "archaeology", "historical", "temple", "monument", "mythology", "world war", "civil war", "ancient mystery"}
         ent_kw = {
             "movie", "cinema", "trailer", "box office", "actor", "celebrity", "film",
             "hollywood", "tollywood", "bollywood", "song", "engaged", "engagement",
             "shiva", "priyanka jain", "hero", "heroine", "director", "producer",
-            "review", "crime", "punch", "donga", "koduku", "teaser", "glimpse", "ott",
+            "review", "punch", "donga", "koduku", "teaser", "glimpse", "ott",
             "release", "censor", "cast", "theatre", "theater", "boxoffice", "shoot", "series"
         }
         phone_kw = {"smartphone", "iphone", "pixel", "galaxy", "phone", "oneplus", "snapdragon", "dimensity", "amoled", "oppo", "vivo", "redmi", "realme", "iqoo"}
@@ -284,7 +290,14 @@ def heal_network_or_quota(stage_name, context=None):
         }
 
         def any_kw(kws):
-            return any(k in raw_topic_lower for k in kws)
+            for k in kws:
+                if re.search(r"[\u0C00-\u0C7F]", k) or " " in k:
+                    if k in raw_topic_lower:
+                        return True
+                else:
+                    if re.search(r"\b" + re.escape(k) + r"\b", raw_topic_lower):
+                        return True
+            return False
 
         is_bb = (
             any_kw(bb_kw)
@@ -294,11 +307,14 @@ def heal_network_or_quota(stage_name, context=None):
             or bool(re.search(r"\b(bb|bb10|bb\d+)\b", raw_topic_lower))
         )
         is_satire = any_kw(satire_kw) or "satir" in content_type_ctx or "sarcas" in content_type_ctx or "humor" in content_type_ctx or "roast" in content_type_ctx or "funny" in content_type_ctx
+        is_news = any_kw(news_kw) or "news" in content_type_ctx or "current" in content_type_ctx or "crime" in content_type_ctx
 
         if is_bb or "reality" in content_type_ctx:
             category = "reality_tv"
         elif is_satire:
             category = "satire"
+        elif is_news:
+            category = "news"
         elif any_kw(facts_kw) or "fact" in content_type_ctx or "curiosity" in content_type_ctx or "science" in content_type_ctx:
             category = "facts"
         elif any_kw(ent_kw) or "entertainment" in content_type_ctx or "cinema" in content_type_ctx or "movie" in content_type_ctx or "review" in raw_topic_lower:
@@ -569,6 +585,49 @@ def heal_network_or_quota(stage_name, context=None):
                          f"{clean_topic} financial decision concept | modern finance office workspace"),
                         (f"Share your thoughts below, hit the like button, and subscribe for timely updates!",
                          f"like share and subscribe animation youtube studio | finance investment channel closing"),
+                    ]
+            elif cat == "news":
+                if tel:
+                    base = [
+                        (f"{tel_topic} పై ప్రస్తుతం తీవ్ర చర్చ నడుస్తోంది. అసలు ఏం జరిగిందంటే...",
+                         f"breaking news studio broadcast | Hyderabad city police alert"),
+                        (f"ఈ పరిణామంపై అధికారిక వర్గాలు మరియు భద్రతా విభాగం వెంటనే స్పందించి హై-అలర్ట్ ప్రకటించాయి.",
+                         f"police patrol vehicle flashing lights night | security forces investigation"),
+                        (f"వచ్చిన సమాచారం ప్రకారం విస్తృత తనిఖీలు చేపట్టి, అనుమానాస్పద కదలికలపై నిఘా ఉంచారు.",
+                         f"police security checkpoint inspection | cctv surveillance monitoring control room"),
+                        (f"ప్రజలు ఎలాంటి వదంతులను నమ్మవద్దని, ధైర్యంగా ఉంటూ పోలీసులకు సహకరించాలని అధికారులు కోరారు.",
+                         f"police official press conference statement | city public safety announcement"),
+                        (f"సైబర్ క్రైమ్ మరియు దర్యాప్తు బృందాలు ఈ సమాచారం వెనుక ఉన్న మూలాలను శోధిస్తున్నాయి.",
+                         f"cyber security analytics computer room | digital forensic investigation"),
+                        (f"నగరంలో ఎలాంటి అవాంఛనీయ సంఘటనలు జరగకుండా కట్టుదిట్టమైన భద్రతా ఏర్పాట్లు పూర్తి చేశారు.",
+                         f"city police security barricade | police officers patrolling street"),
+                        (f"పరిస్థితిని ఎప్పటికప్పుడు సమీక్షిస్తూ ఉన్నతాధికారులు క్షేత్రస్థాయిలో పర్యవేక్షిస్తున్నారు.",
+                         f"law enforcement tactical team brief | police headquarters command center"),
+                        (f"ఈ తాజా ఘటనపై మరిన్ని అధికారిక వివరాలు త్వరలోనే వెల్లడి కానున్నాయి.",
+                         f"breaking news bulletin live update | news reporter microphone desk"),
+                        (f"ఈ కీలక పరిణామాలపై మీరేమనుకుంటున్నారు? కామెంట్స్‌లో చెప్పండి, తాజా అప్‌డేట్స్ కోసం లైక్ కొట్టి సబ్‌స్క్రైబ్ చేసుకోండి!",
+                         f"like share and subscribe animation youtube studio | breaking news desk closing"),
+                    ]
+                else:
+                    base = [
+                        (f"Here is an urgent update on {clean_topic} that everyone is closely following.",
+                         f"breaking news studio broadcast | Hyderabad city police alert"),
+                        (f"Law enforcement authorities and security agencies have immediately stepped in on high alert.",
+                         f"police patrol vehicle flashing lights night | security forces investigation"),
+                        (f"Extensive security checks and proactive surveillance operations are actively underway.",
+                         f"police security checkpoint inspection | cctv surveillance monitoring control room"),
+                        (f"Officials have strongly advised the public to remain calm and avoid unverified rumors.",
+                         f"police official press conference statement | city public safety announcement"),
+                        (f"Cyber forensic and intelligence teams are thoroughly tracing the origin of these alerts.",
+                         f"cyber security analytics computer room | digital forensic investigation"),
+                        (f"Strict precautionary protocols and active patrols have been reinforced citywide.",
+                         f"city police security barricade | police officers patrolling street"),
+                        (f"Senior officials continue reviewing the ground situation in real time.",
+                         f"law enforcement tactical team brief | police headquarters command center"),
+                        (f"Further official briefings and detailed updates are anticipated soon.",
+                         f"breaking news bulletin live update | news reporter microphone desk"),
+                        (f"What is your take on these security developments? Share below and subscribe for breaking updates!",
+                         f"like share and subscribe animation youtube studio | breaking news desk closing"),
                     ]
             elif cat == "history":
                 if tel:

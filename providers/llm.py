@@ -48,9 +48,11 @@ OPENAI_MODELS = [
 
 GROQ_MODELS = [
     "qwen/qwen3.8-27b",
+    "llama-3.3-70b-versatile",
+    "llama-3.1-8b-instant",
     "openai/gpt-oss-20b",
-    "openai/gpt-oss-120b",
 ]
+
 
 OPENROUTER_MODELS = [
     "openrouter/free",
@@ -344,7 +346,7 @@ def generate_text_cascade(prompt: str, api_key: str = None, step_name: str = "sc
     Enforces per-provider timeout (~15s) so a stalled provider fails over quickly
     rather than consuming the entire stage budget.
     """
-    configured_order = os.getenv("LLM_PROVIDER_ORDER", "groq,gemini,openrouter")
+    configured_order = os.getenv("LLM_PROVIDER_ORDER", "groq,gemini,openrouter,pollinations")
     providers = [p.strip().lower() for p in configured_order.split(",") if p.strip()]
 
     provider_map = {
@@ -359,7 +361,7 @@ def generate_text_cascade(prompt: str, api_key: str = None, step_name: str = "sc
     errors = []
     attempt = 0
 
-    effective_timeout = min(float(per_provider_timeout), 15.0)
+    effective_timeout = max(15.0, min(float(per_provider_timeout), 45.0))
 
     for prov in providers:
         if prov not in provider_map:
@@ -395,7 +397,7 @@ def generate_text_cascade(prompt: str, api_key: str = None, step_name: str = "sc
             return result
         except concurrent.futures.TimeoutError:
             dur_ms = (time.time() - t_start) * 1000
-            err_msg = f"{prov.upper()} timed out after {per_provider_timeout:.0f}s"
+            err_msg = f"{prov.upper()} timed out after {effective_timeout:.0f}s"
             print(f"⚠️ {err_msg}. Trying next fallback in chain...")
             record_call(prov, False, error=err_msg, duration_ms=dur_ms)
             errors.append(err_msg)

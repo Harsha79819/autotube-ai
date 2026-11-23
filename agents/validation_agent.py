@@ -655,22 +655,28 @@ class ValidationAgent:
         # 2. Dual-channel routing audit
         ct = content_type.lower()
         top = topic.lower()
-        is_tech = any(k in ct or k in top for k in ("tech", "ai ", "gadget", "smartphone", "phone", "hardware", "software", "apple", "samsung", "google", "nvidia"))
+        tech_kw = (
+            "tech", "ai ", "ai:", "gadget", "smartphone", "phone", "hardware", "software",
+            "apple", "samsung", "google", "nvidia", "cyber", "email", "security", "digital",
+            "data", "internet", "hack", "scam", "science", "isro", "nasa", "engineering",
+            "quantum", "algorithm", "robot"
+        )
+        is_tech = any(k in ct or k in top for k in tech_kw)
         is_channel_1 = "channel 1" in target_channel.lower() or "primary" in target_channel.lower()
 
         if is_tech and not is_channel_1:
             res.add_warning(
                 rule="Dual-Channel Routing Compliance",
-                expected="Tech/AI topics routed to Channel 1 (Primary)",
+                expected="Tech/AI/Cyber topics routed to Channel 1 (Primary)",
                 actual=f"Tech topic '{topic[:30]}' routed to '{target_channel}'",
-                fix="Verify channel selection: Tech topics belong on Channel 1.",
+                fix="Verify channel selection: Tech & Cyber topics belong on Channel 1.",
             )
-        elif not is_tech and is_channel_1 and content_type not in ("Uploaded Flyer", "General Topic"):
+        elif not is_tech and is_channel_1 and content_type not in ("Uploaded Flyer", "General Topic", "News", "Breaking News"):
             res.add_warning(
                 rule="Dual-Channel Routing Compliance",
                 expected="Non-tech topics routed to Channel 2",
                 actual=f"Non-tech content '{content_type}' routed to Channel 1",
-                fix="Route general entertainment/news to Channel 2 to maintain audience segmentation.",
+                fix="Route general entertainment/Bigg Boss to Channel 2 to maintain audience segmentation.",
             )
 
         # 3. Duplicate upload check

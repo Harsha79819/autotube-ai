@@ -12,7 +12,9 @@ Validates:
   7. Channel credential and topic resolver routing.
 """
 
+import os
 import unittest
+from unittest.mock import patch
 from datetime import datetime
 from pathlib import Path
 import json
@@ -141,9 +143,15 @@ class TestDailyMultiSlotScheduler(unittest.TestCase):
         ch1_slot = {"channel": "Channel 1 (Primary)"}
         ch2_slot = {"channel": "Channel 2 (Secondary)"}
 
-        # With default SCHEDULED_CHANNELS="Channel 1"
-        self.assertTrue(scheduler.is_channel_automated(ch1_slot))
-        self.assertFalse(scheduler.is_channel_automated(ch2_slot))
+        # When SCHEDULED_CHANNELS is set to Channel 1 only
+        with patch.dict(os.environ, {"SCHEDULED_CHANNELS": "Channel 1 (Primary)"}):
+            self.assertTrue(scheduler.is_channel_automated(ch1_slot))
+            self.assertFalse(scheduler.is_channel_automated(ch2_slot))
+
+        # When SCHEDULED_CHANNELS is set to both
+        with patch.dict(os.environ, {"SCHEDULED_CHANNELS": "both"}):
+            self.assertTrue(scheduler.is_channel_automated(ch1_slot))
+            self.assertTrue(scheduler.is_channel_automated(ch2_slot))
 
     def test_09_lead_time_calculation_and_pacing(self):
         """Ensure lead times are 25 min for Shorts and 35 min for Long-form across all 10 slots."""

@@ -509,9 +509,11 @@ def download_visuals(
         **kwargs,
     )
     if not res:
-        raise RuntimeError("No visual assets were returned by image agent.")
-    ensure_visual_assets_exist(needed_count=len(res))
-    return res
+        print("⚠️ [Pipeline] image agent returned empty list. Auto-recovering assets via ensure_visual_assets_exist...")
+    ensure_visual_assets_exist(needed_count=None)
+    from agents.video_agent import get_images
+    imgs = get_images()
+    return [(i, p) for i, p in enumerate(imgs, 1)]
 
 
 # ============================================================
@@ -1305,13 +1307,14 @@ def generate_multi_media_video(
         )
         print(f"🧭 [Omni-Route] Topic '{topic[:45]}...' routed to: {omni_spec['target_channel']} (OVS: {omni_spec['omni_viral_score']}, Voice: {omni_spec['voice_mode']})")
 
-        # 1. Channel Assignment
-        if not youtube_channel:
-            youtube_channel = omni_spec["target_channel"]
-        elif any(k in topic.lower() for k in ("bigg boss", "bb10", "tollywood", "cinema", "roast", "review", "nominations", "elimination")):
-            youtube_channel = "Channel 2 (Secondary)"
-        elif any(k in topic.lower() for k in ("science", "isro", "nasa", "quantum", "facts", "secret", "mystery", "tech")):
-            youtube_channel = "Channel 1 (Primary)"
+        # 1. Channel Assignment (Honor caller's explicit channel if provided)
+        if not youtube_channel or str(youtube_channel).strip().lower() in ("auto", "none", ""):
+            if any(k in topic.lower() for k in ("bigg boss", "bb10", "tollywood", "cinema", "roast", "nominations", "elimination")):
+                youtube_channel = "Channel 2 (Secondary)"
+            elif any(k in topic.lower() for k in ("science", "isro", "nasa", "quantum", "facts", "secret", "mystery", "tech")):
+                youtube_channel = "Channel 1 (Primary)"
+            else:
+                youtube_channel = omni_spec.get("target_channel", "Channel 1 (Primary)")
 
         # 2. Voice Auto-Selection (Guarantee Shruti Female Voice for Bigg Boss & Entertainment Roasts)
         voice_str = str(voice or "").lower()

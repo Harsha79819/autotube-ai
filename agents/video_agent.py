@@ -538,14 +538,32 @@ def get_images():
             existing_ext = asset_map[num].suffix.lower()
             if existing_ext in (".jpg", ".jpeg", ".png", ".webp") and ext in (".mp4", ".mov", ".webm", ".mkv"):
                 asset_map[num] = path
-        else:
-            asset_map[num] = path
+    if not asset_map:
+        return []
 
-    sorted_nums = sorted(asset_map.keys())
-    return [
-        asset_map[n]
-        for n in sorted_nums
-    ]
+    visual_plan = get_visual_plan()
+    sections = get_section_map()
+    needed_count = max(len(visual_plan), len(sections), max(asset_map.keys()), 4)
+
+    # Ensure every single slot from 1 to needed_count has a valid file without gaps
+    result = []
+    fallback_dir = ASSETS_DIR / "fallback"
+    fallback_pool = sorted(fallback_dir.glob("*.jpg")) if fallback_dir.exists() else []
+
+    for i in range(1, needed_count + 1):
+        if i in asset_map and asset_map[i].exists() and asset_map[i].stat().st_size > 1000:
+            result.append(asset_map[i])
+        else:
+            target_jpg = ASSETS_DIR / f"{i}.jpg"
+            if not target_jpg.exists() or target_jpg.stat().st_size < 1000:
+                if fallback_pool:
+                    src_fb = fallback_pool[(i - 1) % len(fallback_pool)]
+                    shutil.copyfile(src_fb, target_jpg)
+                elif result and result[-1].exists():
+                    shutil.copyfile(result[-1], target_jpg)
+            result.append(target_jpg if target_jpg.exists() else (ASSETS_DIR / f"{i}.mp4"))
+
+    return result
 
 
 def get_visual_plan():

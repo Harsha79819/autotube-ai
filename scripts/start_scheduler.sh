@@ -21,8 +21,13 @@ if [ ! -f "$PYTHON_BIN" ]; then
     PYTHON_BIN="python3"
 fi
 
-echo "🚀 Starting 24/7 Daily Scheduler Daemon for Channel 1..."
-nohup "$PYTHON_BIN" "$DIR/daily_scheduler.py" --daemon >> "$LOG_FILE" 2>&1 &
+echo "🚀 Starting 24/7 Daily Scheduler Daemon (Channel 1 & Channel 2)..."
+if [[ "$OSTYPE" == "darwin"* ]] && command -v caffeinate >/dev/null 2>&1; then
+    echo "☕ macOS caffeinate enabled (preventing idle sleep)..."
+    nohup caffeinate -dims "$PYTHON_BIN" "$DIR/daily_scheduler.py" --daemon >> "$LOG_FILE" 2>&1 &
+else
+    nohup "$PYTHON_BIN" "$DIR/daily_scheduler.py" --daemon >> "$LOG_FILE" 2>&1 &
+fi
 PID=$!
 echo "✅ Scheduler started successfully (PID: $PID) using $PYTHON_BIN!"
 echo "📝 Logs: $LOG_FILE"

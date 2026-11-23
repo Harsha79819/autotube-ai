@@ -2889,9 +2889,8 @@ TRANSLATE AND ADAPT ALL NEWS/TOPIC FACTS DIRECTLY INTO ENGAGING TELUGU SPOKEN CR
 - ONE CORE IDEA ONLY: Focus exclusively on 1 single punchy story, reveal, or twist. Do NOT cram 3-5 different items or multiple bullet points into one Short!
 - SENTENCE LENGTH: Keep sentences snappy and short (maximum {profile.max_words_per_sentence} words per sentence).
 - SCENE / BEAT COUNT: Exactly {max(6, profile.recommended_clips - 2)} to {profile.recommended_clips + 2} dynamic beats (each beat {profile.min_clip_duration:.1f} to {profile.max_clip_duration:.1f}s / 8 to 12 words).
-- SPOKEN HOOK AT 0.0s: Beat 1 MUST hook the viewer immediately at 0.0s with zero dead air. NEVER start with greetings ("హాయ్ ఫ్రెండ్స్", "Namaskaram", "Hi guys") or channel intros ("Welcome back", "Today we discuss").
-- LOOP-FRIENDLY ENDING: The final sentence must flow seamlessly back into the opening hook line so the Short loops endlessly on YouTube/Instagram.
-- CTA INSIDE NARRATION: Weave the call to action directly into the final sentence before the loop."""
+- LOOP-FRIENDLY ENDING: The final sentence must provide a smart conclusion or transition that naturally connects back to the theme of the opening hook, but NEVER repeat the exact same words or sentence as the opening hook!
+- CTA INSIDE NARRATION: Weave the call to action directly into the final sentence before concluding."""
         visual_count_text = f"- {profile.min_seconds:.0f}–{profile.max_seconds:.0f} second scripts (Shorts): {max(6, profile.recommended_clips - 2)}–{profile.recommended_clips + 2} dynamic visuals (each {profile.min_clip_duration:.1f} to {profile.max_clip_duration:.1f}s)"
 
     topic_str = str(topic).lower()
