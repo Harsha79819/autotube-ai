@@ -496,21 +496,28 @@ def deduplicate_consecutive_assets(
 
             success = False
             if is_bb_scene:
-                # Reality Show / Bigg Boss: Zero Anime/Cartoon Faces
-                # Priority 1: Check unused news still from cache
-                try:
-                    from tools.news_media_harvester import CACHE_DIR as NEWS_CACHE
-                    if NEWS_CACHE.exists():
-                        for n_file in sorted(NEWS_CACHE.glob("*.jpg"), key=lambda f: f.stat().st_mtime, reverse=True):
-                            cand_h = hashlib.md5(n_file.read_bytes()).hexdigest()
+                # Reality Show / Bigg Boss: Strictly use Bigg Boss contestant galleries or Stage/House sets
+                if loc_c and loc_c[1].exists():
+                    shutil.copy2(loc_c[1], dest_jpg)
+                    clean_and_crop_image(dest_jpg, aspect_ratio=aspect_ratio)
+                    success = True
+                    print(f"  ✓ Beat {b_id} dedup replaced with unique contestant photo: {loc_c[0]} ({loc_c[1].name})")
+
+                if not success:
+                    ROOT_DIR = Path(__file__).resolve().parent.parent
+                    for bb_cand in [
+                        ROOT_DIR / "data" / "stage" / "bigg_boss_stage.jpg",
+                        ROOT_DIR / "assets" / "entities" / "bigg_boss_telugu" / "image.jpg",
+                        ROOT_DIR / "reference_assets" / "contestants" / "akkineni_nagarjuna.jpg",
+                    ]:
+                        if bb_cand.exists():
+                            cand_h = hashlib.md5(bb_cand.read_bytes()).hexdigest()
                             if not any(a.get("file_hash") == cand_h for a in ledger_by_beat.values()):
-                                shutil.copy2(n_file, dest_jpg)
+                                shutil.copy2(bb_cand, dest_jpg)
                                 clean_and_crop_image(dest_jpg, aspect_ratio=aspect_ratio)
                                 success = True
-                                print(f"  ✓ Beat {b_id} dedup replaced with unique news still: {n_file.name}")
+                                print(f"  ✓ Beat {b_id} dedup replaced with Bigg Boss Stage set: {bb_cand.name}")
                                 break
-                except Exception:
-                    pass
 
                 # Priority 2: Canva Editorial Card with real photo
                 if not success:

@@ -3244,29 +3244,48 @@ def download_images_from_visual_plan(
             except Exception as ph_err:
                 print(f"Pre-harvest notice: {ph_err}")
 
-    # Load extracted news media (from verified publisher articles)
+    # Load extracted news media ONLY when content_type is News and NOT Bigg Boss / Entertainment
     news_extracted_media = []
-    provided_news = kwargs.get("news_media")
-    if provided_news and isinstance(provided_news, dict):
-        news_extracted_media = provided_news.get("extracted_media", [])
-    if not news_extracted_media:
-        log_media_file = ROOT / "logs" / "extracted_news_media.json"
-        if log_media_file.exists():
-            try:
-                nm_data = json.loads(log_media_file.read_text(encoding="utf-8"))
-                news_extracted_media = nm_data.get("extracted_media", [])
-            except Exception:
-                pass
-    if not news_extracted_media:
-        verif_file = OUTPUT_DIR / "news_verification.json"
-        if verif_file.exists():
-            try:
-                v_data = json.loads(verif_file.read_text(encoding="utf-8"))
-                news_extracted_media = v_data.get("extracted_media", [])
-            except Exception:
-                pass
-    if news_extracted_media:
-        print(f"📰 [Image Agent] Loaded {len(news_extracted_media)} authentic verified news media items for scene mapping.")
+    is_news_requested = (
+        topic_category == "news"
+        or str(kwargs.get("content_type", "")).lower() == "news"
+        or "news" in str(topic_category).lower()
+    ) and not (
+        "bigg boss" in topic.lower()
+        or "bigg boss" in str(topic_category).lower()
+        or "bigg boss" in str(kwargs.get("content_type", "")).lower()
+        or str(kwargs.get("content_type", "")).lower() in ("entertainment", "movie review", "film review", "technology", "roasting")
+    )
+    if is_news_requested:
+        provided_news = kwargs.get("news_media")
+        if provided_news and isinstance(provided_news, dict):
+            news_extracted_media = provided_news.get("extracted_media", [])
+        if not news_extracted_media:
+            log_media_file = ROOT / "logs" / "extracted_news_media.json"
+            if log_media_file.exists():
+                try:
+                    nm_data = json.loads(log_media_file.read_text(encoding="utf-8"))
+                    logged_topic = str(nm_data.get("topic", "")).lower()
+                    curr_topic_words = set(re.findall(r"\b[a-zA-Z]{4,}\b", topic.lower()))
+                    logged_words = set(re.findall(r"\b[a-zA-Z]{4,}\b", logged_topic))
+                    if not curr_topic_words or len(curr_topic_words & logged_words) >= 1:
+                        news_extracted_media = nm_data.get("extracted_media", [])
+                except Exception:
+                    pass
+        if not news_extracted_media:
+            verif_file = OUTPUT_DIR / "news_verification.json"
+            if verif_file.exists():
+                try:
+                    v_data = json.loads(verif_file.read_text(encoding="utf-8"))
+                    v_topic = str(v_data.get("topic", "")).lower()
+                    curr_topic_words = set(re.findall(r"\b[a-zA-Z]{4,}\b", topic.lower()))
+                    v_words = set(re.findall(r"\b[a-zA-Z]{4,}\b", v_topic))
+                    if not curr_topic_words or len(curr_topic_words & v_words) >= 1:
+                        news_extracted_media = v_data.get("extracted_media", [])
+                except Exception:
+                    pass
+        if news_extracted_media:
+            print(f"📰 [Image Agent] Loaded {len(news_extracted_media)} authentic verified news media items for scene mapping.")
 
     # --------------------------------------------------------
     # GLOBAL VIDEO TOPIC ENTITY DETECTION & INHERITANCE
@@ -3407,7 +3426,8 @@ def download_images_from_visual_plan(
 
         # INHERIT GLOBAL ENTITY:
         # If this beat didn't detect an entity, but the video as a whole is about Bigg Boss, a movie, or a phone brand:
-        if not is_entity and global_is_entity:
+        is_general_set_scene = any(k in visual_query.lower() for k in ("house set", "interior", "living area", "stage", "voting", "scoreboard", "audience", "crowd", "subscribe"))
+        if not is_entity and global_is_entity and not is_general_set_scene:
             is_entity = True
             entity_name = global_entity_name
             entity_cat = global_entity_cat
@@ -3431,6 +3451,18 @@ def download_images_from_visual_plan(
         # Resolve canonical contestant name from local reference to guide fresh online search.
         # The PDF headshot acts as the verified reference anchor and guaranteed fallback,
         # while fresh online news stills, promo frames, and web photos are prioritized.
+        from utils.season_guard import is_bigg_boss_topic
+        is_bb_scene = (
+            is_bigg_boss_topic(topic or "")
+            or is_bigg_boss_topic(visual_query or "")
+            or is_bigg_boss_topic(assigned_narration or "")
+            or "bigg boss" in str(topic_category).lower()
+            or "bb10" in (visual_query or "").lower()
+            or "bigg boss" in (visual_query or "").lower()
+            or (entity_name and bool(find_local_contestant_image(entity_name)))
+            or ("bigg boss" in str(kwargs.get("content_type", "")).lower())
+        )
+
         search_ctx = f"{s_primary_ent} {entity_name} {visual_query} {assigned_narration}".strip()
         local_contestant = find_local_contestant_image(search_ctx, used_hashes=used_hashes, used_dhashes=used_dhashes)
         if local_contestant:
@@ -3445,24 +3477,66 @@ def download_images_from_visual_plan(
             except Exception:
                 pass
 
-        # Reference Anchor: Keep verified local reference as guaranteed fallback, but prioritize fresh online search & promo frames!
+            # PRIORITY 1: Attach verified local Bigg Boss contestant asset directly!
+            if is_bb_scene and c_img_path and c_img_path.exists():
+                c_h = image_hash(c_img_path)
+                c_dh = image_dhash(c_img_path)
+                with hash_lock:
+                    if c_h:
+                        used_hashes.add(c_h)
+                    if c_dh:
+                        used_dhashes.append(c_dh)
+                shutil.copy2(c_img_path, destination)
+                clean_and_crop_image(destination, aspect_ratio=aspect_ratio)
+                from data.asset_ledger import record_asset
+                record_asset(
+                    video_id="current",
+                    beat_id=visual_number,
+                    asset_path=str(destination),
+                    source_url=f"contestant_gallery:{c_slug}",
+                    tier="TIER_A",
+                    license_name="Star Maa Bigg Boss 10 Fair Use",
+                    credit_text=f"Bigg Boss 10: {c_slug.title()}",
+                )
+                print(f"🌟 Visual {visual_number} matched verified Bigg Boss 10 contestant asset: {c_slug} ({c_img_path.name})")
+                return visual_number, destination
+
+        # Bigg Boss Stage / House Set / Logo matching
+        if is_bb_scene and any(k in visual_query.lower() for k in ("house", "set", "interior", "stage", "voting", "scoreboard", "audience", "crowd", "living area")):
+            bb_stage_candidates = [
+                ROOT / "assets" / "entities" / "bigg_boss_telugu" / "image.jpg",
+                ROOT / "data" / "stage" / "bigg_boss_stage.jpg",
+            ]
+            for bb_c in bb_stage_candidates:
+                if bb_c.exists():
+                    bb_h = image_hash(bb_c)
+                    bb_dh = image_dhash(bb_c)
+                    with hash_lock:
+                        if (not bb_h or bb_h not in used_hashes) and (not bb_dh or not is_perceptual_duplicate(bb_dh, used_dhashes)):
+                            if bb_h:
+                                used_hashes.add(bb_h)
+                            if bb_dh:
+                                used_dhashes.append(bb_dh)
+                            shutil.copy2(bb_c, destination)
+                            clean_and_crop_image(destination, aspect_ratio=aspect_ratio)
+                            from data.asset_ledger import record_asset
+                            record_asset(
+                                video_id="current",
+                                beat_id=visual_number,
+                                asset_path=str(destination),
+                                source_url=f"bb_stage:{bb_c.name}",
+                                tier="TIER_A",
+                                license_name="Fair Use Bigg Boss Stage Set",
+                                credit_text="Bigg Boss Telugu 10 House Set",
+                            )
+                            print(f"🏠 [Bigg Boss Set] Visual {visual_number} matched authentic Bigg Boss stage/house set: {bb_c.name}")
+                            return visual_number, destination
+
+        # Reference Anchor: Keep verified local reference as guaranteed fallback
         fallback_contestant = None
         if local_contestant:
             c_slug, c_img_path = local_contestant
             fallback_contestant = (c_slug, c_img_path, c_canon if 'c_canon' in locals() else c_slug)
-            print(f"⚓ [Reference Anchor] Contestant identified as '{c_slug}' ({c_canon if 'c_canon' in locals() else c_slug}). Proceeding to search fresh Season 10 promo & online media...")
-
-        from utils.season_guard import is_bigg_boss_topic
-        is_bb_scene = (
-            is_bigg_boss_topic(topic or "")
-            or is_bigg_boss_topic(visual_query or "")
-            or is_bigg_boss_topic(assigned_narration or "")
-            or "bigg boss" in str(topic_category).lower()
-            or "bb10" in (visual_query or "").lower()
-            or "bigg boss" in (visual_query or "").lower()
-            or (entity_name and bool(find_local_contestant_image(entity_name)))
-            or bool(local_contestant)
-        )
 
         # Check Entity Library next (for non-reality topics or explicit show logos like bigg_boss_telugu)
         # Reality contestants bypass static entity photos to search fresh online news/promos/web stills!
@@ -3526,10 +3600,9 @@ def download_images_from_visual_plan(
         # TIER 1.25: AUTHENTIC VERIFIED NEWS MEDIA (PUBLISHER ARTICLES & TV PORTALS)
         # ------------------------------------------------------------
         is_news_content = (
-            topic_category == "news"
-            or "news" in str(topic_category).lower()
-            or any(k in visual_query.lower() for k in ("news", "police", "court", "govt", "minister", "hyderabad", "threat", "attack", "election", "bjp", "congress", "brs", "ysrcp", "tdp"))
-            or bool(news_extracted_media)
+            (topic_category == "news" or "news" in str(topic_category).lower() or str(kwargs.get("content_type", "")).lower() == "news")
+            and not is_bb_scene
+            and bool(news_extracted_media)
         )
         if is_news_content:
             # 1. First priority: Check extracted media from verified news articles
@@ -4822,20 +4895,46 @@ def download_images_from_visual_plan(
                 print(f"🔄 [Zero-Duplicate Enforcer] Beat {idx} duplicates an earlier beat visual! Replacing with unique asset...")
                 replaced = False
                 
-                # 1. Try unused news photo from cache
-                from tools.news_media_harvester import CACHE_DIR as NEWS_CACHE
-                if NEWS_CACHE.exists():
-                    for n_file in sorted(NEWS_CACHE.glob("*.jpg"), key=lambda f: f.stat().st_mtime, reverse=True):
-                        cand_h = image_hash(n_file)
-                        cand_dh = image_dhash(n_file)
-                        if cand_h and cand_h not in final_seen_hashes and not is_perceptual_duplicate(cand_dh, final_seen_dhashes, max_dist=6):
-                            shutil.copy2(n_file, cur_p)
-                            clean_and_crop_image(cur_p, aspect_ratio=aspect_ratio)
-                            cur_h = image_hash(cur_p)
-                            cur_dh = image_dhash(cur_p)
-                            replaced = True
-                            print(f"  ✓ Beat {idx} replaced with unique news still: {n_file.name}")
-                            break
+                if is_bb_mode:
+                    # For Bigg Boss: Strictly use Bigg Boss contestant galleries or Stage/House sets
+                    b_txt = visuals[idx - 1] if idx - 1 < len(visuals) else ""
+                    c_cand = find_local_contestant_image(b_txt, used_hashes=final_seen_hashes, used_dhashes=final_seen_dhashes)
+                    if c_cand and c_cand[1].exists():
+                        shutil.copy2(c_cand[1], cur_p)
+                        clean_and_crop_image(cur_p, aspect_ratio=aspect_ratio)
+                        cur_h = image_hash(cur_p)
+                        cur_dh = image_dhash(cur_p)
+                        replaced = True
+                        print(f"  ✓ Beat {idx} replaced with unique Bigg Boss contestant gallery photo: {c_cand[0]} ({c_cand[1].name})")
+
+                    if not replaced:
+                        for bb_st in [ROOT / "data" / "stage" / "bigg_boss_stage.jpg", ROOT / "assets" / "entities" / "bigg_boss_telugu" / "image.jpg"]:
+                            if bb_st.exists():
+                                cand_h = image_hash(bb_st)
+                                cand_dh = image_dhash(bb_st)
+                                if (not cand_h or cand_h not in final_seen_hashes) and (not cand_dh or not is_perceptual_duplicate(cand_dh, final_seen_dhashes, max_dist=6)):
+                                    shutil.copy2(bb_st, cur_p)
+                                    clean_and_crop_image(cur_p, aspect_ratio=aspect_ratio)
+                                    cur_h = image_hash(cur_p)
+                                    cur_dh = image_dhash(cur_p)
+                                    replaced = True
+                                    print(f"  ✓ Beat {idx} replaced with Bigg Boss Stage set: {bb_st.name}")
+                                    break
+                else:
+                    # For News content: Try unused news photo from cache
+                    from tools.news_media_harvester import CACHE_DIR as NEWS_CACHE
+                    if NEWS_CACHE.exists():
+                        for n_file in sorted(NEWS_CACHE.glob("*.jpg"), key=lambda f: f.stat().st_mtime, reverse=True):
+                            cand_h = image_hash(n_file)
+                            cand_dh = image_dhash(n_file)
+                            if cand_h and cand_h not in final_seen_hashes and not is_perceptual_duplicate(cand_dh, final_seen_dhashes, max_dist=6):
+                                shutil.copy2(n_file, cur_p)
+                                clean_and_crop_image(cur_p, aspect_ratio=aspect_ratio)
+                                cur_h = image_hash(cur_p)
+                                cur_dh = image_dhash(cur_p)
+                                replaced = True
+                                print(f"  ✓ Beat {idx} replaced with unique news still: {n_file.name}")
+                                break
 
                 # 2. Try unused promo frame from cache
                 if not replaced:
